@@ -1,0 +1,24 @@
+<core:FragmentDefinition
+	xmlns="sap.m"
+	xmlns:core="sap.ui.core">
+	<Dialog
+		id="dlgVistaOferta"
+		title="{i18n>impresionTitulo}"
+		contentWidth="60rem"
+		contentHeight="42rem"
+		draggable="true"
+		resizable="true">
+		<content>
+			<VBox class="sapUiSmallMargin">
+				<MessageStrip text="{i18n>impresionNota}" type="Information" showIcon="true" class="sapUiSmallMarginBottom" />
+				<core:HTML content="{print>/html}" />
+			</VBox>
+		</content>
+		<beginButton>
+			<Button text="{i18n>imprimir}" icon="sap-icon://print" type="Emphasized" press=".onImprimirAhora" />
+		</beginButton>
+		<endButton>
+			<Button text="{i18n>cerrar}" press=".onCerrarVistaOferta" />
+		</endButton>
+	</Dialog>
+</core:FragmentDefinition>

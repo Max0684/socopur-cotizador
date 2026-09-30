@@ -1,0 +1,572 @@
+<mvc:View
+	controllerName="com.socopur.cotizador.controller.Oferta"
+	height="100%"
+	xmlns="sap.m"
+	xmlns:mvc="sap.ui.core.mvc"
+	xmlns:uxap="sap.uxap"
+	xmlns:form="sap.ui.layout.form"
+	xmlns:core="sap.ui.core">
+	<uxap:ObjectPageLayout
+		id="ofertaPage"
+		showFooter="true"
+		upperCaseAnchorBar="false"
+		headerContentPinnable="true"
+		isChildPage="true"
+		enableLazyLoading="false">
+
+		<!-- Encabezado: siempre visible, es el "resumen fijo" de la especificacion -->
+		<uxap:headerTitle>
+			<uxap:ObjectPageDynamicHeaderTitle>
+				<uxap:expandedHeading>
+					<Title text="{oferta>/titulo}" wrapping="true" />
+				</uxap:expandedHeading>
+				<uxap:snappedHeading>
+					<Title text="{oferta>/titulo}" />
+				</uxap:snappedHeading>
+				<uxap:actions>
+					<Button text="{i18n>imprimir}" icon="sap-icon://print" type="Transparent" enabled="{= ${oferta>/grupos}.length > 0 }" press=".onVistaOferta" />
+					<Button text="{i18n>clonar}" icon="sap-icon://duplicate" type="Transparent" visible="{= !!${oferta>/numero} }" press=".onClonar" />
+					<Button icon="sap-icon://nav-back" text="{i18n>volverOfertas}" type="Transparent" press=".onCerrar" />
+				</uxap:actions>
+			</uxap:ObjectPageDynamicHeaderTitle>
+		</uxap:headerTitle>
+
+		<uxap:headerContent>
+			<FlexBox wrap="Wrap" alignItems="Start">
+				<VBox class="sapUiMediumMarginEnd sapUiTinyMarginBottom">
+					<Label text="{i18n>hdrCliente}" />
+					<Text text="{= ${oferta>/cliente} ? ${oferta>/cliente/nombre} : ${i18n>hdrSinCliente} }" />
+					<ObjectStatus
+						visible="{= !!${oferta>/cliente} }"
+						text="{oferta>/cliente/estado}"
+						state="{oferta>/cliente/estadoState}" />
+				</VBox>
+				<VBox class="sapUiMediumMarginEnd sapUiTinyMarginBottom">
+					<Label text="{i18n>hdrEntrega}" />
+					<DatePicker
+						value="{oferta>/fechaEntrega}"
+						valueFormat="yyyy-MM-dd"
+						displayFormat="dd/MM/yyyy"
+						width="9rem" />
+				</VBox>
+				<VBox class="sapUiMediumMarginEnd sapUiTinyMarginBottom">
+					<Label text="{i18n>hdrOfertas}" />
+					<ObjectNumber number="{oferta>/cantidadOfertas}" emphasized="true" />
+				</VBox>
+				<VBox class="sapUiMediumMarginEnd sapUiTinyMarginBottom">
+					<Label text="{i18n>hdrVigencia}" />
+					<ObjectStatus text="{oferta>/vigencia/texto}" state="{oferta>/vigencia/estado}" />
+					<Button text="{i18n>renovar}" icon="sap-icon://refresh" type="Transparent" visible="{oferta>/vigencia/vencida}" press=".onRenovar" />
+				</VBox>
+								<VBox class="sapUiTinyMarginBottom">
+					<Label text="{i18n>hdrTotal}" />
+					<ObjectNumber
+						number="{path: 'oferta>/totales/total', formatter: '.formatMonto'}"
+						unit="PEN"
+						emphasized="true"
+						state="Success" />
+				</VBox>
+			</FlexBox>
+		</uxap:headerContent>
+
+		<uxap:sections>
+			<!-- 1. Cliente -->
+			<uxap:ObjectPageSection id="secCliente" title="{i18n>secCliente}">
+				<uxap:subSections>
+					<uxap:ObjectPageSubSection>
+						<VBox>
+							<HBox alignItems="Center" wrap="Wrap" class="sapUiTinyMarginBottom">
+								<SearchField
+									id="buscarCliente"
+									width="16rem"
+									placeholder="{i18n>buscarPlaceholder}"
+									search=".onBuscarCliente" />
+								<Button
+									text="{i18n>buscar}"
+									class="sapUiTinyMarginBegin"
+									press=".onBuscarCliente" />
+							</HBox>
+
+							<MessageStrip
+								visible="{oferta>/clienteNoEncontrado}"
+								text="{i18n>clienteNoEncontrado}"
+								type="Warning"
+								showIcon="true"
+								class="sapUiSmallMarginBottom" />
+							<Panel visible="{oferta>/altaAbierta}" headerText="{i18n>altaTitulo}" class="sapUiSmallMarginBottom">
+								<MessageStrip text="{i18n>altaSimulada}" type="Information" showIcon="true" class="sapUiSmallMarginBottom" />
+								<MessageStrip visible="{= !!${oferta>/alta/nota} }" text="{oferta>/alta/nota}" type="{oferta>/alta/notaTipo}" showIcon="true" class="sapUiSmallMarginBottom" />
+								<MessageStrip visible="{= !!${oferta>/alta/errores} }" text="{oferta>/alta/errores}" type="Error" showIcon="true" class="sapUiSmallMarginBottom" />
+								<form:SimpleForm editable="true" layout="ColumnLayout" columnsM="2" columnsL="2" columnsXL="3">
+									<Label text="{i18n>altaTipoCliente}" />
+									<Select selectedKey="{oferta>/alta/tipoCliente}" items="{oferta>/tiposCliente}"><core:Item key="{oferta>key}" text="{oferta>text}" /></Select>
+									<Label text="{i18n>altaTipoDoc}" />
+									<Select selectedKey="{oferta>/alta/tipoDoc}"><core:Item key="DNI" text="DNI" /><core:Item key="RUC" text="RUC" /></Select>
+									<Label text="{i18n>altaNroDoc}" />
+									<Input value="{oferta>/alta/doc}" maxLength="11" />
+									<Label text="" />
+									<Button text="{i18n>altaConsultarApi}" icon="sap-icon://search" press=".onConsultarApi" width="14rem" />
+									<Label text="{i18n>altaRazon}" required="true" />
+									<Input value="{oferta>/alta/razon1}" maxLength="35" />
+									<Input value="{oferta>/alta/razon2}" maxLength="35" />
+									<Input value="{oferta>/alta/razon3}" maxLength="35" />
+									<Label text="{i18n>altaPais}" />
+									<Input value="Perú" editable="false" />
+									<Label text="{i18n>altaDepartamento}" required="true" />
+									<Select selectedKey="{oferta>/alta/dep}" forceSelection="false" change=".onCambiaDpto" items="{oferta>/ubigeo}"><core:Item key="{oferta>dep}" text="{oferta>dep}" /></Select>
+									<Label text="{i18n>altaProvincia}" required="true" />
+									<Select selectedKey="{oferta>/alta/prov}" forceSelection="false" change=".onCambiaProv" items="{oferta>/alta/provincias}"><core:Item key="{oferta>prov}" text="{oferta>prov}" /></Select>
+									<Label text="{i18n>altaDistrito}" required="true" />
+									<Select selectedKey="{oferta>/alta/dist}" forceSelection="false" items="{oferta>/alta/distritos}"><core:Item key="{oferta>}" text="{oferta>}" /></Select>
+									<Label text="{i18n>altaDireccion}" required="true" />
+									<Input value="{oferta>/alta/dir1}" maxLength="35" />
+									<Input value="{oferta>/alta/dir2}" maxLength="35" />
+									<Input value="{oferta>/alta/dir3}" maxLength="35" />
+									<Label text="{i18n>altaCelular}" required="true" />
+									<Input value="{oferta>/alta/celular}" type="Tel" maxLength="9" />
+									<Label text="{i18n>altaEmail}" required="true" />
+									<Input value="{oferta>/alta/email}" type="Email" />
+								</form:SimpleForm>
+								<HBox>
+									<Button text="{i18n>altaCrear}" type="Emphasized" press=".onCrearCliente" class="sapUiSmallMarginEnd" />
+									<Button text="{i18n>cancelar}" type="Transparent" press=".onCancelarAlta" />
+								</HBox>
+							</Panel>
+
+							<VBox visible="{= !!${oferta>/cliente} }">
+								<form:SimpleForm
+									editable="false"
+									layout="ColumnLayout"
+									columnsM="2"
+									columnsL="2"
+									columnsXL="3">
+									<Label text="{i18n>documento}" />
+									<Text text="{oferta>/cliente/tipoDoc} {oferta>/cliente/doc}" />
+									<Label text="{i18n>condicionComercial}" />
+									<Text text="{oferta>/cliente/condicion}" />
+									<Label text="{i18n>grupoCliente}" />
+									<Text text="{oferta>/cliente/grupo}" />
+									<Label text="{i18n>telefono}" />
+									<Text text="{oferta>/cliente/telefono}" />
+									<Label text="{i18n>correo}" />
+									<Text text="{oferta>/cliente/correo}" />
+									<Label text="{i18n>direccion}" />
+									<Text text="{oferta>/cliente/direccion}" />
+								</form:SimpleForm>
+								<HBox wrap="Wrap">
+									<Button text="{i18n>estadoCuenta}" type="Transparent" press=".onEstadoCuenta" />
+									<Button text="{i18n>fichaCompleta}" type="Transparent" press=".onFichaCompleta" />
+									<Button text="{i18n>editarCliente}" type="Transparent" press=".onEditarCliente" />
+									<Button text="{i18n>ampliarArea}" type="Transparent" press=".onAmpliarAbrir" />
+								</HBox>
+							</VBox>
+						</VBox>
+					</uxap:ObjectPageSubSection>
+				</uxap:subSections>
+			</uxap:ObjectPageSection>
+
+			<!-- 2. Datos de la oferta (perfil del vendedor, plegado) -->
+			<uxap:ObjectPageSection id="secDatos" title="{i18n>secDatos}">
+				<uxap:subSections>
+					<uxap:ObjectPageSubSection>
+						
+						<Panel headerText="{i18n>datosPanel}" expandable="true" expanded="false">
+							<form:SimpleForm
+								editable="true"
+								layout="ColumnLayout"
+								columnsM="2"
+								columnsL="2"
+								columnsXL="3">
+								<Label text="{i18n>vendedor}" />
+								<Input value="{oferta>/perfil/vendedor}" editable="false" />
+								<Label text="{i18n>canal}" />
+								<Input value="{oferta>/perfil/canal}" />
+								<Label text="{i18n>oficina}" />
+								<Input value="{oferta>/perfil/oficina}" />
+								<Label text="{i18n>centro}" />
+								<Input value="{oferta>/perfil/centro}" />
+								<Label text="{i18n>moneda}" />
+								<Input value="{oferta>/perfil/moneda}" />
+								<Label text="{i18n>formaPago}" />
+								<Select selectedKey="{oferta>/perfil/formaPago}" items="{oferta>/formasPago}">
+									<core:Item key="{oferta>key}" text="{oferta>text}" />
+								</Select>
+								<Label text="{i18n>expedicion}" />
+								<Input value="{oferta>/perfil/expedicion}" />
+								<Label text="{i18n>tipoCambio}" />
+								<Input value="{oferta>/perfil/tipoCambio}" editable="false" description="{i18n>tipoCambioNota}" />
+							</form:SimpleForm>
+							<MessageStrip text="{i18n>datosNota}" type="Information" showIcon="true" />
+						</Panel>
+					</uxap:ObjectPageSubSection>
+				</uxap:subSections>
+			</uxap:ObjectPageSection>
+
+			<!-- 3. Material (siguiente paso) -->
+			<uxap:ObjectPageSection id="secMaterial" title="{i18n>secMaterial}">
+				<uxap:subSections>
+					<uxap:ObjectPageSubSection>
+						<VBox>
+							<HBox class="sapUiSmallMarginBottom">
+								<Button
+									text="{= ${oferta>/materialElegido} ? ${i18n>cambiarMaterial} : ${i18n>buscarMaterial} }"
+									icon="sap-icon://search"
+									press=".onAbrirBusqueda" />
+							</HBox>
+							<!-- Solicitudes de traslado (SOLPED) de esta oferta, con su estado visible -->
+							<VBox visible="{= ${oferta>/solpeds}.length > 0 }" class="sapUiSmallMarginBottom">
+								<Title text="{i18n>solicitudesTitulo}" level="H4" class="sapUiTinyMarginBottom" />
+								<List items="{oferta>/solpeds}">
+									<StandardListItem
+										title="{oferta>numero} · {oferta>denominacion} · {oferta>cantidad}"
+										description="{oferta>origen} → {oferta>destino}"
+										info="{oferta>estado}"
+										infoState="Warning"
+										icon="sap-icon://shipping-status" />
+								</List>
+							</VBox>
+
+							<!-- Repuestos, ropa, accesorios: seleccion multiple, cada fila con su desglose y cantidad -->
+							<VBox visible="{= ${oferta>/elegidosLista}.length > 0 }">
+								<Title text="{i18n>materialesElegidos}" level="H4" class="sapUiTinyMarginBottom" />
+								<Table items="{oferta>/elegidosLista}" sticky="ColumnHeaders" contextualWidth="Auto">
+									<columns>
+										<Column width="8rem"><Text text="{i18n>colMaterial}" /></Column>
+										<Column minScreenWidth="30rem" demandPopin="false"><Text text="{i18n>colDescripcion}" /></Column>
+										<Column width="8rem" hAlign="End" minScreenWidth="70rem" demandPopin="true"><Text text="{i18n>colPrecioLista}" /></Column>
+										<Column width="15rem" minScreenWidth="70rem" demandPopin="true"><Text text="{i18n>condicionPrecio}" /></Column>
+										<Column width="12rem" hAlign="End" minScreenWidth="70rem" demandPopin="true"><Text text="{i18n>promocion}" /></Column>
+										<Column width="8rem" hAlign="End"><Text text="{i18n>colPrecioFinal}" /></Column>
+										<Column width="9rem" hAlign="Center"><Text text="{i18n>cantidad}" /></Column>
+										<Column width="8rem" hAlign="End"><Text text="{i18n>colTotalLinea}" /></Column>
+										<Column width="4rem" hAlign="Center"><Text text="" /></Column>
+									</columns>
+									<items>
+										<ColumnListItem>
+											<cells>
+												<ObjectIdentifier title="{oferta>material}" />
+												<Text text="{oferta>denominacion}" />
+												<Text text="{oferta>listaTxt}" />
+												<VBox>
+													<Text text="{oferta>condicionTxt}" />
+													<ObjectStatus visible="{= !!${oferta>escalaTxt} }" text="{oferta>escalaTxt}" state="{= ${oferta>escalaTxt}.indexOf('%') > -1 ? 'Success' : 'None' }" />
+													<ObjectStatus visible="{= !!${oferta>proximoTxt} }" text="{oferta>proximoTxt}" state="Information" />
+												</VBox>
+												<Text text="{oferta>promoTxt}" />
+												<ObjectNumber number="{oferta>finalTxt}" unit="PEN" />
+												<StepInput value="{oferta>cantidad}" min="1" width="7rem" change=".onCambiaCantidadFila" />
+												<ObjectNumber number="{oferta>totalTxt}" unit="PEN" emphasized="true" />
+												<Button icon="sap-icon://inventory" type="Transparent" tooltip="{i18n>verStock}" press=".onVerStock" />
+											</cells>
+										</ColumnListItem>
+									</items>
+								</Table>
+								<HBox class="sapUiSmallMarginTop">
+									<Button text="{i18n>agregarTodos}" press=".onAgregarLista" />
+								</HBox>
+							</VBox>
+
+							<!-- Vehiculos: un material, vista previa detallada -->
+							<VBox visible="{= !!${oferta>/materialElegido} }">
+								<Title text="{i18n>materialElegido}" level="H4" class="sapUiTinyMarginBottom" />
+								<form:SimpleForm
+									editable="false"
+									layout="ColumnLayout"
+									columnsM="2"
+									columnsL="2"
+									columnsXL="3">
+									<Label text="{i18n>colMaterial}" />
+									<Text text="{oferta>/materialElegido/material}" />
+									<Label text="{i18n>colDescripcion}" />
+									<Text text="{oferta>/materialElegido/denominacion}" />
+									<Label text="{i18n>colDetalle}" />
+									<Text text="{oferta>/materialElegido/detalle}" />
+									<Label text="Stock" />
+									<Text text="{oferta>/materialElegido/stockTexto}" />
+								</form:SimpleForm>
+								<Button text="{i18n>verStock}" icon="sap-icon://inventory" type="Transparent" press=".onVerStock" />
+								<Panel headerText="{i18n>vistaPrevia}" class="sapUiSmallMarginTop">
+									<MessageStrip
+										text="{i18n>vistaPreviaNota}"
+										type="Information"
+										showIcon="true"
+										class="sapUiSmallMarginBottom" />
+									<HBox alignItems="Center" class="sapUiSmallMarginBottom">
+										<Label text="{i18n>cantidad}" labelFor="stepCantidad" class="sapUiSmallMarginEnd" />
+										<StepInput
+											id="stepCantidad"
+											value="{oferta>/vista/cantidad}"
+											min="1"
+											max="{oferta>/vista/maxCantidad}"
+											width="8rem"
+											change=".onCambiaCantidad" />
+										<Text
+											visible="{= ${oferta>/vista/maxCantidad} === 1 }"
+											text="{i18n>unidadUnica}"
+											class="sapUiSmallMarginBegin" />
+									</HBox>
+									<form:SimpleForm
+										editable="false"
+										layout="ColumnLayout"
+										columnsM="1"
+										columnsL="1"
+										columnsXL="1">
+										<Label text="{i18n>precioLista}" />
+										<Text text="{oferta>/vista/listaTxt}" />
+										<Label text="{oferta>/vista/condicionEtq}" />
+										<Text text="{oferta>/vista/condicionTxt}" />
+										<Label text="{oferta>/vista/promoEtq}" />
+										<Text text="{oferta>/vista/promoTxt}" />
+										<Label text="{i18n>valorNeto}" visible="{oferta>/vista/conImpuestos}" />
+										<Text text="{oferta>/vista/netoTxt}" visible="{oferta>/vista/conImpuestos}" />
+										<Label text="{oferta>/vista/iscEtq}" visible="{oferta>/vista/hayIsc}" />
+										<Text text="{oferta>/vista/iscTxt}" visible="{oferta>/vista/hayIsc}" />
+										<Label text="{i18n>igv}" visible="{oferta>/vista/conImpuestos}" />
+										<Text text="{oferta>/vista/igvTxt}" visible="{oferta>/vista/conImpuestos}" />
+										<Label text="{i18n>precioFinalUnit}" />
+										<ObjectStatus text="{oferta>/vista/finalDualTxt}" state="Success" />
+										<Label text="{i18n>totalLinea}" />
+										<ObjectNumber number="{oferta>/vista/totalTxt}" unit="PEN" emphasized="true" />
+									</form:SimpleForm>
+									<Text visible="{oferta>/vista/sinClienteVisible}" text="{i18n>impuestosSinCliente}" />
+								</Panel>
+								<HBox class="sapUiSmallMarginTop">
+									<Button text="{i18n>agregarOferta}" press=".onAgregar" />
+								</HBox>
+							</VBox>
+						</VBox>
+					</uxap:ObjectPageSubSection>
+				</uxap:subSections>
+			</uxap:ObjectPageSection>
+
+			<!-- 4. Detalle: carrito agrupado por sector -->
+			<uxap:ObjectPageSection id="secDetalle" title="{i18n>secDetalle}">
+				<uxap:subSections>
+					<uxap:ObjectPageSubSection>
+						<VBox>
+							<HBox class="sapUiSmallMarginBottom">
+								<Button text="{i18n>cargarExcel}" icon="sap-icon://excel-attachment" enabled="{= ${oferta>/pedidos}.length === 0 }" press=".onCargarExcel" />
+							</HBox>
+							<MessageStrip
+								visible="{= ${oferta>/grupos}.length === 0 }"
+								text="{i18n>detalleVacio}"
+								type="Information"
+								showIcon="true" />
+							<MessageStrip visible="{oferta>/faltaTalla}" text="{i18n>faltaTalla}" type="Warning" showIcon="true" class="sapUiSmallMarginBottom" />
+							<VBox items="{oferta>/grupos}">
+								<Panel class="sapUiSmallMarginBottom">
+									<headerToolbar>
+										<OverflowToolbar>
+											<Title text="{oferta>titulo}" />
+											<ToolbarSpacer />
+											<Label text="{i18n>modalidad}" />
+											<Select selectedKey="{oferta>modalidad}" width="18rem" change=".onCambiaModalidadGrupo" enabled="{= ${oferta>/pedidos}.length === 0 }" items="{oferta>opciones}">
+												<core:Item key="{oferta>key}" text="{oferta>texto}" />
+											</Select>
+										</OverflowToolbar>
+									</headerToolbar>
+									<HBox wrap="Wrap" class="sapUiTinyMarginBottom">
+										<ObjectStatus title="{i18n>canalVenta}" text="{oferta>canal}" class="sapUiMediumMarginEnd" />
+										<ObjectStatus title="{i18n>claseOferta}" text="{oferta>claseOferta}" class="sapUiMediumMarginEnd" />
+										<ObjectStatus title="{i18n>clasePedido}" text="{oferta>clasePedido}" class="sapUiMediumMarginEnd" />
+										<Text text="{oferta>nota}" />
+									</HBox>
+									<HBox visible="{oferta>areaFalta}" alignItems="Center" wrap="Wrap" class="sapUiTinyMarginBottom">
+										<MessageStrip text="{oferta>areaAviso}" type="Warning" showIcon="true" class="sapUiSmallMarginEnd" />
+										<Button text="{i18n>ampliarArea}" press=".onAmpliarAbrir" />
+									</HBox>
+									<Table items="{oferta>lineas}" sticky="ColumnHeaders" contextualWidth="Auto">
+										<columns>
+											<Column width="8rem"><Text text="{i18n>colMaterial}" /></Column>
+											<Column minScreenWidth="30rem" demandPopin="true"><Text text="{i18n>colDescripcion}" /></Column>
+											<Column minScreenWidth="48rem" demandPopin="true"><Text text="{i18n>colDetalle}" /></Column>
+											<Column width="9rem" hAlign="Center" minScreenWidth="26rem" demandPopin="true"><Text text="{i18n>colCantidad}" /></Column>
+											<Column width="8rem" hAlign="End" minScreenWidth="36rem" demandPopin="true"><Text text="{i18n>colPrecio}" /></Column>
+											<Column width="7rem" hAlign="End"><Text text="{i18n>colTotalLinea}" /></Column>
+											<Column width="3rem" hAlign="Center"><Text text="" /></Column>
+										</columns>
+										<items>
+											<ColumnListItem>
+												<cells>
+													<ObjectIdentifier title="{= ${oferta>bonificacion} ? ${oferta>denominacion} : ${oferta>material} }" text="{= ${oferta>bonificacion} ? ${i18n>regaloEtq} : '' }" />
+													<Text text="{oferta>denominacion}" />
+													<VBox>
+														<Text text="{oferta>detalle}" visible="{= !${oferta>bonificacion} }" />
+														<Select visible="{= !!${oferta>bonificacion} }" selectedKey="{oferta>talla}" forceSelection="false" width="9rem" change=".onCambiaTalla" enabled="{= ${oferta>/pedidos}.length === 0 }" items="{oferta>tallas}">
+															<core:Item key="{oferta>key}" text="{oferta>text}" enabled="{oferta>enabled}" />
+														</Select>
+													</VBox>
+													<StepInput value="{oferta>cantidad}" min="1" max="{= ${oferta>unica} ? 1 : 9999 }" width="7rem" enabled="{= ${oferta>/pedidos}.length === 0 &amp;&amp; !${oferta>bonificacion} }" change=".onCambiaCantidadLinea" />
+													<ObjectNumber number="{path: 'oferta>precio', formatter: '.formatMonto'}" />
+													<ObjectNumber number="{path: 'oferta>total', formatter: '.formatMonto'}" />
+													<Button icon="sap-icon://delete" type="Transparent" tooltip="{i18n>quitarLinea}" visible="{= !${oferta>bonificacion} }" enabled="{= ${oferta>/pedidos}.length === 0 }" press=".onQuitarLinea" />
+												</cells>
+											</ColumnListItem>
+										</items>
+									</Table>
+									<HBox justifyContent="End" class="sapUiSmallMarginTop">
+										<Label text="{i18n>subtotal}:" class="sapUiTinyMarginEnd" />
+										<ObjectNumber number="{path: 'oferta>subtotal', formatter: '.formatMonto'}" unit="PEN" />
+									</HBox>
+								</Panel>
+							</VBox>
+						</VBox>
+					</uxap:ObjectPageSubSection>
+				</uxap:subSections>
+			</uxap:ObjectPageSection>
+
+			<!-- 5. Entrega (siguiente paso) -->
+			<uxap:ObjectPageSection id="secEntrega" title="{i18n>secEntrega}">
+				<uxap:subSections>
+					<uxap:ObjectPageSubSection>
+						<VBox>
+							<SegmentedButton selectedKey="{oferta>/entrega}" class="sapUiSmallMarginBottom">
+								<items>
+									<SegmentedButtonItem key="recojo" text="{i18n>entregaRecojo}" />
+									<SegmentedButtonItem key="envio" text="{i18n>entregaEnvio}" />
+								</items>
+							</SegmentedButton>
+							<VBox visible="{= ${oferta>/entrega} === 'recojo' }">
+								<form:SimpleForm editable="false" layout="ColumnLayout" columnsM="1" columnsL="1" columnsXL="2">
+									<Label text="{i18n>puntoRecojo}" />
+									<Text text="{i18n>recojoTexto}" />
+									<Label text="{i18n>direccionFactura}" />
+									<Text text="{oferta>/cliente/direccion}" />
+								</form:SimpleForm>
+							</VBox>
+							<VBox visible="{= ${oferta>/entrega} === 'envio' }">
+								<form:SimpleForm editable="true" layout="ColumnLayout" columnsM="1" columnsL="1" columnsXL="2">
+									<Label text="{i18n>direccionFactura}" />
+									<Text text="{oferta>/cliente/direccion}" />
+									<Label text="{i18n>direccionEnvio}" />
+									<Select selectedKey="{oferta>/entregaDatos/direccionId}" items="{oferta>/opcionesDireccion}" change=".onCambiaDireccionEnvio">
+										<core:Item key="{oferta>id}" text="{= ${oferta>texto} ? ${oferta>alias} + ' · ' + ${oferta>texto} : ${oferta>alias} }" />
+									</Select>
+									<Label text="" visible="{= ${oferta>/entregaDatos/direccionId} === '__unica__' }" />
+									<Input visible="{= ${oferta>/entregaDatos/direccionId} === '__unica__' }" value="{oferta>/entregaDatos/direccionUnica}" placeholder="{i18n>direccionUnicaPh}" liveChange=".onCambiaDireccionUnica" valueState="{= ${oferta>/entregaDatos/direccionUnica} ? 'None' : 'Warning' }" />
+									<Label text="" visible="{= ${oferta>/entregaDatos/direccionId} === '__unica__' }" />
+									<Text text="{i18n>direccionUnicaNota}" visible="{= ${oferta>/entregaDatos/direccionId} === '__unica__' }" />
+									<Label text="" />
+									<Button text="{i18n>direccionesAdministrar}" type="Transparent" icon="sap-icon://add" press=".onEditarCliente" width="18rem" />
+									<Label text="{i18n>transportista}" />
+									<Input
+											value="{oferta>/entregaDatos/transportistaTexto}"
+											placeholder="{i18n>transportistaBuscar}"
+											showSuggestion="true"
+											startSuggestion="1"
+											suggestionItems="{oferta>/transportistas}"
+											suggestionItemSelected=".onSugerenciaTransportista"
+											change=".onCambiaTransportistaTexto"
+											valueState="{= ${oferta>/entregaDatos/transportistaError} ? 'Error' : 'None' }"
+											valueStateText="{oferta>/entregaDatos/transportistaError}">
+											<suggestionItems>
+												<core:ListItem key="{oferta>key}" text="{oferta>text}" additionalText="{oferta>nSedes}" />
+											</suggestionItems>
+										</Input>
+									<Label text="{i18n>sedeTransportista}" />
+									<Select selectedKey="{oferta>/entregaDatos/sede}" items="{oferta>/sedes}" change=".onCambiaSede" enabled="{= !!${oferta>/entregaDatos/transportista} }">
+										<core:Item key="{oferta>key}" text="{oferta>text}" />
+									</Select>
+									<Label text="{i18n>direccionTransporte}" />
+									<Text text="{= ${oferta>/entregaDatos/sedeDireccion} || '—' }" />
+									</form:SimpleForm>
+									<HBox wrap="Wrap" alignItems="Center" class="sapUiSmallMarginBottom" visible="{= ${oferta>/recientes}.length > 0 }">
+											<Text text="{i18n>transportistasRecientes}" class="sapUiTinyMarginEnd" />
+											<HBox items="{oferta>/recientes}">
+												<Button text="{oferta>text}" type="Transparent" press=".onElegirReciente" />
+											</HBox>
+										</HBox>
+							</VBox>
+							<form:SimpleForm editable="true" layout="ColumnLayout" columnsM="1" columnsL="1" columnsXL="2">
+								<Label text="{i18n>comentario}" />
+								<TextArea value="{oferta>/entregaDatos/comentario}" rows="2" />
+							</form:SimpleForm>
+							<MessageStrip text="{= ${oferta>/hayVehiculos} ? ${i18n>entregaVehiculoNota} : ${i18n>entregaRepuestoNota} }" type="Information" showIcon="true" />
+						</VBox>
+					</uxap:ObjectPageSubSection>
+				</uxap:subSections>
+			</uxap:ObjectPageSection>
+			<!-- 6. Pedido: aparece al crearlo, con el VIN ya enlazado y su bloqueo -->
+			<uxap:ObjectPageSection id="secPedido" title="{i18n>secPedido}" visible="{= ${oferta>/pedidos}.length > 0 }">
+				<uxap:subSections>
+					<uxap:ObjectPageSubSection>
+						<VBox>
+							<MessageStrip text="{i18n>pedidoNota}" type="Information" showIcon="true" class="sapUiSmallMarginBottom" />
+							<Table items="{oferta>/pedidos}" contextualWidth="Auto">
+								<columns>
+									<Column width="8rem"><Text text="{i18n>colPedido}" /></Column>
+									<Column width="8rem" minScreenWidth="72rem" demandPopin="true"><Text text="{i18n>colOfertaOrigen}" /></Column>
+									<Column width="12rem"><Text text="{i18n>colVehiculo}" /></Column>
+									<Column width="11rem"><Text text="{i18n>colVin}" /></Column>
+									<Column width="10rem" minScreenWidth="84rem" demandPopin="true"><Text text="{i18n>colBloqueoHasta}" /></Column>
+									<Column width="5rem"><Text text="{i18n>clasePedido}" /></Column>
+									<Column width="7rem"><Text text="{i18n>colEstado}" /></Column>
+									<Column width="14rem"><Text text="{i18n>validarLiberacion}" /></Column>
+								</columns>
+								<items>
+									<ColumnListItem>
+										<cells>
+											<ObjectIdentifier title="{oferta>numero}" />
+											<Text text="{oferta>oferta}" />
+											<Text text="{oferta>detalle}" />
+											<Text text="{oferta>vin}" />
+											<Text text="{oferta>bloqueo}" />
+											<Text text="{oferta>clasePedido}" />
+											<ObjectStatus text="{oferta>estado}" state="{oferta>estadoState}" />
+											<ObjectStatus text="{oferta>liberacion}" state="{oferta>liberacionState}" />
+										</cells>
+									</ColumnListItem>
+								</items>
+							</Table>
+						</VBox>
+					</uxap:ObjectPageSubSection>
+				</uxap:subSections>
+			</uxap:ObjectPageSection>
+		</uxap:sections>
+
+		<!-- Barra inferior fija: total y acciones (una sola accion Emphasized) -->
+		<uxap:footer>
+			<OverflowToolbar>
+				<ObjectStatus
+					visible="{= ${oferta>/guardado/visible} &amp;&amp; ${device>/ancho} > 700 }"
+					text="{oferta>/guardado/texto}"
+					state="Success"
+					icon="sap-icon://message-success" />
+				<Text text="{oferta>/textoGenerar}" visible="{= !${oferta>/guardado/visible} &amp;&amp; ${device>/ancho} > 1000 }" wrapping="false">
+					<layoutData><OverflowToolbarLayoutData priority="Low" /></layoutData>
+				</Text>
+				<ToolbarSpacer />
+				<HBox alignItems="Center" visible="{= ${oferta>/totales/hayIsc} &amp;&amp; ${device>/ancho} > 1250 }">
+					<layoutData><OverflowToolbarLayoutData priority="Low" /></layoutData>
+					<Label text="{i18n>valorNeto}:" class="sapUiTinyMarginEnd" />
+					<ObjectNumber number="{path: 'oferta>/totales/neto', formatter: '.formatMonto'}" unit="PEN" class="sapUiSmallMarginEnd" />
+					<Label text="{i18n>iscIncluido}:" class="sapUiTinyMarginEnd" />
+					<ObjectNumber number="{path: 'oferta>/totales/isc', formatter: '.formatMonto'}" unit="PEN" class="sapUiSmallMarginEnd" />
+				</HBox>
+				<HBox alignItems="Center">
+					<layoutData><OverflowToolbarLayoutData priority="NeverOverflow" /></layoutData>
+					<Label visible="{= ${device>/ancho} > 640 }" text="{i18n>igv}:" class="sapUiTinyMarginEnd" />
+					<ObjectNumber visible="{= ${device>/ancho} > 640 }" number="{path: 'oferta>/totales/igv', formatter: '.formatMonto'}" unit="PEN" class="sapUiSmallMarginEnd" />
+					<Label text="{i18n>totalOferta}:" class="sapUiTinyMarginEnd" />
+					<ObjectNumber number="{path: 'oferta>/totales/total', formatter: '.formatMonto'}" unit="PEN" emphasized="true" state="Success" class="sapUiSmallMarginEnd" />
+				</HBox>
+				<Button
+					text="{= ${oferta>/numero} ? ${i18n>guardarCambios} : ${i18n>guardarOferta} }"
+					type="Emphasized"
+					enabled="{= ${oferta>/grupos}.length > 0 &amp;&amp; !!${oferta>/cliente} &amp;&amp; !${oferta>/faltaTalla} &amp;&amp; !(${oferta>/entrega} === 'envio' &amp;&amp; !${oferta>/entregaDatos/direccionEnvio}) &amp;&amp; ${oferta>/pedidos}.length === 0 }"
+					press=".onGuardar">
+					<layoutData><OverflowToolbarLayoutData priority="NeverOverflow" /></layoutData>
+				</Button>
+				<Button
+					text="{i18n>copiarPedido}"
+					enabled="{= ${oferta>/guardado/visible} &amp;&amp; ${oferta>/pedidos}.length === 0 &amp;&amp; !${oferta>/vigencia/vencida} }"
+					press=".onCopiarPedido">
+					<layoutData><OverflowToolbarLayoutData priority="High" /></layoutData>
+				</Button>
+				<Button text="{i18n>cancelar}" type="Transparent" press=".onCerrar">
+					<layoutData><OverflowToolbarLayoutData priority="Low" /></layoutData>
+				</Button>
+			</OverflowToolbar>
+		</uxap:footer>
+	</uxap:ObjectPageLayout>
+</mvc:View>

@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "es2023",
+    "module": "es2022",
+    "moduleResolution": "node",
+    "skipLibCheck": true,
+    "allowJs": false,
+    "strict": true,
+    "strictNullChecks": true,
+    "strictPropertyInitialization": false,
+    "rootDir": "./webapp",
+    "baseUrl": "./",
+    "paths": {
+      "com/socopur/cotizador/*": ["./webapp/*"]
+    },
+    "types": ["@sapui5/types"]
+  },
+  "include": ["./webapp/**/*"]
+}

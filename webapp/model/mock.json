@@ -1,0 +1,1509 @@
+{
+ "_aviso": "Datos de ejemplo para el prototipo visual. Estructura real (lectura DS4/130 del 29/09): tipos de busqueda Repuestos/Vehiculos, segmentos Linea>Clase>Familia>Subfamilia>Marca, sectores 10-20 marcas de moto y 50-56 lineas de repuesto, orgs 1101 vehiculos y 1103 repuestos. Nombres de familias solo conocidos para G-01 y M-01; marcas de repuestos, precios y stock inventados. Regla confirmada por lectura DS4/130: el sector de la CABECERA de una oferta de repuestos es 99 (procedimiento de precios Z31001 solo existe para sector 99 en la org 1103), aunque cada material conserve su sector real (50-56) para buscar. En vehiculos el sector de cabecera es la marca (10-20). Stock por almacen y transito: ilustrativos; falta confirmar con Socopur/BASIS que expone realmente el WMS/SGA (Propuesta D). Semantica real (lectura DS4/130): fisico = MARD-LABST, disponible = chequeo ATP, comprometido = fisico - disponible; transito = pendiente de pedidos de traslado Z204 (fecha = la prometida). Centros y almacenes reales; numeros de pedido y cantidades de ejemplo. VINs de ejemplo. El plazo de bloqueo (bloqueoHoras) es un valor de ejemplo: por definir con Socopur; VELO no trae vencimiento propio, hace falta un proceso que libere los bloqueos vencidos. Precios de lista en USD como en SAP (Z101/Z200/Z300); la oferta es en PEN al tipo de cambio del perfil. Importes reales vistos en DS4: KTM 390 Duke USD 7,799; lubricante USD 46.50; el resto son de ejemplo. Tipo de cambio 3.406 (tipo M USD->PEN al 29/09/2026, vigente desde 25/09, medido en DS4/130).",
+ "perfil": {
+  "vendedor": "V-1042 · Diego Salvatierra",
+  "canal": "11 Retail",
+  "oficina": "1101 PCP - Centenario",
+  "centro": "1101",
+  "moneda": "PEN",
+  "formaPago": "C000",
+  "expedicion": "02 Recojo",
+  "tipoCambio": "3.406",
+  "busqueda": {
+   "tipo": "repuestos",
+   "orgs": {
+    "vehiculos": "1101",
+    "repuestos": "1103"
+   },
+   "canal": "11",
+   "defectos": {
+    "vehiculos": {
+     "linea": "VE"
+    },
+    "repuestos": {
+     "linea": "M",
+     "clase": "01"
+    }
+   }
+  },
+  "bloqueoHoras": 24,
+  "vigenciaDias": 7
+ },
+ "clientes": {
+  "45211870": {
+   "doc": "45211870",
+   "tipoDoc": "DNI",
+   "nombre": "Renzo Alonso Gutiérrez Meza",
+   "estado": "Al día",
+   "estadoState": "Success",
+   "condicion": "Crédito · línea S/ 15,000.00",
+   "grupo": "02 Retail",
+   "telefono": "944 218 903",
+   "correo": "rgutierrez@gmail.com",
+   "direccion": "Av. España 1450, Trujillo",
+   "lineaCredito": 15000,
+   "areas": [
+    "1101/11",
+    "1103/11"
+   ],
+   "estadoCuenta": {
+    "saldo": 4200,
+    "vencido": 0,
+    "movimientos": [
+     {
+      "fecha": "10/09/2026",
+      "doc": "F001-000345",
+      "tipo": "Factura",
+      "monto": "4,200.00",
+      "estado": "Pendiente"
+     },
+     {
+      "fecha": "15/08/2026",
+      "doc": "F001-000210",
+      "tipo": "Factura",
+      "monto": "3,100.00",
+      "estado": "Pagada"
+     },
+     {
+      "fecha": "02/07/2026",
+      "doc": "F001-000098",
+      "tipo": "Factura",
+      "monto": "259.00",
+      "estado": "Pagada"
+     }
+    ]
+   },
+   "direcciones": [
+    {
+     "id": "D1",
+     "alias": "Fiscal / Facturación",
+     "tipo": "Fiscal",
+     "texto": "Av. España 1450, Trujillo"
+    },
+    {
+     "id": "D2",
+     "alias": "Almacén Víctor Larco",
+     "tipo": "Envio",
+     "texto": "Jr. Los Cedros 320, Víctor Larco Herrera, Trujillo"
+    },
+    {
+     "id": "D3",
+     "alias": "Obra La Esperanza",
+     "tipo": "Envio",
+     "texto": "Mz. B Lt. 12, Urb. Los Jardines, La Esperanza, Trujillo"
+    }
+   ]
+  },
+  "41837205": {
+   "doc": "41837205",
+   "tipoDoc": "DNI",
+   "nombre": "Jorge Luis Peralta Díaz",
+   "estado": "Bloqueado para venta a crédito",
+   "estadoState": "Error",
+   "condicion": "Solo contado hasta regularizar",
+   "grupo": "02 Retail",
+   "telefono": "966 218 903",
+   "correo": "jperalta@gmail.com",
+   "direccion": "Jr. Bolívar 220, Trujillo",
+   "lineaCredito": 0,
+   "areas": [
+    "1103/11"
+   ],
+   "estadoCuenta": {
+    "saldo": 8250,
+    "vencido": 3000,
+    "movimientos": [
+     {
+      "fecha": "10/08/2026",
+      "doc": "F001-000190",
+      "tipo": "Factura",
+      "monto": "3,000.00",
+      "estado": "Vencida"
+     },
+     {
+      "fecha": "10/09/2026",
+      "doc": "F001-000340",
+      "tipo": "Factura",
+      "monto": "5,250.00",
+      "estado": "Pendiente"
+     }
+    ]
+   },
+   "direcciones": [
+    {
+     "id": "D1",
+     "alias": "Fiscal / Facturación",
+     "tipo": "Fiscal",
+     "texto": "Jr. Bolívar 220, Trujillo"
+    }
+   ]
+  }
+ },
+ "ofertas": [
+  {
+   "numero": "0004521",
+   "cliente": "Renzo Alonso Gutiérrez Meza",
+   "doc": "45211870",
+   "fecha": "2026-09-28",
+   "total": "5,842.00",
+   "estado": "Vigente",
+   "estadoState": "Success"
+  },
+  {
+   "numero": "0004503",
+   "cliente": "Jorge Luis Peralta Díaz",
+   "doc": "41837205",
+   "fecha": "2026-09-10",
+   "total": "8,250.00",
+   "estado": "Vigente",
+   "estadoState": "Success"
+  },
+  {
+   "numero": "0004502",
+   "cliente": "Renzo Alonso Gutiérrez Meza",
+   "doc": "45211870",
+   "fecha": "2026-07-02",
+   "total": "259.00",
+   "estado": "Vencida",
+   "estadoState": "Warning"
+  },
+  {
+   "numero": "0004480",
+   "cliente": "Carla Ivonne Ríos Salas",
+   "doc": "45219034",
+   "fecha": "2026-03-12",
+   "total": "9,290.00",
+   "estado": "Pedido generado",
+   "estadoState": "Information"
+  }
+ ],
+ "detalles": {
+  "0004521": {
+   "doc": "45211870",
+   "lineas": [
+    {
+     "grupo": "Vehículos Lifan",
+     "orgVentas": "1101",
+     "sector": "16",
+     "material": "VEH-LKP200",
+     "denominacion": "Lifan KPT 200",
+     "detalle": "Negro Mate · 2026 · CBU",
+     "cantidad": 1,
+     "precio": 5800
+    },
+    {
+     "grupo": "Repuestos y accesorios",
+     "orgVentas": "1103",
+     "sector": "99",
+     "material": "LUB-1040",
+     "denominacion": "Aceite de Motor 10W-40",
+     "detalle": "—",
+     "cantidad": 1,
+     "precio": 42
+    }
+   ]
+  }
+ },
+ "catalogo": {
+  "vehiculos": [
+   {
+    "material": "VEH-LKP200",
+    "denominacion": "Lifan KPT 200",
+    "marca": "Lifan",
+    "modelo": "KPT 200",
+    "color": "Negro Mate",
+    "anio": 2026,
+    "condicion": "CBU",
+    "stockMio": 6,
+    "stockOtros": 3,
+    "orgVentas": "1101",
+    "sector": "16",
+    "grupo": "Vehículos Lifan",
+    "condicionPct": 0,
+    "promocion": null,
+    "linea": "VE",
+    "clase": "ME",
+    "familia": "",
+    "sectorTxt": "Lifan",
+    "sectorOferta": "16",
+    "precioUsd": 5690,
+    "iscPct": 10
+   },
+   {
+    "material": "VEH-LKP200R",
+    "denominacion": "Lifan KPT 200",
+    "marca": "Lifan",
+    "modelo": "KPT 200",
+    "color": "Rojo",
+    "anio": 2026,
+    "condicion": "CBU",
+    "stockMio": 0,
+    "stockOtros": 2,
+    "orgVentas": "1101",
+    "sector": "16",
+    "grupo": "Vehículos Lifan",
+    "condicionPct": 3,
+    "promocion": null,
+    "linea": "VE",
+    "clase": "ME",
+    "familia": "",
+    "sectorTxt": "Lifan",
+    "sectorOferta": "16",
+    "precioUsd": 5690,
+    "iscPct": 10
+   },
+   {
+    "material": "VEH-LTM200",
+    "denominacion": "Lifan Trimoto 200 carguero",
+    "marca": "Lifan",
+    "modelo": "Trimoto 200",
+    "color": "Amarillo",
+    "anio": 2026,
+    "condicion": "CBU",
+    "stockMio": 0,
+    "stockOtros": 0,
+    "orgVentas": "1101",
+    "sector": "16",
+    "grupo": "Vehículos Lifan",
+    "condicionPct": 0,
+    "promocion": null,
+    "linea": "VE",
+    "clase": "ME",
+    "familia": "",
+    "sectorTxt": "Lifan",
+    "sectorOferta": "16",
+    "precioUsd": 3450,
+    "iscPct": 10
+   },
+   {
+    "material": "VEH-KTM390",
+    "denominacion": "KTM 390 Duke",
+    "marca": "KTM",
+    "modelo": "390 Duke",
+    "color": "Naranja KTM",
+    "anio": 2026,
+    "condicion": "CBU",
+    "stockMio": 2,
+    "stockOtros": 1,
+    "orgVentas": "1101",
+    "sector": "10",
+    "grupo": "Vehículos KTM",
+    "condicionPct": 4.5,
+    "promocion": {
+     "nombre": "Mix: Lanzamiento Q3",
+     "monto": 50
+    },
+    "linea": "VE",
+    "clase": "ME",
+    "familia": "",
+    "sectorTxt": "KTM",
+    "sectorOferta": "10",
+    "precioUsd": 7799,
+    "iscPct": 10
+   }
+  ],
+  "repuestos": [
+   {
+    "material": "LUB-1040",
+    "denominacion": "Aceite de Motor 10W-40",
+    "marca": "Motul",
+    "linea": "M",
+    "clase": "01",
+    "familia": "01",
+    "sector": "55",
+    "sectorTxt": "Lubricantes",
+    "orgVentas": "1103",
+    "grupo": "Repuestos y accesorios",
+    "disponible": 120,
+    "comprometido": 10,
+    "total": 130,
+    "um": "UN",
+    "condicionPct": 0,
+    "promocion": null,
+    "sectorOferta": "99",
+    "precioUsd": 46.5,
+    "iscPct": 0,
+    "escala": [
+     {
+      "min": 10,
+      "pct": 5
+     },
+     {
+      "min": 50,
+      "pct": 10
+     }
+    ]
+   },
+   {
+    "material": "LUB-1040B",
+    "denominacion": "Aceite de Motor 10W-40",
+    "marca": "Bosch",
+    "linea": "M",
+    "clase": "01",
+    "familia": "01",
+    "sector": "55",
+    "sectorTxt": "Lubricantes",
+    "orgVentas": "1103",
+    "grupo": "Repuestos y accesorios",
+    "disponible": 0,
+    "comprometido": 40,
+    "total": 40,
+    "um": "UN",
+    "condicionPct": 0,
+    "promocion": null,
+    "sectorOferta": "99",
+    "precioUsd": 41,
+    "iscPct": 0
+   },
+   {
+    "material": "LUB-2075",
+    "denominacion": "Aceite de Transmisión 80W-90",
+    "marca": "Motul",
+    "linea": "M",
+    "clase": "01",
+    "familia": "02",
+    "sector": "55",
+    "sectorTxt": "Lubricantes",
+    "orgVentas": "1103",
+    "grupo": "Repuestos y accesorios",
+    "disponible": 60,
+    "comprometido": 0,
+    "total": 60,
+    "um": "UN",
+    "condicionPct": 0,
+    "promocion": null,
+    "sectorOferta": "99",
+    "precioUsd": 62,
+    "iscPct": 0,
+    "escala": [
+     {
+      "min": 6,
+      "pct": 4
+     },
+     {
+      "min": 24,
+      "pct": 8
+     }
+    ]
+   },
+   {
+    "material": "LIM-KIT",
+    "denominacion": "Kit de Limpieza de Motor",
+    "marca": "Motul",
+    "linea": "M",
+    "clase": "01",
+    "familia": "03",
+    "sector": "55",
+    "sectorTxt": "Lubricantes",
+    "orgVentas": "1103",
+    "grupo": "Repuestos y accesorios",
+    "disponible": 0,
+    "comprometido": 0,
+    "total": 0,
+    "um": "UN",
+    "condicionPct": 0,
+    "promocion": null,
+    "sectorOferta": "99",
+    "precioUsd": 9.5,
+    "iscPct": 0
+   },
+   {
+    "material": "LF157FMJ-S",
+    "denominacion": "Motor LF157FMJ-S",
+    "marca": "Lifan",
+    "linea": "M",
+    "clase": "02",
+    "familia": "",
+    "sector": "50",
+    "sectorTxt": "Rep. alternativos y llantas",
+    "orgVentas": "1103",
+    "grupo": "Repuestos y accesorios",
+    "disponible": 4,
+    "comprometido": 0,
+    "total": 4,
+    "um": "UN",
+    "condicionPct": 0,
+    "promocion": null,
+    "sectorOferta": "99",
+    "precioUsd": 495,
+    "iscPct": 0
+   },
+   {
+    "material": "MUN-CAL12",
+    "denominacion": "Munición calibre 12 (caja)",
+    "marca": "CBC",
+    "linea": "M",
+    "clase": "05",
+    "familia": "",
+    "sector": "54",
+    "sectorTxt": "Armas y municiones",
+    "orgVentas": "1103",
+    "grupo": "Repuestos y accesorios",
+    "disponible": 30,
+    "comprometido": 5,
+    "total": 35,
+    "um": "UN",
+    "condicionPct": 0,
+    "promocion": null,
+    "sectorOferta": "99",
+    "precioUsd": 25.5,
+    "iscPct": 0
+   },
+   {
+    "material": "ACC-CASCO-M",
+    "denominacion": "Casco Integral Talla M",
+    "marca": "MT Helmets",
+    "linea": "G",
+    "clase": "02",
+    "familia": "",
+    "sector": "52",
+    "sectorTxt": "Ropa y accesorios",
+    "orgVentas": "1103",
+    "grupo": "Repuestos y accesorios",
+    "disponible": 15,
+    "comprometido": 2,
+    "total": 17,
+    "um": "UN",
+    "condicionPct": 0,
+    "promocion": null,
+    "sectorOferta": "99",
+    "precioUsd": 69,
+    "iscPct": 0
+   },
+   {
+    "material": "ACC-GUANTE",
+    "denominacion": "Guantes de Trabajo",
+    "marca": "Socopur",
+    "linea": "G",
+    "clase": "04",
+    "familia": "",
+    "sector": "52",
+    "sectorTxt": "Ropa y accesorios",
+    "orgVentas": "1103",
+    "grupo": "Repuestos y accesorios",
+    "disponible": 40,
+    "comprometido": 0,
+    "total": 40,
+    "um": "UN",
+    "condicionPct": 0,
+    "promocion": null,
+    "sectorOferta": "99",
+    "precioUsd": 6.7,
+    "iscPct": 0,
+    "escala": [
+     {
+      "min": 12,
+      "pct": 6
+     }
+    ]
+   },
+   {
+    "material": "CAS-SS-S",
+    "denominacion": "Casaca Softshell Talla S",
+    "marca": "Socopur",
+    "linea": "G",
+    "clase": "06",
+    "familia": "",
+    "sector": "52",
+    "sectorTxt": "Ropa y accesorios",
+    "orgVentas": "1103",
+    "grupo": "Repuestos y accesorios",
+    "disponible": 35,
+    "comprometido": 0,
+    "total": 35,
+    "um": "UN",
+    "condicionPct": 0,
+    "promocion": null,
+    "sectorOferta": "99",
+    "precioUsd": 40,
+    "iscPct": 0
+   },
+   {
+    "material": "CAS-SS-M",
+    "denominacion": "Casaca Softshell Talla M",
+    "marca": "Socopur",
+    "linea": "G",
+    "clase": "06",
+    "familia": "",
+    "sector": "52",
+    "sectorTxt": "Ropa y accesorios",
+    "orgVentas": "1103",
+    "grupo": "Repuestos y accesorios",
+    "disponible": 54,
+    "comprometido": 0,
+    "total": 54,
+    "um": "UN",
+    "condicionPct": 0,
+    "promocion": null,
+    "sectorOferta": "99",
+    "precioUsd": 40,
+    "iscPct": 0
+   },
+   {
+    "material": "CAS-SS-L",
+    "denominacion": "Casaca Softshell Talla L",
+    "marca": "Socopur",
+    "linea": "G",
+    "clase": "06",
+    "familia": "",
+    "sector": "52",
+    "sectorTxt": "Ropa y accesorios",
+    "orgVentas": "1103",
+    "grupo": "Repuestos y accesorios",
+    "disponible": 8,
+    "comprometido": 0,
+    "total": 8,
+    "um": "UN",
+    "condicionPct": 0,
+    "promocion": null,
+    "sectorOferta": "99",
+    "precioUsd": 40,
+    "iscPct": 0
+   },
+   {
+    "material": "LLA-9090-18",
+    "denominacion": "Llanta 90/90-18",
+    "marca": "Michelin",
+    "linea": "P",
+    "clase": "03",
+    "familia": "",
+    "sector": "50",
+    "sectorTxt": "Rep. alternativos y llantas",
+    "orgVentas": "1103",
+    "grupo": "Repuestos y accesorios",
+    "disponible": 24,
+    "comprometido": 3,
+    "total": 27,
+    "um": "UN",
+    "condicionPct": 0,
+    "promocion": null,
+    "sectorOferta": "99",
+    "precioUsd": 49.5,
+    "iscPct": 0
+   },
+   {
+    "material": "BUJ-CR8E",
+    "denominacion": "Bujía CR8E",
+    "marca": "NGK",
+    "linea": "P",
+    "clase": "05",
+    "familia": "",
+    "sector": "51",
+    "sectorTxt": "Repuestos originales",
+    "orgVentas": "1103",
+    "grupo": "Repuestos y accesorios",
+    "disponible": 200,
+    "comprometido": 0,
+    "total": 200,
+    "um": "UN",
+    "condicionPct": 0,
+    "promocion": null,
+    "sectorOferta": "99",
+    "precioUsd": 4.8,
+    "iscPct": 0
+   },
+   {
+    "material": "ACC-CASCO-S",
+    "denominacion": "Casco Integral Talla S",
+    "marca": "MT Helmets",
+    "linea": "G",
+    "clase": "02",
+    "familia": "",
+    "sector": "52",
+    "sectorTxt": "Ropa y accesorios",
+    "orgVentas": "1103",
+    "grupo": "Repuestos y accesorios",
+    "disponible": 0,
+    "comprometido": 0,
+    "total": 0,
+    "um": "UN",
+    "condicionPct": 0,
+    "promocion": null,
+    "sectorOferta": "99",
+    "precioUsd": 69,
+    "iscPct": 0
+   },
+   {
+    "material": "ACC-CASCO-L",
+    "denominacion": "Casco Integral Talla L",
+    "marca": "MT Helmets",
+    "linea": "G",
+    "clase": "02",
+    "familia": "",
+    "sector": "52",
+    "sectorTxt": "Ropa y accesorios",
+    "orgVentas": "1103",
+    "grupo": "Repuestos y accesorios",
+    "disponible": 6,
+    "comprometido": 0,
+    "total": 6,
+    "um": "UN",
+    "condicionPct": 0,
+    "promocion": null,
+    "sectorOferta": "99",
+    "precioUsd": 69,
+    "iscPct": 0
+   }
+  ]
+ },
+ "segmentos": {
+  "lineas": {
+   "vehiculos": [
+    {
+     "key": "VE",
+     "text": "VE · Vehículo"
+    }
+   ],
+   "repuestos": [
+    {
+     "key": "G",
+     "text": "G · Indumentaria y protecciones"
+    },
+    {
+     "key": "M",
+     "text": "M · Mercadería"
+    },
+    {
+     "key": "O",
+     "text": "O · Otros repuestos"
+    },
+    {
+     "key": "P",
+     "text": "P · Repuestos de vehículos"
+    }
+   ]
+  },
+  "clases": {
+   "VE": [
+    {
+     "key": "LI",
+     "text": "LI · Vehículo ligero"
+    },
+    {
+     "key": "ME",
+     "text": "ME · Vehículo menor"
+    }
+   ],
+   "G": [
+    {
+     "key": "01",
+     "text": "01 · Calzado"
+    },
+    {
+     "key": "02",
+     "text": "02 · Cascos"
+    },
+    {
+     "key": "03",
+     "text": "03 · Lentes & goggles"
+    },
+    {
+     "key": "04",
+     "text": "04 · Protectores"
+    },
+    {
+     "key": "05",
+     "text": "05 · Repuestos de indumentaria"
+    },
+    {
+     "key": "06",
+     "text": "06 · Ropa técnica"
+    },
+    {
+     "key": "07",
+     "text": "07 · Ropa casual"
+    }
+   ],
+   "M": [
+    {
+     "key": "01",
+     "text": "01 · Lubricantes, aditivos y grasas"
+    },
+    {
+     "key": "02",
+     "text": "02 · Motores"
+    },
+    {
+     "key": "03",
+     "text": "03 · Línea fuerza"
+    },
+    {
+     "key": "04",
+     "text": "04 · Línea forestal"
+    },
+    {
+     "key": "05",
+     "text": "05 · Armas y municiones"
+    },
+    {
+     "key": "06",
+     "text": "06 · Bicicletas"
+    },
+    {
+     "key": "07",
+     "text": "07 · Comunicaciones"
+    },
+    {
+     "key": "08",
+     "text": "08 · Herramientas y equipos"
+    },
+    {
+     "key": "09",
+     "text": "09 · Accesorios y merchandising"
+    }
+   ],
+   "O": [
+    {
+     "key": "01",
+     "text": "01 · Repuestos línea fuerza"
+    },
+    {
+     "key": "02",
+     "text": "02 · Repuestos línea forestal y agrícola"
+    },
+    {
+     "key": "03",
+     "text": "03 · Repuestos de bicicleta"
+    }
+   ],
+   "P": [
+    {
+     "key": "01",
+     "text": "01 · Motor"
+    },
+    {
+     "key": "02",
+     "text": "02 · Chasis"
+    },
+    {
+     "key": "03",
+     "text": "03 · Llantas y cámaras"
+    },
+    {
+     "key": "04",
+     "text": "04 · Engranajes y sistema de arrastre"
+    },
+    {
+     "key": "05",
+     "text": "05 · Bujías y baterías"
+    },
+    {
+     "key": "06",
+     "text": "06 · Rodamientos"
+    },
+    {
+     "key": "07",
+     "text": "07 · Recambio y accesorios"
+    }
+   ]
+  },
+  "familias": {
+   "G-01": [
+    {
+     "key": "01",
+     "text": "01 · Técnico"
+    },
+    {
+     "key": "02",
+     "text": "02 · Casual"
+    }
+   ],
+   "M-01": [
+    {
+     "key": "01",
+     "text": "01 · Lubricantes de motor"
+    },
+    {
+     "key": "02",
+     "text": "02 · Lubricantes de transmisión"
+    },
+    {
+     "key": "03",
+     "text": "03 · Mantenimiento"
+    },
+    {
+     "key": "04",
+     "text": "04 · Aditivos y workshop"
+    }
+   ]
+  }
+ },
+ "sectores": {
+  "vehiculos": [
+   {
+    "key": "10",
+    "text": "10 · KTM"
+   },
+   {
+    "key": "11",
+    "text": "11 · Husqvarna"
+   },
+   {
+    "key": "12",
+    "text": "12 · Gasgas"
+   },
+   {
+    "key": "13",
+    "text": "13 · Triumph"
+   },
+   {
+    "key": "14",
+    "text": "14 · Polaris"
+   },
+   {
+    "key": "15",
+    "text": "15 · Hero"
+   },
+   {
+    "key": "16",
+    "text": "16 · Lifan"
+   },
+   {
+    "key": "17",
+    "text": "17 · Piaggio"
+   },
+   {
+    "key": "18",
+    "text": "18 · QJ Motor"
+   },
+   {
+    "key": "19",
+    "text": "19 · VOGE"
+   },
+   {
+    "key": "20",
+    "text": "20 · Loncin"
+   }
+  ],
+  "repuestos": [
+   {
+    "key": "50",
+    "text": "50 · Rep. alternativos y llantas"
+   },
+   {
+    "key": "51",
+    "text": "51 · Repuestos originales"
+   },
+   {
+    "key": "52",
+    "text": "52 · Ropa y accesorios"
+   },
+   {
+    "key": "53",
+    "text": "53 · Bicicletas"
+   },
+   {
+    "key": "54",
+    "text": "54 · Armas y municiones"
+   },
+   {
+    "key": "55",
+    "text": "55 · Lubricantes"
+   },
+   {
+    "key": "90",
+    "text": "90 · Administrativo"
+   }
+  ]
+ },
+ "stock": {
+  "VEH-KTM390": [
+   {
+    "ubicacion": "1101 · Pucallpa-Centenario · 0004 TDA CENTEN",
+    "esMio": true,
+    "fisico": 2,
+    "disponible": 2,
+    "transito": 2
+   },
+   {
+    "ubicacion": "1003 · Lima-Chorrillos · 0001",
+    "esMio": false,
+    "fisico": 1,
+    "disponible": 1,
+    "transito": 0
+   }
+  ],
+  "VEH-LKP200": [
+   {
+    "ubicacion": "1101 · Pucallpa-Centenario · 0004 TDA CENTEN",
+    "esMio": true,
+    "fisico": 6,
+    "disponible": 6,
+    "transito": 0
+   },
+   {
+    "ubicacion": "1003 · Lima-Chorrillos · 0001",
+    "esMio": false,
+    "fisico": 2,
+    "disponible": 2,
+    "transito": 0
+   },
+   {
+    "ubicacion": "1302 · Tarapoto-Hurtado · 0001",
+    "esMio": false,
+    "fisico": 1,
+    "disponible": 1,
+    "transito": 0
+   }
+  ],
+  "VEH-LKP200R": [
+   {
+    "ubicacion": "1101 · Pucallpa-Centenario · 0004 TDA CENTEN",
+    "esMio": true,
+    "fisico": 0,
+    "disponible": 0,
+    "transito": 0
+   },
+   {
+    "ubicacion": "1003 · Lima-Chorrillos · 0001",
+    "esMio": false,
+    "fisico": 2,
+    "disponible": 2,
+    "transito": 0
+   }
+  ],
+  "VEH-LTM200": [
+   {
+    "ubicacion": "1101 · Pucallpa-Centenario · 0004 TDA CENTEN",
+    "esMio": true,
+    "fisico": 0,
+    "disponible": 0,
+    "transito": 3
+   }
+  ],
+  "LUB-1040": [
+   {
+    "ubicacion": "1101 · Pucallpa-Centenario · 0001 CENTENARIO",
+    "esMio": true,
+    "fisico": 130,
+    "disponible": 120,
+    "transito": 0
+   },
+   {
+    "ubicacion": "1003 · Lima-Chorrillos · 0001",
+    "esMio": false,
+    "fisico": 400,
+    "disponible": 380,
+    "transito": 0
+   }
+  ],
+  "CAS-SS-S": [
+   {
+    "ubicacion": "1101 · Pucallpa-Centenario · 0001 CENTENARIO",
+    "esMio": true,
+    "fisico": 35,
+    "disponible": 35,
+    "transito": 0
+   },
+   {
+    "ubicacion": "1003 · Lima-Chorrillos · 0001",
+    "esMio": false,
+    "fisico": 60,
+    "disponible": 60,
+    "transito": 0
+   }
+  ],
+  "CAS-SS-M": [
+   {
+    "ubicacion": "1101 · Pucallpa-Centenario · 0001 CENTENARIO",
+    "esMio": true,
+    "fisico": 54,
+    "disponible": 54,
+    "transito": 0
+   },
+   {
+    "ubicacion": "1003 · Lima-Chorrillos · 0001",
+    "esMio": false,
+    "fisico": 80,
+    "disponible": 80,
+    "transito": 0
+   }
+  ],
+  "CAS-SS-L": [
+   {
+    "ubicacion": "1101 · Pucallpa-Centenario · 0001 CENTENARIO",
+    "esMio": true,
+    "fisico": 8,
+    "disponible": 8,
+    "transito": 12
+   },
+   {
+    "ubicacion": "1003 · Lima-Chorrillos · 0001",
+    "esMio": false,
+    "fisico": 25,
+    "disponible": 25,
+    "transito": 0
+   }
+  ]
+ },
+ "transito": {
+  "VEH-KTM390": [
+   {
+    "cantidad": 2,
+    "origen": "1003 · Lima-Chorrillos · 0001",
+    "destino": "1101 · Pucallpa-Centenario · 0004 TDA CENTEN",
+    "documento": "8000001136",
+    "llega": "2026-10-02"
+   }
+  ],
+  "VEH-LTM200": [
+   {
+    "cantidad": 3,
+    "origen": "1003 · Lima-Chorrillos · 0001",
+    "destino": "1101 · Pucallpa-Centenario · 0004 TDA CENTEN",
+    "documento": "8000001137",
+    "llega": "2026-10-05"
+   }
+  ],
+  "CAS-SS-L": [
+   {
+    "cantidad": 12,
+    "origen": "1003 · Lima-Chorrillos · 0001",
+    "destino": "1101 · Pucallpa-Centenario · 0001 CENTENARIO",
+    "documento": "8000001140",
+    "llega": "2026-10-01"
+   }
+  ]
+ },
+ "vins": {
+  "VEH-KTM390": [
+   {
+    "vin": "VBKJPDU390Z011001",
+    "ingreso": "2026-07-14",
+    "ubic": "1101 · 0004 TDA CENTEN",
+    "estado": "Disponible"
+   },
+   {
+    "vin": "VBKJPDU390Z011007",
+    "ingreso": "2026-08-02",
+    "ubic": "1101 · 0004 TDA CENTEN",
+    "estado": "Reservado",
+    "reservadoPor": "V-1077 · María Fernanda Rojas",
+    "hasta": "2026-09-29T18:00:00"
+   },
+   {
+    "vin": "VBKJPDU390Z011012",
+    "ingreso": "2026-08-20",
+    "ubic": "1003 · Lima-Chorrillos",
+    "estado": "Disponible"
+   }
+  ],
+  "VEH-LKP200": [
+   {
+    "vin": "LFPJ250Z2600301",
+    "ingreso": "2026-06-10",
+    "ubic": "1101 · 0004 TDA CENTEN",
+    "estado": "Disponible"
+   },
+   {
+    "vin": "LFPJ250Z2600302",
+    "ingreso": "2026-06-10",
+    "ubic": "1101 · 0004 TDA CENTEN",
+    "estado": "Disponible"
+   },
+   {
+    "vin": "LFPJ250Z2600317",
+    "ingreso": "2026-07-22",
+    "ubic": "1101 · 0004 TDA CENTEN",
+    "estado": "Disponible"
+   },
+   {
+    "vin": "LFPJ250Z2600350",
+    "ingreso": "2026-08-30",
+    "ubic": "1003 · Lima-Chorrillos",
+    "estado": "Disponible"
+   }
+  ]
+ },
+ "modalidades": [
+  {
+   "key": "veh_retail",
+   "texto": "Vehículos retail",
+   "tipo": "vehiculos",
+   "canal": "11 Retail",
+   "claseOferta": "Z100",
+   "clasePedido": "Z116",
+   "expedicion": "recojo",
+   "nota": "Contado libera Caja; crédito, el Área de Créditos. El VIN se enlaza al crear el pedido."
+  },
+  {
+   "key": "veh_mayorista",
+   "texto": "Vehículos mayorista",
+   "tipo": "vehiculos",
+   "canal": "10 Mayorista",
+   "claseOferta": "Z100",
+   "clasePedido": "Z112",
+   "expedicion": "recojo",
+   "nota": "Canal mayorista. El pedido nace con bloqueo de factura."
+  },
+  {
+   "key": "veh_flota",
+   "texto": "Vehículos flota",
+   "tipo": "vehiculos",
+   "canal": "10 Mayorista",
+   "claseOferta": "Z100",
+   "clasePedido": "Z113",
+   "expedicion": "recojo",
+   "nota": "Pedido de flota (bloqueo de factura, verificación de crédito)."
+  },
+  {
+   "key": "veh_directa",
+   "texto": "Vehículos venta directa",
+   "tipo": "vehiculos",
+   "canal": "10 Mayorista",
+   "claseOferta": "Z100",
+   "clasePedido": "Z114",
+   "expedicion": "recojo",
+   "nota": "Venta directa (bloqueo de factura, verificación de crédito)."
+  },
+  {
+   "key": "veh_ferias",
+   "texto": "Vehículos ferias",
+   "tipo": "vehiculos",
+   "canal": "11 Retail",
+   "claseOferta": "Z100",
+   "clasePedido": "Z117",
+   "expedicion": "recojo",
+   "nota": "Venta en feria."
+  },
+  {
+   "key": "veh_usado",
+   "texto": "Vehículos usados",
+   "tipo": "vehiculos",
+   "canal": "13 Usado (por confirmar)",
+   "claseOferta": "Z100",
+   "clasePedido": "Z118",
+   "expedicion": "recojo",
+   "nota": "Canal de usados."
+  },
+  {
+   "key": "veh_export",
+   "texto": "Vehículos exportación",
+   "tipo": "vehiculos",
+   "canal": "10 Mayorista",
+   "claseOferta": "Z100",
+   "clasePedido": "Z115",
+   "expedicion": "recojo",
+   "nota": "Entrega y factura de exportación."
+  },
+  {
+   "key": "veh_transf_gratuita",
+   "texto": "Transferencia gratuita de vehículo",
+   "tipo": "vehiculos",
+   "canal": "10 / 11",
+   "claseOferta": "Z302 (inferido)",
+   "clasePedido": "Z119",
+   "expedicion": "recojo",
+   "nota": "Sin cobro; precio con esquema Z2. Entrega bloqueada hasta liberar."
+  },
+  {
+   "key": "rep_mostrador",
+   "texto": "Repuestos – mostrador",
+   "tipo": "repuestos",
+   "canal": "11 Retail",
+   "claseOferta": "Z300",
+   "clasePedido": "Z311",
+   "expedicion": "recojo",
+   "nota": "Factura directa en Caja (la factura nace bloqueada) y reconocimiento de ingreso."
+  },
+  {
+   "key": "rep_despacho",
+   "texto": "Repuestos – despacho a cliente",
+   "tipo": "repuestos",
+   "canal": "por confirmar",
+   "claseOferta": "Z300",
+   "clasePedido": "Z310",
+   "expedicion": "envio",
+   "nota": "La clase Z310 no figura en canal 11 de la org. 1103: falta confirmar en qué canal se usa. La entrega nace bloqueada y pasa por el almacén (EWM)."
+  },
+  {
+   "key": "rep_mayorista",
+   "texto": "Repuestos – mostrador mayorista",
+   "tipo": "repuestos",
+   "canal": "10 / 12",
+   "claseOferta": "Z300",
+   "clasePedido": "Z323",
+   "expedicion": "recojo",
+   "nota": "Z323 está habilitada en canales 10 y 12 con sectores 50–56 y 90, no con el 99: validar cómo se arma la oferta mayorista. El cliente debe estar ampliado a ese canal."
+  },
+  {
+   "key": "rep_web",
+   "texto": "Repuestos – web",
+   "tipo": "repuestos",
+   "canal": "14 Web",
+   "claseOferta": "Z300",
+   "clasePedido": "Z313",
+   "expedicion": "envio",
+   "nota": "Canal web; la entrega nace bloqueada."
+  },
+  {
+   "key": "rep_export",
+   "texto": "Repuestos – exportación",
+   "tipo": "repuestos",
+   "canal": "por confirmar",
+   "claseOferta": "Z301",
+   "clasePedido": "Z312",
+   "expedicion": "envio",
+   "nota": "Z301/Z312 no figuran en canal 11 ni 14 de la org. 1103: falta confirmar canal. Entrega bloqueada."
+  },
+  {
+   "key": "rep_transf_gratuita",
+   "texto": "Transferencia gratuita de repuestos",
+   "tipo": "repuestos",
+   "canal": "11 Retail",
+   "claseOferta": "Z302",
+   "clasePedido": "Z316",
+   "expedicion": "recojo",
+   "nota": "Pedido sin cargo (esquema Z2). No pasa por Caja: alguien con permiso levanta el bloqueo Z1 y sigue entrega y factura."
+  },
+  {
+   "key": "rep_costo_cero",
+   "texto": "Marketing costo cero",
+   "tipo": "repuestos",
+   "canal": "11 Retail",
+   "claseOferta": "Z302 (inferido)",
+   "clasePedido": "Z363",
+   "expedicion": "recojo",
+   "nota": "Pedido sin cargo (esquema Z2). No pasa por Caja: alguien con permiso levanta el bloqueo Z1 y sigue entrega y factura."
+  },
+  {
+   "key": "rep_promo_cruzada",
+   "texto": "Promoción cruzada de motos",
+   "tipo": "repuestos",
+   "canal": "11 Retail",
+   "claseOferta": "Z302 (inferido)",
+   "clasePedido": "Z362",
+   "expedicion": "recojo",
+   "nota": "Pedido sin cargo (Z362). El regalo se carga como posición gratuita según ZTSD_CROS90x/ZTSD_MATER_ADIC (por confirmar). Alguien con permiso levanta el bloqueo de entrega Z1."
+  }
+ ],
+ "transportistas": [
+  {
+   "key": "T01",
+   "text": "Transportes Ejemplo A",
+   "sedes": [
+    {
+     "key": "T01-1",
+     "text": "Sede Lima · Callao",
+     "direccion": "Av. Argentina 1200, Callao"
+    },
+    {
+     "key": "T01-2",
+     "text": "Sede Trujillo",
+     "direccion": "Av. Industrial 450, Trujillo"
+    },
+    {
+     "key": "T01-3",
+     "text": "Sede Pucallpa",
+     "direccion": "Jr. Tarapacá 810, Callería, Pucallpa"
+    }
+   ]
+  },
+  {
+   "key": "T02",
+   "text": "Cargas del Oriente (ejemplo)",
+   "sedes": [
+    {
+     "key": "T02-1",
+     "text": "Sede Pucallpa",
+     "direccion": "Av. Centenario 2100, Pucallpa"
+    },
+    {
+     "key": "T02-2",
+     "text": "Sede Tarapoto",
+     "direccion": "Jr. Alfonso Ugarte 95, Tarapoto"
+    }
+   ]
+  },
+  {
+   "key": "T03",
+   "text": "Logística Norte (ejemplo)",
+   "sedes": [
+    {
+     "key": "T03-1",
+     "text": "Sede Trujillo",
+     "direccion": "Av. Larco 1500, Trujillo"
+    }
+   ]
+  }
+ ],
+ "formasPago": [
+  {
+   "key": "C000",
+   "text": "C000 Contado"
+  },
+  {
+   "key": "C030",
+   "text": "C030 Crédito 30 días (ejemplo)"
+  }
+ ],
+ "bonificaciones": [
+  {
+   "id": "CASCO-MOTO",
+   "nombre": "Casco integral de regalo",
+   "motos": [
+    "VEH-LKP200",
+    "VEH-LKP200R",
+    "VEH-LTM200"
+   ],
+   "cantidad": 1,
+   "vigenteHasta": "2026-12-31",
+   "tallas": [
+    {
+     "key": "S",
+     "material": "ACC-CASCO-S"
+    },
+    {
+     "key": "M",
+     "material": "ACC-CASCO-M"
+    },
+    {
+     "key": "L",
+     "material": "ACC-CASCO-L"
+    }
+   ]
+  }
+ ],
+ "ubigeo": [
+  {
+   "dep": "Lima",
+   "provincias": [
+    {
+     "prov": "Lima",
+     "distritos": [
+      "Chorrillos",
+      "Miraflores",
+      "San Isidro",
+      "Surco"
+     ]
+    }
+   ]
+  },
+  {
+   "dep": "La Libertad",
+   "provincias": [
+    {
+     "prov": "Trujillo",
+     "distritos": [
+      "Trujillo",
+      "Victor Larco Herrera",
+      "La Esperanza"
+     ]
+    }
+   ]
+  },
+  {
+   "dep": "Ucayali",
+   "provincias": [
+    {
+     "prov": "Coronel Portillo",
+     "distritos": [
+      "Calleria",
+      "Yarinacocha",
+      "Manantay"
+     ]
+    }
+   ]
+  },
+  {
+   "dep": "Madre de Dios",
+   "provincias": [
+    {
+     "prov": "Tambopata",
+     "distritos": [
+      "Tambopata",
+      "Las Piedras"
+     ]
+    }
+   ]
+  }
+ ],
+ "tiposCliente": [
+  {
+   "key": "0001",
+   "text": "0001 Persona natural (ejemplo)"
+  },
+  {
+   "key": "0003",
+   "text": "0003 Empresa"
+  }
+ ],
+ "apiDocumentos": {
+  "45219034": {
+   "tipoDoc": "DNI",
+   "razon": "Carla Ivonne Rios Salas",
+   "direccion": "Av. Ejemplo 123, Urb. Los Pinos",
+   "dep": "Lima",
+   "prov": "Lima",
+   "dist": "Chorrillos",
+   "ubigeoApi": "140108",
+   "formato": "RENIEC"
+  },
+  "20512345678": {
+   "tipoDoc": "RUC",
+   "razon": "Comercial Ejemplo Selva S.A.C.",
+   "direccion": "Jr. Comercio 456",
+   "dep": "Ucayali",
+   "prov": "Coronel Portillo",
+   "dist": "Calleria",
+   "ubigeoApi": "250101",
+   "formato": "INEI"
+  }
+ },
+ "canalesArea": [
+  {
+   "key": "1101/11",
+   "org": "1101",
+   "canal": "11",
+   "text": "Vehículos · 11 Retail"
+  },
+  {
+   "key": "1101/10",
+   "org": "1101",
+   "canal": "10",
+   "text": "Vehículos · 10 Mayorista"
+  },
+  {
+   "key": "1103/11",
+   "org": "1103",
+   "canal": "11",
+   "text": "Repuestos y accesorios · 11 Retail"
+  },
+  {
+   "key": "1103/10",
+   "org": "1103",
+   "canal": "10",
+   "text": "Repuestos y accesorios · 10 Mayorista"
+  },
+  {
+   "key": "1103/12",
+   "org": "1103",
+   "canal": "12",
+   "text": "Repuestos y accesorios · 12 Institucional"
+  }
+ ],
+ "transportistasRecientes": [
+  "T01",
+  "T02"
+ ],
+ "empresa": {
+  "razon": "Socopur S.A.C. (ejemplo)",
+  "ruc": "RUC de ejemplo",
+  "direccion": "Av. Centenario 0000, Pucallpa (ejemplo)",
+  "telefono": "(061) 000 000 (ejemplo)"
+ },
+ "cuentasBancarias": [
+  {
+   "banco": "Banco A (ejemplo)",
+   "moneda": "PEN",
+   "cuenta": "000-0000000-0-00",
+   "cci": "000 000 0000000000 00"
+  },
+  {
+   "banco": "Banco B (ejemplo)",
+   "moneda": "USD",
+   "cuenta": "000-0000000-1-00",
+   "cci": "000 000 0000000001 00"
+  }
+ ]
+}

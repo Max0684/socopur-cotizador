@@ -1,0 +1,19 @@
+{
+  "name": "com.socopur.cotizador",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cotizador Socopur (YCOTIZ) - UI5 Freestyle + TypeScript",
+  "scripts": {
+    "start": "ui5 serve --open index.html",
+    "build": "ui5 build --clean-dest",
+    "typecheck": "tsc --noEmit",
+    "lint": "ui5lint"
+  },
+  "devDependencies": {
+    "@sapui5/types": "~1.120.52",
+    "@ui5/cli": "^4.0.0",
+    "@ui5/linter": "^1.0.0",
+    "typescript": "~5.9.3",
+    "ui5-tooling-transpile": "^3.0.0"
+  }
+}

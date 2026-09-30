@@ -1,0 +1,100 @@
+<mvc:View
+	controllerName="com.socopur.cotizador.controller.Main"
+	height="100%"
+	xmlns="sap.m"
+	xmlns:f="sap.f"
+	xmlns:core="sap.ui.core"
+	xmlns:mvc="sap.ui.core.mvc">
+	<f:DynamicPage id="listaPage" headerExpanded="false" toggleHeaderOnTitleClick="true">
+		<f:title>
+			<f:DynamicPageTitle>
+				<f:heading>
+					<Title text="{i18n>listaTitulo}" />
+				</f:heading>
+				<f:content>
+					<SearchField
+						id="filtroTexto"
+						width="100%"
+						placeholder="{i18n>buscarPlaceholder}"
+						liveChange=".onFiltrar"
+						search=".onFiltrar" />
+				</f:content>
+				<f:actions>
+					<Button
+						id="nuevaOfertaBtn"
+						text="{i18n>nuevaOferta}"
+						type="Emphasized"
+						icon="sap-icon://add"
+						press=".onNuevaOferta" />
+				</f:actions>
+			</f:DynamicPageTitle>
+		</f:title>
+
+		<f:header>
+			<f:DynamicPageHeader pinnable="false">
+				<HBox wrap="Wrap" alignItems="End">
+					<VBox class="sapUiSmallMarginEnd sapUiTinyMarginBottom">
+						<Label text="{i18n>filtroFechas}" labelFor="filtroFechas" />
+						<DateRangeSelection
+							id="filtroFechas"
+							width="15rem"
+							displayFormat="dd/MM/yyyy"
+							change=".onFiltrar" />
+					</VBox>
+					<VBox class="sapUiTinyMarginBottom">
+						<Label text="{i18n>filtroEstado}" labelFor="filtroEstado" />
+						<Select id="filtroEstado" selectedKey="" change=".onFiltrar" width="11rem">
+							<core:Item key="" text="{i18n>estadoTodos}" />
+							<core:Item key="Vigente" text="{i18n>estadoVigente}" />
+							<core:Item key="Vencida" text="{i18n>estadoVencida}" />
+							<core:Item key="Pedido generado" text="{i18n>estadoPedido}" />
+						</Select>
+					</VBox>
+				</HBox>
+			</f:DynamicPageHeader>
+		</f:header>
+
+		<f:content>
+			<VBox height="100%">
+			<VBox
+				visible="{= !${vista>/consultado} }"
+				alignItems="Center"
+				justifyContent="Center"
+				height="100%"
+				class="sapUiLargeMarginTop">
+				<core:Icon src="sap-icon://search" size="3rem" color="Neutral" class="sapUiSmallMarginBottom" />
+				<Title text="{i18n>listaBuscarPrimero}" level="H3" />
+				<Text text="{i18n>listaBuscarNota}" class="sapUiTinyMarginTop sapUiSmallMarginBottom" textAlign="Center" />
+				<HBox>
+					<Button text="{i18n>verMisOfertas}" icon="sap-icon://list" press=".onVerMisOfertas" class="sapUiSmallMarginEnd" />
+					<Button text="{i18n>nuevaOferta}" type="Emphasized" icon="sap-icon://add" press=".onNuevaOferta" />
+				</HBox>
+			</VBox>
+						<List
+				id="tabla"
+				visible="{vista>/consultado}"
+				items="{mock>/ofertas}"
+				mode="SingleSelectMaster"
+				itemPress=".onSeleccionar"
+				noDataText="{i18n>listaVacia}"
+				growing="true"
+				growingThreshold="20">
+				<ObjectListItem
+					type="Navigation"
+					title="{mock>cliente}"
+					number="{= 'S/ ' + ${mock>total} }"
+					numberState="None">
+					<attributes>
+						<ObjectAttribute text="{parts: ['mock>numero', 'mock>fecha'], formatter: '.formatNumFecha'}" />
+						<ObjectAttribute text="{mock>doc}" />
+						<ObjectAttribute text="{path: 'mock>vence', formatter: '.formatVence'}" visible="{= !!${mock>vence} &amp;&amp; ${mock>estado} !== 'Pedido generado' }" />
+					</attributes>
+					<firstStatus>
+						<ObjectStatus text="{mock>estado}" state="{mock>estadoState}" />
+					</firstStatus>
+				</ObjectListItem>
+			</List>
+			</VBox>
+		</f:content>
+	</f:DynamicPage>
+</mvc:View>

@@ -1,0 +1,228 @@
+<core:FragmentDefinition
+	xmlns="sap.m"
+	xmlns:core="sap.ui.core">
+	<Dialog
+		id="dlgBuscarMaterial"
+		title="{i18n>materialBuscarTitulo}"
+		contentWidth="90%"
+		contentHeight="40rem"
+		draggable="true"
+		resizable="true"
+		afterClose=".onCerrarBusqueda">
+		<content>
+			<VBox class="sapUiSmallMargin">
+				<MessageStrip
+					text="{busqueda>/alcance}"
+					type="Information"
+					showIcon="true"
+					class="sapUiSmallMarginBottom" />
+
+				<!-- Tipo de busqueda: hoy solo hay dos (Repuestos y Vehiculos) -->
+				<HBox alignItems="Center" class="sapUiSmallMarginBottom">
+					<Label text="{i18n>tipoBusqueda}" class="sapUiSmallMarginEnd" />
+					<SegmentedButton selectedKey="{busqueda>/tipo}" selectionChange=".onCambiaTipo">
+						<items>
+							<SegmentedButtonItem key="repuestos" text="{i18n>tabRepuestos}" width="9rem" />
+							<SegmentedButtonItem key="vehiculos" text="{i18n>tabVehiculos}" width="9rem" />
+						</items>
+					</SegmentedButton>
+				</HBox>
+
+				<!-- Segmentos: Linea > Clase > Familia (Subfamilia y Marca se agregan con las tablas reales) -->
+				<Panel
+					headerText="{= ${i18n>filtrosTitulo} + (${busqueda>/resumen} ? ': ' + ${busqueda>/resumen} : '') }"
+					expandable="true"
+					expanded="{busqueda>/filtrosAbiertos}"
+					class="sapUiSmallMarginBottom">
+					<Title text="{i18n>segmentosTitulo}" level="H5" class="sapUiTinyMarginBottom" />
+					<HBox wrap="Wrap">
+						<VBox class="sapUiSmallMarginEnd sapUiTinyMarginBottom">
+							<Label text="{i18n>filtroLinea}" />
+							<Select width="17rem" items="{busqueda>/lineas}" selectedKey="{busqueda>/linea}" change=".onCambiaSegmento">
+								<core:Item key="{busqueda>key}" text="{busqueda>text}" />
+							</Select>
+						</VBox>
+						<VBox class="sapUiSmallMarginEnd sapUiTinyMarginBottom">
+							<Label text="{i18n>filtroClase}" />
+							<Select width="17rem" items="{busqueda>/clases}" selectedKey="{busqueda>/clase}" change=".onCambiaSegmento">
+								<core:Item key="{busqueda>key}" text="{busqueda>text}" />
+							</Select>
+						</VBox>
+						<VBox class="sapUiTinyMarginBottom">
+							<Label text="{i18n>filtroFamilia}" />
+							<Select
+								width="17rem"
+								items="{busqueda>/familias}"
+								selectedKey="{busqueda>/familia}"
+								enabled="{= ${busqueda>/familias}.length > 1 }"
+								change=".onCambiaSegmento">
+								<core:Item key="{busqueda>key}" text="{busqueda>text}" />
+							</Select>
+						</VBox>
+					</HBox>
+
+					<!-- Material: codigo, descripcion, texto largo, sector y filtros propios de cada tipo -->
+					<Title text="{i18n>materialFiltrosTitulo}" level="H5" class="sapUiSmallMarginTop sapUiTinyMarginBottom" />
+					<HBox wrap="Wrap" alignItems="End">
+						<VBox class="sapUiSmallMarginEnd sapUiTinyMarginBottom">
+							<Label text="{i18n>filtroCodigo}" />
+							<Input width="11rem" value="{busqueda>/codigo}" submit=".onBuscar" />
+						</VBox>
+						<VBox class="sapUiSmallMarginEnd sapUiTinyMarginBottom">
+							<Label text="{i18n>filtroDescripcion}" />
+							<Input width="14rem" value="{busqueda>/descripcion}" submit=".onBuscar" />
+						</VBox>
+						<VBox class="sapUiSmallMarginEnd sapUiTinyMarginBottom">
+							<Label text="{i18n>filtroTextoLargo}" />
+							<Input width="12rem" value="{busqueda>/texto}" submit=".onBuscar" />
+						</VBox>
+						<VBox class="sapUiSmallMarginEnd sapUiTinyMarginBottom">
+							<Label text="{i18n>filtroSector}" />
+							<Select width="15rem" items="{busqueda>/sectores}" selectedKey="{busqueda>/sector}">
+								<core:Item key="{busqueda>key}" text="{busqueda>text}" />
+							</Select>
+						</VBox>
+						<VBox class="sapUiSmallMarginEnd sapUiTinyMarginBottom" visible="{= ${busqueda>/tipo} === 'repuestos' }">
+							<Label text="{i18n>filtroMarca}" />
+							<Select width="12rem" items="{busqueda>/marcas}" selectedKey="{busqueda>/marca}">
+								<core:Item key="{busqueda>key}" text="{busqueda>text}" />
+							</Select>
+						</VBox>
+						<VBox class="sapUiSmallMarginEnd sapUiTinyMarginBottom" visible="{= ${busqueda>/tipo} === 'vehiculos' }">
+							<Label text="{i18n>filtroColor}" />
+							<Input width="9rem" value="{busqueda>/color}" submit=".onBuscar" />
+						</VBox>
+						<VBox class="sapUiSmallMarginEnd sapUiTinyMarginBottom" visible="{= ${busqueda>/tipo} === 'vehiculos' }">
+							<Label text="{i18n>filtroAnio}" />
+							<Input width="6rem" value="{busqueda>/anio}" submit=".onBuscar" />
+						</VBox>
+						<VBox class="sapUiSmallMarginEnd sapUiTinyMarginBottom" visible="{= ${busqueda>/tipo} === 'vehiculos' }">
+							<Label text="{i18n>filtroCondicion}" />
+							<Select width="8rem" selectedKey="{busqueda>/condicion}">
+								<core:Item key="" text="{i18n>todos}" />
+								<core:Item key="CBU" text="CBU" />
+								<core:Item key="Usada" text="Usada" />
+							</Select>
+						</VBox>
+					</HBox>
+					<HBox alignItems="Center" wrap="Wrap">
+						<CheckBox text="{i18n>soloConStock}" selected="{busqueda>/soloStock}" />
+						<Button text="{i18n>buscar}" type="Emphasized" icon="sap-icon://search" class="sapUiSmallMarginBegin" press=".onBuscar" />
+						<Button text="{i18n>limpiar}" type="Transparent" press=".onLimpiar" />
+					</HBox>
+				</Panel>
+
+				<MessageStrip
+					visible="{busqueda>/faltaFiltro}"
+					text="{i18n>faltaFiltro}"
+					type="Warning"
+					showIcon="true"
+					class="sapUiSmallMarginBottom" />
+
+				<Table
+					id="tablaVehiculos"
+					visible="{= ${busqueda>/tipo} === 'vehiculos' }"
+					items="{busqueda>/vehiculos}"
+					mode="SingleSelectLeft"
+					selectionChange=".onElegirFila"
+					noDataText="{= ${busqueda>/buscado} ? ${i18n>buscarMaterialVacio} : ${i18n>sinBuscarAun} }"
+					growing="true"
+					growingThreshold="30"
+					contextualWidth="Auto"
+					sticky="ColumnHeaders">
+					<columns>
+						<Column width="8rem"><Text text="{i18n>colMaterial}" /></Column>
+						<Column><Text text="{i18n>colDescripcion}" /></Column>
+						<Column width="7rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colSector}" /></Column>
+						<Column width="6rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colColor}" /></Column>
+						<Column width="3.5rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colAnio}" /></Column>
+						<Column width="4.5rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colCondicion}" /></Column>
+						<Column width="6rem" hAlign="End"><Text text="{i18n>colStockMio}" /></Column>
+						<Column width="7rem" hAlign="End"><Text text="{i18n>colStockOtros}" /></Column>
+						<Column width="9rem" hAlign="End"><Text text="{i18n>colPrecioLista}" /></Column>
+						<Column width="3rem" hAlign="Center"><Text text="" /></Column>
+					</columns>
+					<items>
+						<ColumnListItem>
+							<cells>
+								<ObjectIdentifier title="{busqueda>material}" />
+								<Text text="{busqueda>denominacion}" />
+								<Text text="{busqueda>sectorTxt}" />
+								<Text text="{busqueda>color}" />
+								<Text text="{busqueda>anio}" />
+								<Text text="{busqueda>condicion}" />
+								<ObjectStatus
+									text="{= ${busqueda>stockMio} > 0 ? ${busqueda>stockMio} : ${i18n>sinStock} }"
+									state="{= ${busqueda>stockMio} > 0 ? 'Success' : 'Error' }" />
+								<ObjectStatus
+									text="{busqueda>stockOtros}"
+									state="{= ${busqueda>stockOtros} > 0 ? 'Information' : 'None' }" />
+								<VBox alignItems="End">
+									<ObjectNumber number="{path: 'busqueda>precioUsd', formatter: '.formatMonto'}" unit="USD" textAlign="End" />
+									<Text text="{path: 'busqueda>precioUsd', formatter: '.formatPen'}" textAlign="End" />
+								</VBox>
+								<Button icon="sap-icon://inventory" type="Transparent" tooltip="{i18n>verStock}" press=".onVerStockFila" />
+							</cells>
+						</ColumnListItem>
+					</items>
+				</Table>
+
+				<Table
+					id="tablaRepuestos"
+					visible="{= ${busqueda>/tipo} === 'repuestos' }"
+					items="{busqueda>/repuestos}"
+					mode="MultiSelect"
+					selectionChange=".onElegirFila"
+					noDataText="{= ${busqueda>/buscado} ? ${i18n>buscarMaterialVacio} : ${i18n>sinBuscarAun} }"
+					growing="true"
+					growingThreshold="30"
+					contextualWidth="Auto"
+					sticky="ColumnHeaders">
+					<columns>
+						<Column width="8rem"><Text text="{i18n>colMaterial}" /></Column>
+						<Column><Text text="{i18n>colDescripcion}" /></Column>
+						<Column width="7rem" minScreenWidth="64rem" demandPopin="true"><Text text="{i18n>colSector}" /></Column>
+						<Column width="6rem" minScreenWidth="64rem" demandPopin="true"><Text text="{i18n>colMarca}" /></Column>
+						<Column width="6rem" hAlign="End"><Text text="{i18n>colDisponible}" /></Column>
+						<Column width="7rem" hAlign="End" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colComprometido}" /></Column>
+						<Column width="6rem" hAlign="End" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colStockTotal}" /></Column>
+						<Column width="3rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colUm}" /></Column>
+						<Column width="9rem" hAlign="End"><Text text="{i18n>colPrecioLista}" /></Column>
+						<Column width="3rem" hAlign="Center"><Text text="" /></Column>
+					</columns>
+					<items>
+						<ColumnListItem>
+							<cells>
+								<ObjectIdentifier title="{busqueda>material}" />
+								<Text text="{busqueda>denominacion}" />
+								<Text text="{busqueda>sectorTxt}" />
+								<Text text="{busqueda>marca}" />
+								<ObjectStatus
+									text="{= ${busqueda>disponible} > 0 ? ${busqueda>disponible} : ${i18n>sinStock} }"
+									state="{= ${busqueda>disponible} > 0 ? 'Success' : 'Error' }" />
+								<Text text="{busqueda>comprometido}" />
+								<Text text="{busqueda>total}" />
+								<Text text="{busqueda>um}" />
+								<VBox alignItems="End">
+									<ObjectNumber number="{path: 'busqueda>precioUsd', formatter: '.formatMonto'}" unit="USD" textAlign="End" />
+									<Text text="{path: 'busqueda>precioUsd', formatter: '.formatPen'}" textAlign="End" />
+								</VBox>
+								<Button icon="sap-icon://inventory" type="Transparent" tooltip="{i18n>verStock}" press=".onVerStockFila" />
+							</cells>
+						</ColumnListItem>
+					</items>
+				</Table>
+			</VBox>
+		</content>
+		<beginButton>
+			<Button
+				text="{i18n>seleccionar}"
+				type="Emphasized"
+				enabled="{= !!${busqueda>/elegido} }"
+				press=".onConfirmarMaterial" />
+		</beginButton>
+		<endButton>
+			<Button text="{i18n>cancelar}" press=".onCancelarBusqueda" />
+		</endButton>
+	</Dialog>
+</core:FragmentDefinition>

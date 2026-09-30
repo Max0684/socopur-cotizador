@@ -1,0 +1,12 @@
+<mvc:View
+	controllerName="com.socopur.cotizador.controller.App"
+	displayBlock="true"
+	height="100%"
+	xmlns="sap.m"
+	xmlns:f="sap.f"
+	xmlns:mvc="sap.ui.core.mvc">
+	<f:FlexibleColumnLayout
+		id="fcl"
+		layout="{app>/layout}"
+		backgroundDesign="Solid" />
+</mvc:View>

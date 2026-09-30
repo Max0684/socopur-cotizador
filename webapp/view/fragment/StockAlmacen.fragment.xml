@@ -1,0 +1,89 @@
+<core:FragmentDefinition
+	xmlns="sap.m"
+	xmlns:core="sap.ui.core">
+	<Dialog
+		id="dlgStock"
+		title="{stock>/titulo}"
+		contentWidth="62rem"
+		draggable="true"
+		resizable="true">
+		<content>
+			<VBox class="sapUiSmallMargin">
+				<MessageStrip
+					visible="{= !!${stock>/alerta} }"
+					text="{stock>/alerta}"
+					type="Warning"
+					showIcon="true"
+					class="sapUiSmallMarginBottom" />
+
+				<Table items="{stock>/filas}" sticky="ColumnHeaders">
+					<columns>
+						<Column><Text text="{i18n>ubicacion}" /></Column>
+						<Column width="6rem" hAlign="End"><Text text="{i18n>colFisico}" /></Column>
+						<Column width="8rem" hAlign="End"><Text text="{i18n>colComprometido}" /></Column>
+						<Column width="7rem" hAlign="End"><Text text="{i18n>colDisponible}" /></Column>
+						<Column width="7rem" hAlign="End"><Text text="{i18n>colTransito}" /></Column>
+						<Column width="10rem" hAlign="End"><Text text="" /></Column>
+					</columns>
+					<items>
+						<ColumnListItem highlight="{= ${stock>esMio} ? 'Information' : 'None' }">
+							<cells>
+								<ObjectIdentifier title="{stock>ubicacion}" text="{= ${stock>esMio} ? ${i18n>tuAlmacen} : '' }" />
+								<Text text="{stock>fisico}" />
+								<Text text="{stock>comprometido}" />
+								<ObjectStatus
+									text="{= ${stock>disponible} > 0 ? ${stock>disponible} : ${i18n>sinStock} }"
+									state="{= ${stock>disponible} > 0 ? 'Success' : 'Error' }" />
+								<ObjectStatus
+									text="{stock>transito}"
+									state="{= ${stock>transito} > 0 ? 'Information' : 'None' }" />
+								<Button
+									text="{i18n>solicitarTraslado}"
+									type="Transparent"
+									visible="{= !${stock>esMio} &amp;&amp; ${stock>disponible} > 0 }"
+									press=".onSolicitarTraslado" />
+							</cells>
+						</ColumnListItem>
+					</items>
+				</Table>
+				<HBox justifyContent="End" class="sapUiTinyMarginTop">
+					<Label text="{i18n>colDisponible} total:" class="sapUiTinyMarginEnd" />
+					<ObjectNumber number="{stock>/totalDisponible}" emphasized="true" />
+				</HBox>
+				<Text text="{i18n>stockNota}" class="sapUiSmallMarginBottom" />
+
+				<VBox visible="{= ${stock>/transito}.length > 0 }">
+					<Title text="{i18n>transitoTitulo}" level="H4" class="sapUiSmallMarginTop sapUiTinyMarginBottom" />
+					<Table items="{stock>/transito}">
+						<columns>
+							<Column width="8rem" hAlign="End"><Text text="{i18n>colCantPendiente}" /></Column>
+							<Column><Text text="{i18n>colOrigen}" /></Column>
+							<Column><Text text="{i18n>colDestino}" /></Column>
+							<Column width="11rem"><Text text="{i18n>colPedidoTraslado}" /></Column>
+							<Column width="10rem"><Text text="{i18n>colLlega}" /></Column>
+						</columns>
+						<items>
+							<ColumnListItem>
+								<cells>
+									<Text text="{stock>cantidad}" />
+									<Text text="{stock>origen}" />
+									<Text text="{stock>destino}" />
+									<Text text="{stock>documento}" />
+									<ObjectStatus text="{path: 'stock>llega', formatter: '.formatFecha'}" state="Information" />
+								</cells>
+							</ColumnListItem>
+						</items>
+					</Table>
+					<MessageStrip
+						text="{i18n>transitoNota}"
+						type="Information"
+						showIcon="true"
+						class="sapUiSmallMarginTop" />
+				</VBox>
+			</VBox>
+		</content>
+		<endButton>
+			<Button text="{i18n>cerrar2}" press=".onCerrarStock" />
+		</endButton>
+	</Dialog>
+</core:FragmentDefinition>

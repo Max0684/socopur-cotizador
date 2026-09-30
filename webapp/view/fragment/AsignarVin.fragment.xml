@@ -1,0 +1,56 @@
+<core:FragmentDefinition
+	xmlns="sap.m"
+	xmlns:core="sap.ui.core">
+	<Dialog
+		id="dlgVin"
+		title="{i18n>vinTitulo}"
+		contentWidth="62rem"
+		draggable="true"
+		resizable="true">
+		<content>
+			<VBox class="sapUiSmallMargin">
+				<MessageStrip text="{i18n>vinNota}" type="Information" showIcon="true" class="sapUiSmallMarginBottom" />
+
+				<MessageStrip
+					visible="{= !!${asignar>/aviso} }"
+					text="{asignar>/aviso}"
+					type="{asignar>/avisoTipo}"
+					showIcon="true"
+					class="sapUiSmallMarginBottom" />
+
+				<Table items="{asignar>/filas}">
+					<columns>
+						<Column width="20rem"><Text text="{i18n>colVehiculo}" /></Column>
+						<Column><Text text="{i18n>colVin}" /></Column>
+					</columns>
+					<items>
+						<ColumnListItem>
+							<cells>
+								<ObjectIdentifier title="{asignar>denominacion}" text="{asignar>detalle}" />
+								<Select
+									width="100%"
+									selectedKey="{asignar>vin}"
+									items="{asignar>opciones}"
+									change=".onCambiaVin"
+									enabled="{= ${asignar>opciones}.length > 0 }">
+									<core:Item key="{asignar>key}" text="{asignar>text}" enabled="{asignar>enabled}" />
+								</Select>
+							</cells>
+						</ColumnListItem>
+					</items>
+				</Table>
+				<Text text="{asignar>/bloqueoNota}" class="sapUiSmallMarginTop" />
+			</VBox>
+		</content>
+		<beginButton>
+			<Button
+				text="{i18n>vinCrear}"
+				type="Emphasized"
+				enabled="{asignar>/valido}"
+				press=".onCrearPedido" />
+		</beginButton>
+		<endButton>
+			<Button text="{i18n>cancelar}" press=".onCerrarVin" />
+		</endButton>
+	</Dialog>
+</core:FragmentDefinition>

@@ -1,0 +1,44 @@
+<core:FragmentDefinition
+	xmlns="sap.m"
+	xmlns:core="sap.ui.core"
+	xmlns:form="sap.ui.layout.form">
+	<Dialog
+		id="dlgEstadoCuenta"
+		title="{i18n>cuentaTitulo}"
+		contentWidth="46rem"
+		draggable="true"
+		resizable="true">
+		<content>
+			<VBox class="sapUiSmallMargin">
+				<HBox wrap="Wrap" class="sapUiSmallMarginBottom">
+					<ObjectStatus title="{i18n>cuentaLinea}" text="{cli>/linea}" class="sapUiMediumMarginEnd" />
+					<ObjectStatus title="{i18n>cuentaSaldo}" text="{cli>/saldo}" class="sapUiMediumMarginEnd" />
+					<ObjectStatus title="{i18n>cuentaDisponible}" text="{cli>/disponible}" state="Success" class="sapUiMediumMarginEnd" />
+					<ObjectStatus title="{i18n>cuentaVencido}" text="{cli>/vencido}" state="{cli>/vencidoEstado}" />
+				</HBox>
+				<MessageStrip text="{i18n>cuentaSimulada}" type="Information" showIcon="true" class="sapUiSmallMarginBottom" />
+				<Table items="{cli>/movimientos}" noDataText="{i18n>cuentaSinMovimientos}">
+					<columns>
+						<Column width="7rem"><Text text="{i18n>colFecha}" /></Column>
+						<Column><Text text="{i18n>cuentaDocumento}" /></Column>
+						<Column width="8rem" hAlign="End"><Text text="{i18n>colTotalLinea}" /></Column>
+						<Column width="8rem"><Text text="{i18n>colEstado}" /></Column>
+					</columns>
+					<items>
+						<ColumnListItem>
+							<cells>
+								<Text text="{cli>fecha}" />
+								<ObjectIdentifier title="{cli>doc}" text="{cli>tipo}" />
+								<ObjectNumber number="{cli>monto}" unit="PEN" />
+								<ObjectStatus text="{cli>estado}" state="{= ${cli>estado} === 'Pagada' ? 'Success' : ${cli>estado} === 'Vencida' ? 'Error' : 'Warning' }" />
+							</cells>
+						</ColumnListItem>
+					</items>
+				</Table>
+			</VBox>
+		</content>
+		<endButton>
+			<Button text="{i18n>cerrar}" press=".onCerrarCliente" />
+		</endButton>
+	</Dialog>
+</core:FragmentDefinition>

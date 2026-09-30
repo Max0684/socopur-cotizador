@@ -1,0 +1,48 @@
+<core:FragmentDefinition
+	xmlns="sap.m"
+	xmlns:core="sap.ui.core"
+	xmlns:form="sap.ui.layout.form">
+	<Dialog
+		id="dlgSolicitud"
+		title="{i18n>solTitulo}"
+		contentWidth="38rem"
+		draggable="true">
+		<content>
+			<VBox class="sapUiSmallMargin">
+				<MessageStrip text="{i18n>solNota}" type="Information" showIcon="true" class="sapUiSmallMarginBottom" />
+
+				<MessageStrip
+					visible="{solped>/creada}"
+					text="{solped>/mensaje}"
+					type="Success"
+					showIcon="true"
+					class="sapUiSmallMarginBottom" />
+
+				<form:SimpleForm editable="true" layout="ColumnLayout" columnsM="1" columnsL="1" columnsXL="1">
+					<Label text="{i18n>solMaterial}" />
+					<Input value="{solped>/material}" editable="false" />
+					<Label text="{i18n>solOrigen}" />
+					<Input value="{solped>/origen}" editable="false" />
+					<Label text="{i18n>solDestino}" />
+					<Input value="{solped>/destino}" editable="false" />
+					<Label text="{i18n>solCantidad}" />
+					<StepInput value="{solped>/cantidad}" min="1" max="{solped>/max}" editable="{= !${solped>/creada} }" width="8rem" />
+					<Label text="{i18n>solAnticipo}" />
+					<CheckBox selected="{solped>/anticipo}" enabled="{= !${solped>/creada} }" text="{i18n>solAnticipoNota}" />
+					<Label text="{i18n>solComentario}" />
+					<TextArea value="{solped>/comentario}" rows="2" editable="{= !${solped>/creada} }" />
+				</form:SimpleForm>
+			</VBox>
+		</content>
+		<beginButton>
+			<Button
+				text="{i18n>solCrear}"
+				type="Emphasized"
+				visible="{= !${solped>/creada} }"
+				press=".onCrearSolicitud" />
+		</beginButton>
+		<endButton>
+			<Button text="{i18n>cerrar2}" press=".onCerrarSolicitud" />
+		</endButton>
+	</Dialog>
+</core:FragmentDefinition>

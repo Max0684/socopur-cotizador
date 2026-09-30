@@ -1,0 +1,45 @@
+<core:FragmentDefinition
+	xmlns="sap.m"
+	xmlns:core="sap.ui.core"
+	xmlns:form="sap.ui.layout.form">
+	<Dialog
+		id="dlgFicha"
+		title="{i18n>fichaTitulo}"
+		contentWidth="46rem"
+		draggable="true"
+		resizable="true">
+		<content>
+			<VBox class="sapUiSmallMargin">
+				<form:SimpleForm editable="false" layout="ColumnLayout" columnsM="1" columnsL="2" columnsXL="2">
+					<Label text="{i18n>nombreCliente}" />
+					<Text text="{cli>/nombre}" />
+					<Label text="{i18n>documento}" />
+					<Text text="{cli>/tipoDoc} {cli>/doc}" />
+					<Label text="{i18n>condicionComercial}" />
+					<Text text="{cli>/condicion}" />
+					<Label text="{i18n>grupoCliente}" />
+					<Text text="{cli>/grupo}" />
+					<Label text="{i18n>telefono}" />
+					<Text text="{cli>/telefono}" />
+					<Label text="{i18n>correo}" />
+					<Text text="{cli>/correo}" />
+					<Label text="{i18n>direccion}" />
+					<Text text="{cli>/direccion}" />
+					<Label text="{i18n>estadoCliente}" />
+					<ObjectStatus text="{cli>/estado}" state="{cli>/estadoState}" />
+				</form:SimpleForm>
+				<Title text="{i18n>direccionesTitulo}" level="H4" class="sapUiSmallMarginBottom" />
+				<List items="{cli>/direcciones}" class="sapUiSmallMarginBottom">
+					<StandardListItem title="{cli>alias}" description="{cli>texto}" icon="sap-icon://addresses" />
+				</List>
+				<Title text="{i18n>areasVenta}" level="H4" class="sapUiSmallMarginBottom" />
+				<List items="{cli>/areas}" noDataText="{i18n>areasNinguna}">
+					<StandardListItem title="{cli>text}" icon="sap-icon://business-by-design" />
+				</List>
+			</VBox>
+		</content>
+		<endButton>
+			<Button text="{i18n>cerrar}" press=".onCerrarCliente" />
+		</endButton>
+	</Dialog>
+</core:FragmentDefinition>

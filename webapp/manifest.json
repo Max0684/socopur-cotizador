@@ -1,0 +1,109 @@
+{
+	"_version": "1.65.0",
+	"sap.app": {
+		"id": "com.socopur.cotizador",
+		"type": "application",
+		"i18n": "i18n/i18n.properties",
+		"title": "{{appTitle}}",
+		"description": "{{appDescription}}",
+		"applicationVersion": {
+			"version": "0.1.0"
+		}
+	},
+	"sap.ui": {
+		"technology": "UI5",
+		"deviceTypes": {
+			"desktop": true,
+			"tablet": true,
+			"phone": false
+		}
+	},
+	"sap.ui5": {
+		"rootView": {
+			"viewName": "com.socopur.cotizador.view.App",
+			"type": "XML",
+			"id": "app",
+			"async": true
+		},
+		"dependencies": {
+			"minUI5Version": "1.120.0",
+			"libs": {
+				"sap.m": {},
+				"sap.ui.core": {},
+				"sap.ui.layout": {},
+				"sap.f": {},
+				"sap.uxap": {},
+				"sap.ui.unified": {}
+			}
+		},
+		"contentDensities": {
+			"compact": true,
+			"cozy": true
+		},
+		"models": {
+			"i18n": {
+				"type": "sap.ui.model.resource.ResourceModel",
+				"settings": {
+					"bundleName": "com.socopur.cotizador.i18n.i18n",
+					"supportedLocales": [
+						"es"
+					],
+					"fallbackLocale": "es"
+				}
+			},
+			"mock": {
+				"type": "sap.ui.model.json.JSONModel",
+				"uri": "model/mock.json"
+			}
+		},
+		"routing": {
+			"config": {
+				"routerClass": "sap.f.routing.Router",
+				"type": "View",
+				"viewType": "XML",
+				"path": "com.socopur.cotizador.view",
+				"controlId": "fcl",
+				"transition": "slide",
+				"async": true
+			},
+			"routes": [
+				{
+					"name": "lista",
+					"pattern": "",
+					"layout": "OneColumn",
+					"target": [
+						"lista"
+					]
+				},
+				{
+					"name": "nueva",
+					"pattern": "oferta/nueva",
+					"layout": "MidColumnFullScreen",
+					"target": [
+						"lista",
+						"oferta"
+					]
+				},
+				{
+					"name": "oferta",
+					"pattern": "oferta/{numero}",
+					"layout": "MidColumnFullScreen",
+					"target": [
+						"lista",
+						"oferta"
+					]
+				}
+			],
+			"targets": {
+				"lista": {
+					"name": "Main",
+					"controlAggregation": "beginColumnPages"
+				},
+				"oferta": {
+					"name": "Oferta",
+					"controlAggregation": "midColumnPages"
+				}
+			}
+		}
+	}
+}

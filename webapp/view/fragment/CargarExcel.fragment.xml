@@ -1,0 +1,77 @@
+<core:FragmentDefinition
+	xmlns="sap.m"
+	xmlns:core="sap.ui.core"
+	xmlns:u="sap.ui.unified">
+	<Dialog
+		id="dlgExcel"
+		title="{i18n>excelTitulo}"
+		contentWidth="58rem"
+		draggable="true"
+		resizable="true">
+		<content>
+			<VBox class="sapUiSmallMargin">
+				<MessageStrip text="{i18n>excelNota}" type="Information" showIcon="true" class="sapUiSmallMarginBottom" />
+				<HBox alignItems="Center" wrap="Wrap" class="sapUiSmallMarginBottom">
+					<Button text="{i18n>excelPlantilla}" icon="sap-icon://download" press=".onDescargarPlantilla" class="sapUiSmallMarginEnd" />
+					<u:FileUploader
+						id="excelArchivo"
+						buttonText="{i18n>excelElegir}"
+						placeholder="{i18n>excelSinArchivo}"
+						uploadOnChange="false"
+						change=".onExcelElegido"
+						width="24rem" />
+				</HBox>
+				<HBox alignItems="Center" class="sapUiSmallMarginBottom">
+					<Label text="{i18n>excelModo}" class="sapUiSmallMarginEnd" />
+					<SegmentedButton selectedKey="{excel>/modo}" selectionChange=".onCambiaModoExcel">
+						<items>
+							<SegmentedButtonItem key="agregar" text="{i18n>excelModoAgregar}" />
+							<SegmentedButtonItem key="reemplazar" text="{i18n>excelModoReemplazar}" />
+						</items>
+					</SegmentedButton>
+				</HBox>
+				<MessageStrip
+					visible="{= !!${excel>/error} }"
+					text="{excel>/error}"
+					type="Error"
+					showIcon="true"
+					class="sapUiSmallMarginBottom" />
+				<HBox visible="{excel>/hayArchivo}" wrap="Wrap" class="sapUiSmallMarginBottom">
+					<ObjectStatus text="{excel>/txtValidas}" state="Success" class="sapUiMediumMarginEnd" />
+					<ObjectStatus text="{excel>/txtAdvertencias}" state="Warning" class="sapUiMediumMarginEnd" />
+					<ObjectStatus text="{excel>/txtErrores}" state="Error" />
+				</HBox>
+				<Table visible="{excel>/hayArchivo}" items="{excel>/filas}" sticky="ColumnHeaders">
+					<columns>
+						<Column width="4rem"><Text text="{i18n>excelFila}" /></Column>
+						<Column width="9rem"><Text text="{i18n>colMaterial}" /></Column>
+						<Column><Text text="{i18n>colDescripcion}" /></Column>
+						<Column width="6rem" hAlign="End"><Text text="{i18n>colCantidad}" /></Column>
+						<Column width="20rem"><Text text="{i18n>excelResultado}" /></Column>
+					</columns>
+					<items>
+						<ColumnListItem highlight="{excel>estado}">
+							<cells>
+								<Text text="{excel>fila}" />
+								<Text text="{excel>material}" />
+								<Text text="{excel>denominacion}" />
+								<Text text="{excel>cantidad}" />
+								<ObjectStatus text="{excel>mensaje}" state="{excel>estado}" />
+							</cells>
+						</ColumnListItem>
+					</items>
+				</Table>
+			</VBox>
+		</content>
+		<beginButton>
+			<Button
+				text="{excel>/txtAgregar}"
+				type="Emphasized"
+				enabled="{excel>/hayValidas}"
+				press=".onAgregarExcel" />
+		</beginButton>
+		<endButton>
+			<Button text="{i18n>cancelar}" press=".onCerrarExcel" />
+		</endButton>
+	</Dialog>
+</core:FragmentDefinition>

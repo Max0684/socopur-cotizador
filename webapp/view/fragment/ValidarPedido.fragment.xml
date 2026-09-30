@@ -1,0 +1,57 @@
+<core:FragmentDefinition
+	xmlns="sap.m"
+	xmlns:core="sap.ui.core">
+	<Dialog
+		id="dlgValidar"
+		title="{i18n>validarTitulo}"
+		contentWidth="66rem"
+		draggable="true"
+		resizable="true">
+		<content>
+			<VBox class="sapUiSmallMargin">
+				<MessageStrip text="{i18n>validarNota}" type="Information" showIcon="true" class="sapUiSmallMarginBottom" />
+				<HBox wrap="Wrap" class="sapUiSmallMarginBottom">
+					<ObjectStatus title="{i18n>hdrCliente}" text="{validar>/cliente}" class="sapUiMediumMarginEnd" />
+					<ObjectStatus title="{i18n>formaPago}" text="{validar>/formaPago}" class="sapUiMediumMarginEnd" />
+					<ObjectStatus title="{i18n>secEntrega}" text="{validar>/entrega}" />
+				</HBox>
+				<MessageStrip
+					visible="{validar>/hayBloqueo}"
+					text="{i18n>validarBloqueo}"
+					type="Error"
+					showIcon="true"
+					class="sapUiSmallMarginBottom" />
+				<Table items="{validar>/filas}">
+					<columns>
+						<Column><Text text="{i18n>validarOferta}" /></Column>
+						<Column width="14rem"><Text text="{i18n>modalidad}" /></Column>
+						<Column width="6rem"><Text text="{i18n>clasePedido}" /></Column>
+						<Column width="8rem" hAlign="End"><Text text="{i18n>colTotalLinea}" /></Column>
+						<Column width="20rem"><Text text="{i18n>validarLiberacion}" /></Column>
+					</columns>
+					<items>
+						<ColumnListItem>
+							<cells>
+								<ObjectIdentifier title="{validar>numero}" text="{validar>titulo}" />
+								<Text text="{validar>modalidadTxt}" />
+								<Text text="{validar>clasePedido}" />
+								<ObjectNumber number="{validar>totalTxt}" unit="PEN" />
+								<ObjectStatus text="{validar>liberacion}" state="{validar>estado}" />
+							</cells>
+						</ColumnListItem>
+					</items>
+				</Table>
+			</VBox>
+		</content>
+		<beginButton>
+			<Button
+				text="{i18n>validarContinuar}"
+				type="Emphasized"
+				enabled="{= !${validar>/hayBloqueo} }"
+				press=".onContinuarPedido" />
+		</beginButton>
+		<endButton>
+			<Button text="{i18n>cancelar}" press=".onCerrarValidar" />
+		</endButton>
+	</Dialog>
+</core:FragmentDefinition>

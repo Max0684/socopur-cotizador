@@ -1,0 +1,33 @@
+<core:FragmentDefinition
+	xmlns="sap.m"
+	xmlns:core="sap.ui.core"
+	xmlns:form="sap.ui.layout.form">
+	<Dialog
+		id="dlgAmpliar"
+		title="{i18n>ampliarTitulo}"
+		contentWidth="36rem"
+		draggable="true"
+		resizable="true">
+		<content>
+			<VBox class="sapUiSmallMargin">
+				<MessageStrip text="{i18n>ampliarNota}" type="Information" showIcon="true" class="sapUiSmallMarginBottom" />
+				<Title text="{i18n>areasVenta}" level="H4" class="sapUiTinyMarginBottom" />
+				<List items="{cli>/areas}" noDataText="{i18n>areasNinguna}" class="sapUiSmallMarginBottom">
+					<StandardListItem title="{cli>text}" icon="sap-icon://business-by-design" />
+				</List>
+				<HBox alignItems="Center">
+					<Label text="{i18n>ampliarNueva}" class="sapUiSmallMarginEnd" />
+					<Select selectedKey="{cli>/nueva}" forceSelection="false" width="20rem" items="{cli>/disponibles}">
+						<core:Item key="{cli>key}" text="{cli>text}" />
+					</Select>
+				</HBox>
+			</VBox>
+		</content>
+		<beginButton>
+			<Button text="{i18n>ampliarAccion}" type="Emphasized" enabled="{= !!${cli>/nueva} }" press=".onAmpliarArea" />
+		</beginButton>
+		<endButton>
+			<Button text="{i18n>cerrar}" press=".onCerrarCliente" />
+		</endButton>
+	</Dialog>
+</core:FragmentDefinition>
