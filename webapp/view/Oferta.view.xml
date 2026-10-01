@@ -388,11 +388,11 @@
 										<items>
 											<ColumnListItem>
 												<cells>
-													<ObjectIdentifier title="{= ${oferta>bonificacion} ? ${oferta>denominacion} : ${oferta>material} }" text="{= ${oferta>bonificacion} ? ${i18n>regaloEtq} : '' }" />
+													<ObjectIdentifier title="{= ${oferta>bonificacion} ? ${oferta>denominacion} : ${oferta>material} }" text="{= ${oferta>bonificacion} ? ( ${oferta>sinTalla} ? ${i18n>regaloPromoEtq} : ${i18n>regaloEtq} ) : '' }" />
 													<Text text="{oferta>denominacion}" />
 													<VBox>
 														<Text text="{oferta>detalle}" visible="{= !${oferta>bonificacion} }" />
-														<Select visible="{= !!${oferta>bonificacion} }" selectedKey="{oferta>talla}" forceSelection="false" width="9rem" change=".onCambiaTalla" enabled="{= ${oferta>/pedidos}.length === 0 }" items="{oferta>tallas}">
+														<Select visible="{= !!${oferta>bonificacion} &amp;&amp; !${oferta>sinTalla} }" selectedKey="{oferta>talla}" forceSelection="false" width="9rem" change=".onCambiaTalla" enabled="{= ${oferta>/pedidos}.length === 0 }" items="{oferta>tallas}">
 															<core:Item key="{oferta>key}" text="{oferta>text}" enabled="{oferta>enabled}" />
 														</Select>
 													</VBox>

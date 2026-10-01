@@ -55,3 +55,108 @@ export async function cargarOfertas(modelo: ODataModel, textoPedido: string): Pr
 		};
 	});
 }
+
+/* ---------- Detalle de una oferta SAP (vistas YI_COTIZ_OFERTA / YI_COTIZ_OFERTAPOS) ---------- */
+
+interface OfertaPosSap {
+	Vbeln: string;
+	Posnr: string;
+	Matnr: string;
+	Arktx: string;
+	Kwmeng: string | number;
+	Vrkme: string;
+	Werks: string;
+	Lgort: string;
+	Netpr: string | number;
+	Netwr: string | number;
+	Waerk: string;
+	Uepos: string;
+	Pstyv: string;
+}
+
+interface OfertaSap {
+	Vbeln: string;
+	Auart: string;
+	Kunnr: string;
+	ClienteNombre?: string;
+	Erdat?: string;
+	Angdt?: string;
+	Bnddt?: string;
+	Vkorg: string;
+	Vtweg: string;
+	Spart: string;
+	Vkbur: string;
+	Netwr: string | number;
+	Waerk: string;
+	_Pos?: OfertaPosSap[];
+}
+
+/** Linea del detalle con la forma que usa la pantalla (LineaMock + total). */
+export interface LineaDetalle {
+	grupo: string;
+	orgVentas: string;
+	sector: string;
+	material: string;
+	denominacion: string;
+	detalle: string;
+	cantidad: number;
+	precio: number;
+	total: number;
+	bonificacion: boolean;
+	sinTalla: boolean;
+	origen: string;
+}
+
+export interface DetalleOferta {
+	numero: string;
+	cliente: string;
+	kunnr: string;
+	clase: string;
+	fecha: string;
+	valida: string;
+	moneda: string;
+	total: number;
+	orgVentas: string;
+	sector: string;
+	lineas: LineaDetalle[];
+}
+
+/**
+ * Lee el documento SAP de una oferta (cabecera y posiciones reales, incluidas las lineas de regalo que SAP
+ * agrega solo). Una linea es regalo cuando cuelga de otra (UEPOS distinto de 000000) y su valor neto es 0.
+ */
+export async function cargarDetalleOferta(modelo: ODataModel, numeroOferta: string): Promise<DetalleOferta> {
+	const clave = numeroOferta.replace(/'/g, "''");
+	const contexto = modelo.bindContext(`/Oferta('${clave}')`, undefined, { $expand: { _Pos: { $orderby: "Posnr" } } });
+	const o = (await contexto.requestObject()) as OfertaSap;
+	const lineas = (o._Pos ?? []).map((p): LineaDetalle => {
+		const esRegalo = Boolean(p.Uepos) && Number(p.Uepos) !== 0 && Number(p.Netwr ?? 0) === 0;
+		return {
+			grupo: `${o.Vkorg}/${o.Spart}`,
+			orgVentas: o.Vkorg,
+			sector: o.Spart,
+			material: p.Matnr,
+			denominacion: p.Arktx,
+			detalle: "",
+			cantidad: Number(p.Kwmeng ?? 0),
+			precio: Number(p.Netpr ?? 0),
+			total: Number(p.Netwr ?? 0),
+			bonificacion: esRegalo,
+			sinTalla: esRegalo,
+			origen: p.Posnr
+		};
+	});
+	return {
+		numero: o.Vbeln,
+		cliente: o.ClienteNombre ?? "",
+		kunnr: o.Kunnr,
+		clase: o.Auart,
+		fecha: (o.Erdat ?? "").slice(0, 10),
+		valida: (o.Bnddt ?? "").slice(0, 10),
+		moneda: o.Waerk,
+		total: Number(o.Netwr ?? 0),
+		orgVentas: o.Vkorg,
+		sector: o.Spart,
+		lineas
+	};
+}

@@ -1,4 +1,6 @@
 import Controller from "sap/ui/core/mvc/Controller";
+import ODataModel from "sap/ui/model/odata/v4/ODataModel";
+import { cargarDetalleOferta } from "com/socopur/cotizador/model/OfertasService";
 import UIComponent from "sap/ui/core/UIComponent";
 import Router from "sap/ui/core/routing/Router";
 import JSONModel from "sap/ui/model/json/JSONModel";
@@ -154,6 +156,8 @@ interface Linea extends LineaMock {
 	unica?: boolean;
 	uid?: string;
 	bonificacion?: boolean;
+	/** Regalo de promocion de repuestos (ZNA0/Zeta): no tiene talla. */
+	sinTalla?: boolean;
 	origen?: string;
 	talla?: string;
 	tallas?: { key: string; text: string; enabled: boolean }[];
@@ -2009,6 +2013,28 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 		};
 	}
 
+	/** Carga cabecera y posiciones del documento SAP (solo con ?odata=1, que es cuando la lista trae ofertas reales). */
+	private async cargarDetalleReal(numeroOferta: string): Promise<void> {
+		const componente = this.getOwnerComponent() as UIComponent;
+		const odata = componente.getModel("odata") as ODataModel | undefined;
+		if (!odata) {
+			return;
+		}
+		try {
+			const detalle = await cargarDetalleOferta(odata, numeroOferta);
+			const oferta = this.modeloOferta();
+			const clienteActual = oferta.getProperty("/cliente") as Cliente | null;
+			if (clienteActual) {
+				oferta.setProperty("/cliente", { ...clienteActual, nombre: detalle.cliente || clienteActual.nombre });
+			}
+			oferta.setProperty("/lineas", detalle.lineas.map((l) => ({ ...l })));
+			this.recalcular();
+			this.instantanea = JSON.stringify(oferta.getProperty("/lineas") ?? []);
+		} catch (error) {
+			MessageToast.show(this.i18n().getText("odataDetalleError", [(error as Error).message]) as string);
+		}
+	}
+
 	private cargar(numero?: string): void {
 		const mock = this.modeloMock();
 		mock.dataLoaded().then(() => {
@@ -2026,6 +2052,10 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 					| undefined;
 				oferta.setProperty("/titulo", esperaNumero ? this.i18n().getText("ofertaSinNumero") : this.i18n().getText("ofertaTitulo", [numero]));
 				oferta.setProperty("/numero", esperaNumero ? "" : numero);
+				// Oferta real (lista leida del servicio) con numero SAP: el detalle se carga del documento SAP.
+				if (cabecera?.cotizId && cabecera.numero) {
+					void this.cargarDetalleReal(cabecera.numero);
+				}
 				if (detalle) {
 					const clientes = mock.getProperty("/clientes") as Record<string, Cliente>;
 					oferta.setProperty("/cliente", clientes[detalle.doc] ?? null);
@@ -2136,7 +2166,7 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 		grupos.forEach((g) => this.aplicarModalidadGrupo(g));
 		const subtotal = grupos.reduce((acc, g) => acc + g.subtotal, 0);
 		oferta.setProperty("/grupos", grupos);
-		oferta.setProperty("/faltaTalla", lineas.some((l) => l.bonificacion && !l.talla));
+		oferta.setProperty("/faltaTalla", lineas.some((l) => l.bonificacion && !l.sinTalla && !l.talla));
 		oferta.setProperty("/hayVehiculos", grupos.some((g) => g.lineas.some((l) => l.unica)));
 		oferta.setProperty("/cantidadOfertas", grupos.length);
 		oferta.setProperty("/textoGenerar", grupos.length ? this.i18n().getText("generaraOfertas", [grupos.length]) : "");
