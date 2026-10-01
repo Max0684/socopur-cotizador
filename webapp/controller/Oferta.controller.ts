@@ -1985,6 +1985,30 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 		this.router.navTo("nueva");
 	}
 
+	/**
+	 * Cliente armado solo con lo que trae hoy el servicio de cotizaciones (nombre y documento).
+	 * El resto de la ficha (condicion, credito, direcciones, estado de cuenta, areas de venta) necesita
+	 * consultas propias al backend que todavia no existen; por eso queda en blanco.
+	 */
+	private clienteBasico(cabecera: { doc: string; cliente?: string; cotizId?: string }): Cliente | null {
+		if (!cabecera.cotizId || !cabecera.cliente) {
+			return null;
+		}
+		const doc = cabecera.doc ?? "";
+		return {
+			doc,
+			tipoDoc: doc.length === 11 ? "RUC" : doc.length === 8 ? "DNI" : "",
+			nombre: cabecera.cliente,
+			estado: "",
+			estadoState: "None",
+			condicion: "",
+			grupo: "",
+			telefono: "",
+			correo: "",
+			direccion: ""
+		};
+	}
+
 	private cargar(numero?: string): void {
 		const mock = this.modeloMock();
 		mock.dataLoaded().then(() => {
@@ -1992,26 +2016,28 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 			const oferta = this.modeloOferta();
 			oferta.setData(this.crearOferta());
 			if (numero) {
-				const cabecera = (mock.getProperty("/ofertas") as { numero: string; doc: string }[]).find(
-					(o) => o.numero === numero
+				const cabecera = (mock.getProperty("/ofertas") as { numero: string; doc: string; cliente?: string; cotizId?: string }[]).find(
+					(o) => o.numero === numero || o.cotizId === numero
 				);
+				// Oferta real aun sin numero SAP: no se muestra el UUID como si fuera el numero.
+				const esperaNumero = cabecera?.cotizId === numero && !cabecera?.numero;
 				const detalle = mock.getProperty(`/detalles/${numero}`) as
 					| { doc: string; lineas: LineaMock[] }
 					| undefined;
-				oferta.setProperty("/titulo", this.i18n().getText("ofertaTitulo", [numero]));
-				oferta.setProperty("/numero", numero);
+				oferta.setProperty("/titulo", esperaNumero ? this.i18n().getText("ofertaSinNumero") : this.i18n().getText("ofertaTitulo", [numero]));
+				oferta.setProperty("/numero", esperaNumero ? "" : numero);
 				if (detalle) {
 					const clientes = mock.getProperty("/clientes") as Record<string, Cliente>;
 					oferta.setProperty("/cliente", clientes[detalle.doc] ?? null);
 					oferta.setProperty("/lineas", detalle.lineas.map((l) => ({ ...l, total: l.cantidad * l.precio })));
 				} else if (cabecera) {
 					const clientes = mock.getProperty("/clientes") as Record<string, Cliente>;
-					oferta.setProperty("/cliente", clientes[cabecera.doc] ?? null);
+					oferta.setProperty("/cliente", clientes[cabecera.doc] ?? this.clienteBasico(cabecera));
 				}
 			}
 			const i18n = this.i18n();
 			if (numero) {
-				const cab = (mock.getProperty("/ofertas") as { numero: string; fecha: string; estado: string }[]).find((o) => o.numero === numero);
+				const cab = (mock.getProperty("/ofertas") as { numero: string; fecha: string; estado: string; cotizId?: string }[]).find((o) => o.numero === numero || o.cotizId === numero);
 				const conPedido = cab?.estado === i18n.getText("estadoPedido");
 				if (conPedido) {
 					// Oferta con pedido: solo lectura (se usa el mismo bloqueo que tras crear el pedido)

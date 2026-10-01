@@ -2,3 +2,5 @@ node_modules/
 dist/
 .ui5/
 *.log
+
+ui5-sap.local.yaml

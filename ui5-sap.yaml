@@ -1,0 +1,31 @@
+# Servidor de desarrollo CONTRA SAP REAL (DS4, mandante 100) a traves del tunel HTTPS.
+# Uso: .\start-sap.ps1 -Url https://<host-del-tunel>   (pide usuario y contrasena; no se guardan)
+# Reenvia /sap/** al sistema SAP. NO PROBADO contra SAP todavia.
+specVersion: "4.0"
+metadata:
+  name: com.socopur.cotizador
+type: application
+framework:
+  name: SAPUI5
+  version: "1.120.52"
+  libraries:
+    - name: sap.m
+    - name: sap.ui.core
+    - name: sap.ui.layout
+    - name: sap.f
+    - name: sap.uxap
+    - name: sap.ui.unified
+    - name: themelib_sap_horizon
+server:
+  customMiddleware:
+    - name: ui5-tooling-transpile-middleware
+      afterMiddleware: compression
+    - name: ui5-middleware-simpleproxy
+      afterMiddleware: compression
+      mountPath: /sap
+      configuration:
+        # baseUri, usuario y contrasena llegan por variables de entorno
+        # (UI5_MIDDLEWARE_SIMPLE_PROXY_BASEURI / _USERNAME / _PASSWORD), puestas por start-sap.ps1.
+        baseUri: "https://sin-configurar.invalid/sap"
+        query:
+          sap-client: "100"

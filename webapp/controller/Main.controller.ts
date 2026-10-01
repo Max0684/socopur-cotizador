@@ -11,6 +11,9 @@ import DateRangeSelection from "sap/m/DateRangeSelection";
 import ListItemBase from "sap/m/ListItemBase";
 import Event from "sap/ui/base/Event";
 import JSONModel from "sap/ui/model/json/JSONModel";
+import ODataModel from "sap/ui/model/odata/v4/ODataModel";
+import MessageToast from "sap/m/MessageToast";
+import { cargarOfertas } from "com/socopur/cotizador/model/OfertasService";
 
 /**
  * Lista de ofertas (equivale a un List Report de Fiori).
@@ -25,7 +28,34 @@ export default class Main extends Controller {
 		// Los datos de clientes no se muestran hasta que el usuario los pide (buscando o con "Ver mis ofertas").
 		this.getView()?.setModel(new JSONModel({ consultado: false }), "vista");
 		const mock = (this.getOwnerComponent() as UIComponent).getModel("mock") as JSONModel;
-		mock.dataLoaded().then(() => this.actualizarVigencias(mock));
+		mock.dataLoaded().then(async () => {
+			if (this.usarOData()) {
+				await this.cargarDesdeOData(mock);
+			}
+			this.actualizarVigencias(mock);
+		});
+	}
+
+	/** La lista lee del servicio real solo con ?odata=1 en la URL; sin la bandera sigue con los datos simulados. */
+	private usarOData(): boolean {
+		return new URLSearchParams(window.location.search).get("odata") === "1";
+	}
+
+	private async cargarDesdeOData(mock: JSONModel): Promise<void> {
+		const componente = this.getOwnerComponent() as UIComponent;
+		const odata = componente.getModel("odata") as ODataModel | undefined;
+		const i18n = componente.getModel("i18n") as unknown as { getResourceBundle(): { getText(k: string, a?: string[]): string } };
+		const textos = i18n.getResourceBundle();
+		if (!odata) {
+			return;
+		}
+		try {
+			const ofertas = await cargarOfertas(odata, textos.getText("estadoPedido"));
+			mock.setProperty("/ofertas", ofertas);
+		} catch (error) {
+			// Si el servicio falla se conservan los datos simulados y se avisa; no se bloquea la pantalla.
+			MessageToast.show(textos.getText("odataError", [(error as Error).message]));
+		}
 	}
 
 	/** La vigencia es fecha de la oferta + dias del perfil (en SAP: ZTSD_CONFIG_OFER, hoy 7 dias). Vencida si ya paso y no tiene pedido. */
@@ -79,7 +109,9 @@ export default class Main extends Controller {
 
 	public onSeleccionar(event: Event<{ listItem: ListItemBase }>): void {
 		const item = event.getParameter("listItem");
-		const numero = item.getBindingContext("mock")?.getProperty("numero") as string;
+		const contexto = item.getBindingContext("mock");
+		// Una oferta real sin numero SAP todavia (aun no se genero) se abre con su identificador de cotizacion.
+		const numero = (contexto?.getProperty("numero") as string) || (contexto?.getProperty("cotizId") as string);
 		this.router.navTo("oferta", { numero });
 	}
 
