@@ -1,6 +1,7 @@
 import Controller from "sap/ui/core/mvc/Controller";
 import ODataModel from "sap/ui/model/odata/v4/ODataModel";
 import { cargarDetalleOferta } from "com/socopur/cotizador/model/OfertasService";
+import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
 import UIComponent from "sap/ui/core/UIComponent";
 import Router from "sap/ui/core/routing/Router";
 import JSONModel from "sap/ui/model/json/JSONModel";
@@ -14,6 +15,10 @@ import Table from "sap/m/Table";
 import Button from "sap/m/Button";
 import Device from "sap/ui/Device";
 import MessageToast from "sap/m/MessageToast";
+import SelectDialog from "sap/m/SelectDialog";
+import Filter from "sap/ui/model/Filter";
+import ListBinding from "sap/ui/model/ListBinding";
+import StandardListItem from "sap/m/StandardListItem";
 import MessageBox from "sap/m/MessageBox";
 import FileUploader from "sap/ui/unified/FileUploader";
 import Fragment from "sap/ui/core/Fragment";
@@ -21,6 +26,8 @@ import { ListBase$SelectionChangeEvent } from "sap/m/ListBase";
 import { Route$PatternMatchedEvent } from "sap/ui/core/routing/Route";
 
 interface Cliente {
+	/** Numero de cliente SAP (solo en clientes leidos del servicio). */
+	kunnr?: string;
 	doc: string;
 	tipoDoc: string;
 	nombre: string;
@@ -1659,8 +1666,114 @@ export default class Oferta extends Controller {
 		this.modeloBusqueda().setProperty("/elegido", null);
 	}
 
+	/** El cliente se busca en SAP solo con ?odata=1; sin la bandera sigue la busqueda simulada. */
+	private usarOData(): boolean {
+		return new URLSearchParams(window.location.search).get("odata") === "1";
+	}
+
+	/** Busqueda real de cliente (vista YI_COTIZ_CLIENTE). Con varias coincidencias se abre una ventana para elegir. */
+	private async buscarClienteReal(texto: string): Promise<void> {
+		const oferta = this.modeloOferta();
+		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel;
+		try {
+			// Organizacion de busqueda por defecto (repuestos 1103) hasta que existan los valores por defecto del perfil.
+			const encontrados = await buscarClientes(odata, texto, "1103");
+			if (encontrados.length === 0) {
+				oferta.setProperty("/cliente", null);
+				oferta.setProperty("/clienteNoEncontrado", true);
+				this.iniciarAlta(texto);
+				this.refrescarTrasCliente();
+			} else if (encontrados.length === 1) {
+				this.aplicarClienteSap(encontrados[0]);
+			} else {
+				this.abrirSelectorCliente(encontrados);
+			}
+		} catch (error) {
+			MessageToast.show(this.i18n().getText("odataClienteError", [(error as Error).message]) as string);
+		}
+	}
+
+	/** Ventana para elegir entre varios clientes (nombre, documento y numero SAP), con filtro mientras se escribe. */
+	private abrirSelectorCliente(encontrados: ClienteSap[]): void {
+		const i18n = this.i18n();
+		const modelo = new JSONModel({ clientes: encontrados });
+		const plantilla = new StandardListItem({
+			title: "{nombre}",
+			description: "{tipoDoc} {doc} · N° {kunnr}",
+			info: "{= ${bloqueado} ? 'Bloqueado' : '' }",
+			infoState: "Error"
+		});
+		const dialogo = new SelectDialog({
+			title: i18n.getText("elegirCliente", [encontrados.length]) as string,
+			items: { path: "/clientes", template: plantilla },
+			growing: false
+		});
+		dialogo.attachSearch((evento) => {
+			const valor = ((evento.getParameter("value") as string | undefined) ?? "").toUpperCase();
+			const enlace = dialogo.getBinding("items") as ListBinding;
+			enlace.filter(
+				valor
+					? [
+							new Filter({
+								filters: [
+									new Filter({ path: "nombre", test: (v: string) => (v ?? "").toUpperCase().includes(valor) }),
+									new Filter({ path: "doc", test: (v: string) => (v ?? "").includes(valor) }),
+									new Filter({ path: "kunnr", test: (v: string) => (v ?? "").includes(valor) })
+								],
+								and: false
+							})
+						]
+					: []
+			);
+		});
+		dialogo.attachConfirm((evento) => {
+			const item = evento.getParameter("selectedItem") as StandardListItem | undefined;
+			const elegido = item?.getBindingContext()?.getObject() as ClienteSap | undefined;
+			if (elegido) {
+				this.aplicarClienteSap(elegido);
+			}
+			dialogo.destroy();
+		});
+		// Al elegir o cancelar se libera la ventana, para no acumular una por cada busqueda.
+		dialogo.attachCancel(() => dialogo.destroy());
+		dialogo.setModel(modelo);
+		this.getView()?.addDependent(dialogo);
+		dialogo.open("");
+	}
+
+	private aplicarClienteSap(elegido: ClienteSap): void {
+		const oferta = this.modeloOferta();
+		const cliente: Cliente = {
+			kunnr: elegido.kunnr,
+			doc: elegido.doc,
+			tipoDoc: elegido.tipoDoc,
+			nombre: elegido.nombre,
+			estado: elegido.bloqueado ? "Bloqueado" : "",
+			estadoState: elegido.bloqueado ? "Error" : "None",
+			condicion: "",
+			grupo: elegido.grupo,
+			telefono: "",
+			correo: "",
+			direccion: elegido.direccion
+		};
+		oferta.setProperty("/cliente", cliente);
+		oferta.setProperty("/clienteNoEncontrado", false);
+		this.refrescarTrasCliente();
+	}
+
+	private refrescarTrasCliente(): void {
+		const oferta = this.modeloOferta();
+		oferta.setProperty("/entregaDatos/direccionId", "");
+		this.aplicarDireccionEnvio();
+		this.recalcular();
+	}
+
 	public onBuscarCliente(): void {
 		const doc = (this.byId("buscarCliente") as SearchField).getValue().trim();
+		if (this.usarOData() && doc !== "") {
+			void this.buscarClienteReal(doc);
+			return;
+		}
 		const oferta = this.modeloOferta();
 		const clientes = this.modeloMock().getProperty("/clientes") as Record<string, Cliente>;
 		const cliente = clientes[doc];
