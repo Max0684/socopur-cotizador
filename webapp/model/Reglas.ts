@@ -114,3 +114,37 @@ const MODALIDAD_POR_DEFECTO: Record<string, Record<string, string>> = {
 export function modalidadPorDefecto(tipo: "repuestos" | "vehiculos", canal: string): string | undefined {
 	return MODALIDAD_POR_DEFECTO[tipo][canal];
 }
+
+export interface LineaTotales {
+	total: number;
+	iscPct?: number;
+	/** Impuesto real de SAP; solo las lineas leidas del documento SAP lo traen. */
+	impuesto?: number;
+}
+
+export interface TotalesOferta {
+	subtotal: number;
+	neto: number;
+	isc: number;
+	hayIsc: boolean;
+	igv: number;
+	/** true solo si TODAS las lineas traen el impuesto de SAP; antes de guardar el IGV no se conoce. */
+	igvConocido: boolean;
+	total: number;
+}
+
+const redondear = (v: number): number => Math.round(v * 100) / 100;
+
+/**
+ * Totales de la oferta. El IGV sale de SAP (VBAP-MWSBP por posicion): si alguna linea no lo trae, el IGV se
+ * considera desconocido (0 y igvConocido=false) y el total es solo la suma de las lineas. Con IGV conocido,
+ * total = suma de las lineas + IGV, como Total = Netwr + ImpuestoTotal en el servicio.
+ * El precio de lista de vehiculos ya incluye el ISC: se separa neto e ISC solo para informar.
+ */
+export function totalesDeOferta(lineas: LineaTotales[]): TotalesOferta {
+	const subtotal = lineas.reduce((acc, l) => acc + l.total, 0);
+	const isc = redondear(lineas.reduce((acc, l) => acc + l.total - l.total / (1 + (l.iscPct ?? 0) / 100), 0));
+	const igvConocido = lineas.length > 0 && lineas.every((l) => l.impuesto !== undefined);
+	const igv = igvConocido ? redondear(lineas.reduce((acc, l) => acc + (l.impuesto ?? 0), 0)) : 0;
+	return { subtotal, neto: redondear(subtotal - isc), isc, hayIsc: isc > 0, igv, igvConocido, total: redondear(subtotal + igv) };
+}

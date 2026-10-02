@@ -17,6 +17,8 @@ export interface Oferta {
 	Vkbur: string;
 	Netwr: string;
 	Waerk: string;
+	ImpuestoTotal: string;
+	Total: string;
 	_Pos?: OfertaPos[];
 }
 
@@ -74,6 +76,10 @@ export interface GrupoEstado {
 	BloqueoEntrega: string;
 	BloqueoFactura: string;
 	Liberado: string;
+	MonedaPedido: string;
+	NetoPedido: string;
+	ImpuestoPedido: string;
+	TotalPedido: string;
 }
 
 /** Claves: CotizId, GrupoNo, IsActiveEntity */
@@ -262,6 +268,9 @@ export interface OfertaPos {
 	Waerk: string;
 	Uepos: string;
 	Pstyv: string;
+	Mwsbp: string;
+	Mwsk1: string;
+	TasaIgv: string;
 	_Oferta?: Oferta;
 }
 

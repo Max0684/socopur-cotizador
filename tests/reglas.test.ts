@@ -10,6 +10,7 @@ import {
 	modalidadPorDefecto,
 	oficinaDe,
 	sectorDeCabecera,
+	totalesDeOferta,
 	type GrupoCarrito
 } from "../webapp/model/Reglas.ts";
 
@@ -144,4 +145,43 @@ test("gruposParaGuardar acepta una funcion de almacen por centro", () => {
 	const [g] = gruposParaGuardar([grupo], { oficina: "1101", centro: "1007" }, (c) => almacenDeCentro(c, { "1007": "0008" }));
 	assert.equal(g.lineas[0].almacen, "0008");
 	assert.equal(g.lineas[0].centro, "1007");
+});
+
+test("totalesDeOferta: con IGV de SAP el total es la suma de las lineas mas el impuesto (oferta de la org 1203, 18 %)", () => {
+	const t = totalesDeOferta([{ total: 306.18, impuesto: 55.11 }]);
+	assert.equal(t.igvConocido, true);
+	assert.equal(t.igv, 55.11);
+	assert.equal(t.total, 361.29);
+});
+
+test("totalesDeOferta: Pucallpa (exonerada, impuesto 0.00) -> IGV conocido en cero y total = neto", () => {
+	const t = totalesDeOferta([
+		{ total: 1750, impuesto: 0 },
+		{ total: 0, impuesto: 0 }
+	]);
+	assert.deepEqual([t.igvConocido, t.igv, t.total], [true, 0, 1750]);
+});
+
+test("totalesDeOferta: antes de guardar el IGV es desconocido (no se inventa un 0.00)", () => {
+	const t = totalesDeOferta([{ total: 1751 }]);
+	assert.equal(t.igvConocido, false);
+	assert.equal(t.igv, 0);
+	assert.equal(t.total, 1751);
+});
+
+test("totalesDeOferta: si una sola linea no trae impuesto, el IGV sigue desconocido", () => {
+	assert.equal(totalesDeOferta([{ total: 10, impuesto: 1.8 }, { total: 20 }]).igvConocido, false);
+});
+
+test("totalesDeOferta: sin lineas todo es cero y el IGV no esta conocido", () => {
+	const t = totalesDeOferta([]);
+	assert.deepEqual([t.subtotal, t.total, t.igvConocido], [0, 0, false]);
+});
+
+test("totalesDeOferta separa el ISC incluido sin cambiar el total", () => {
+	const t = totalesDeOferta([{ total: 1100, iscPct: 10 }]);
+	assert.equal(t.isc, 100);
+	assert.equal(t.neto, 1000);
+	assert.equal(t.total, 1100);
+	assert.equal(t.hayIsc, true);
 });

@@ -1,7 +1,7 @@
 import Controller from "sap/ui/core/mvc/Controller";
 import ODataModel from "sap/ui/model/odata/v4/ODataModel";
 import { cargarDetalleOferta } from "com/socopur/cotizador/model/OfertasService";
-import { almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, gruposParaGuardar, modalidadPorDefecto } from "com/socopur/cotizador/model/Reglas";
+import { almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, gruposParaGuardar, modalidadPorDefecto, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
 import { crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, type OfertaParaGuardar } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
 import { cargarModalidades, type ModalidadPantalla } from "com/socopur/cotizador/model/ModalidadesService";
@@ -164,6 +164,8 @@ interface XlsxLib {
 
 interface Linea extends LineaMock {
 	total: number;
+	/** Impuesto (IGV) real leido de SAP; sin valor mientras la oferta no se haya guardado. */
+	impuesto?: number;
 	iscPct?: number;
 	unica?: boolean;
 	uid?: string;
@@ -1739,7 +1741,8 @@ export default class Oferta extends Controller {
 					estado: !real ? (i18n.getText("pedidoPendiente") as string) : liberado ? (i18n.getText("pedidoLiberado") as string) : (i18n.getText("pedidoBloqueado") as string),
 					estadoState: liberado ? "Success" : "Warning",
 					liberacion: [credito, ...bloqueos].join(" · "),
-					liberacionState: !real ? "Warning" : liberado ? "Success" : "Warning"
+					liberacionState: !real ? "Warning" : liberado ? "Success" : "Warning",
+					totalSap: real && real.TotalPedido !== undefined && real.TotalPedido !== "" ? `${this.formatMonto(Number(real.NetoPedido))} + IGV ${this.formatMonto(Number(real.ImpuestoPedido))} = ${this.formatMonto(Number(real.TotalPedido))} ${real.MonedaPedido}` : "\u2014"
 				});
 			}
 		} catch (error) {
@@ -2255,6 +2258,7 @@ export default class Oferta extends Controller {
 				.join("");
 			const isc = this.redondear(g.lineas.reduce((acc, l) => acc + l.total - l.total / (1 + (l.iscPct ?? 0) / 100), 0));
 			const neto = this.redondear(g.subtotal - isc);
+			const igvG = g.lineas.every((l) => l.impuesto !== undefined) ? this.redondear(g.lineas.reduce((acc, l) => acc + (l.impuesto ?? 0), 0)) : 0;
 			const mod = modalidades.find((x) => x.key === g.modalidad);
 			const dirEnvio = envio ? ed.direccionEnvio : (i18n.getText("recojoTexto") as string);
 			const transportista = envio && ed.transportistaTexto ? `${ed.transportistaTexto}${ed.sede ? ` \u00b7 ${ed.sedeDireccion}` : ""}` : "\u2014";
@@ -2268,7 +2272,7 @@ export default class Oferta extends Controller {
 <tr><td style="vertical-align:top;padding-top:6px">${e(i18n.getText("vendedor"))}: ${e(perfil.vendedor)}<br/>${e(i18n.getText("formaPago"))}: ${e(formas.find((f) => f.key === perfil.formaPago)?.text ?? "")}</td>
 <td style="vertical-align:top;padding-top:6px">${e(i18n.getText("tipoCambio"))}: ${e(perfil.tipoCambio)}<br/>${e(i18n.getText("modalidad"))}: ${e(mod?.texto ?? "")}</td></tr></table>
 <table style="${tabla}"><thead><tr><th style="${th}">${e(i18n.getText("colMaterial"))}</th><th style="${th}">${e(i18n.getText("colDescripcion"))}</th><th style="${th}">${e(i18n.getText("colDetalle"))}</th><th style="${th}${der}">${e(i18n.getText("colCantidad"))}</th><th style="${th}${der}">${e(i18n.getText("colPrecio"))} (${e(perfil.moneda || "PEN")})</th><th style="${th}${der}">${e(i18n.getText("colTotalLinea"))}</th></tr></thead><tbody>${filas}</tbody></table>
-<table style="width:40%;margin-left:60%;margin-top:8px"><tr><td>${e(i18n.getText("valorNeto"))}</td><td style="${der}">${m(neto)}</td></tr>${isc > 0 ? `<tr><td>${e(i18n.getText("iscIncluido"))}</td><td style="${der}">${m(isc)}</td></tr>` : ""}<tr><td>${e(i18n.getText("igv"))}</td><td style="${der}">${m(0)}</td></tr><tr><td><b>${e(i18n.getText("totalOferta"))}</b></td><td style="${der}"><b>${e(perfil.moneda || "PEN")} ${m(g.subtotal)}</b></td></tr></table>
+<table style="width:40%;margin-left:60%;margin-top:8px"><tr><td>${e(i18n.getText("valorNeto"))}</td><td style="${der}">${m(neto)}</td></tr>${isc > 0 ? `<tr><td>${e(i18n.getText("iscIncluido"))}</td><td style="${der}">${m(isc)}</td></tr>` : ""}<tr><td>${e(i18n.getText("igv"))}</td><td style="${der}">${m(igvG)}</td></tr><tr><td><b>${e(i18n.getText("totalOferta"))}</b></td><td style="${der}"><b>${e(perfil.moneda || "PEN")} ${m(g.subtotal + igvG)}</b></td></tr></table>
 ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentario)}</p>` : ""}
 <p style="margin-top:14px"><b>${e(i18n.getText("impresionCuentas"))}</b></p>
 <table style="${tabla}">${bancos.map((b) => `<tr><td style="${td}">${e(b.banco)} (${e(b.moneda)})</td><td style="${td}">${e(b.cuenta)}</td><td style="${td}">CCI ${e(b.cci)}</td></tr>`).join("")}</table>
@@ -2548,25 +2552,14 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 		});
 		const grupos = Array.from(mapa.values());
 		grupos.forEach((g) => this.aplicarModalidadGrupo(g));
-		const subtotal = grupos.reduce((acc, g) => acc + g.subtotal, 0);
 		oferta.setProperty("/grupos", grupos);
 		oferta.setProperty("/faltaTalla", lineas.some((l) => l.bonificacion && !l.sinTalla && !l.talla));
 		oferta.setProperty("/hayVehiculos", grupos.some((g) => g.lineas.some((l) => l.unica)));
 		oferta.setProperty("/cantidadOfertas", grupos.length);
 		oferta.setProperty("/textoGenerar", grupos.length ? this.i18n().getText("generaraOfertas", [grupos.length]) : "");
-		// El precio de lista de vehiculos ya incluye el ISC (probado en DS4): se separa neto e ISC solo para informar; el total no cambia.
-		const todas = grupos.flatMap((g) => g.lineas);
-		const iscIncluido = this.redondear(
-			todas.reduce((acc, l) => acc + l.total - l.total / (1 + (l.iscPct ?? 0) / 100), 0)
-		);
-		oferta.setProperty("/totales", {
-			subtotal,
-			neto: this.redondear(subtotal - iscIncluido),
-			isc: iscIncluido,
-			hayIsc: iscIncluido > 0,
-			igv: 0,
-			total: subtotal
-		});
+		// IGV real de SAP (solo tras guardar); antes de guardar no se conoce y se muestra "—".
+		const totales = totalesDeOferta(grupos.flatMap((g) => g.lineas));
+		oferta.setProperty("/totales", { ...totales, igvTxt: totales.igvConocido ? this.formatMonto(totales.igv) : "\u2014" });
 		if (oferta.getProperty("/cliente") && !oferta.getProperty("/entregaDatos/direccionId")) {
 			this.aplicarDireccionEnvio();
 		}

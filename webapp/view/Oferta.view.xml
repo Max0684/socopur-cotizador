@@ -506,6 +506,7 @@
 									<Column width="5rem"><Text text="{i18n>clasePedido}" /></Column>
 									<Column width="7rem"><Text text="{i18n>colEstado}" /></Column>
 									<Column width="14rem"><Text text="{i18n>colLiberacionSap}" /></Column>
+									<Column width="16rem" minScreenWidth="90rem" demandPopin="true"><Text text="{i18n>colTotalSap}" /></Column>
 								</columns>
 								<items>
 									<ColumnListItem>
@@ -518,6 +519,7 @@
 											<Text text="{oferta>clasePedido}" />
 											<ObjectStatus text="{oferta>estado}" state="{oferta>estadoState}" />
 											<ObjectStatus text="{oferta>liberacion}" state="{oferta>liberacionState}" />
+											<Text text="{oferta>totalSap}" />
 										</cells>
 									</ColumnListItem>
 								</items>
@@ -550,7 +552,7 @@
 				<HBox alignItems="Center">
 					<layoutData><OverflowToolbarLayoutData priority="NeverOverflow" /></layoutData>
 					<Label visible="{= ${device>/ancho} > 640 }" text="{i18n>igv}:" class="sapUiTinyMarginEnd" />
-					<ObjectNumber visible="{= ${device>/ancho} > 640 }" number="{path: 'oferta>/totales/igv', formatter: '.formatMonto'}" unit="{oferta>/perfil/moneda}" class="sapUiSmallMarginEnd" />
+					<ObjectNumber visible="{= ${device>/ancho} > 640 }" number="{oferta>/totales/igvTxt}" unit="{= ${oferta>/totales/igvConocido} ? ${oferta>/perfil/moneda} : '' }" class="sapUiSmallMarginEnd" />
 					<Label text="{i18n>totalOferta}:" class="sapUiTinyMarginEnd" />
 					<ObjectNumber number="{path: 'oferta>/totales/total', formatter: '.formatMonto'}" unit="{oferta>/perfil/moneda}" emphasized="true" state="Success" class="sapUiSmallMarginEnd" />
 				</HBox>
