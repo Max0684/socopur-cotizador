@@ -1,6 +1,7 @@
 import Controller from "sap/ui/core/mvc/Controller";
 import ODataModel from "sap/ui/model/odata/v4/ODataModel";
 import { cargarDetalleOferta } from "com/socopur/cotizador/model/OfertasService";
+import { canalDe, faltaAreaDeVentas, gruposParaGuardar } from "com/socopur/cotizador/model/Reglas";
 import { crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, type OfertaParaGuardar } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
 import { cargarModalidades, type ModalidadPantalla } from "com/socopur/cotizador/model/ModalidadesService";
@@ -959,11 +960,9 @@ export default class Oferta extends Controller {
 		grupo.canal = m.canal || "\u2014";
 		// El cliente debe estar dado de alta en el area de ventas (organizacion + canal) de la modalidad
 		const cliente = oferta.getProperty("/cliente") as Cliente | null;
-		const canalNum = /^(\d{2})/.exec(m.canal)?.[1];
+		const canalNum = canalDe(m.canal);
 		const area = canalNum ? `${grupo.lineas[0]?.orgVentas}/${canalNum}` : "";
-		// Los clientes de SAP traen sus areas como organizacion/canal/sector; aqui se compara organizacion/canal.
-		const areasCliente = (cliente?.areas ?? ["1101/11", "1103/11"]).map((a) => a.split("/").slice(0, 2).join("/"));
-		grupo.areaFalta = !!cliente && !!area && !areasCliente.includes(area);
+		grupo.areaFalta = !!cliente && !!area && faltaAreaDeVentas(cliente.areas, grupo.lineas[0]?.orgVentas, canalNum);
 		if (grupo.areaFalta) {
 			const nombre = (this.modeloMock().getProperty("/canalesArea") as { key: string; text: string }[]).find((x) => x.key === area)?.text ?? area;
 			grupo.areaAviso = i18n.getText("areaFalta", [nombre]) as string;
@@ -2113,27 +2112,7 @@ export default class Oferta extends Controller {
 			kunnr: cliente.kunnr,
 			moneda: perfil.moneda || "PEN",
 			comentario: (oferta.getProperty("/entregaDatos/comentario") as string) ?? "",
-			grupos: grupos.map((g) => ({
-				vkorg: g.lineas[0]?.orgVentas ?? "",
-				vtweg: /^(\d{2})/.exec(g.canal ?? "")?.[1] ?? "",
-				// Regla leida en TVAKZ (org 1103): los canales 11, 14 y 99 solo existen con sector 99; el 10 y el 12 usan el del material.
-				spart: ["11", "14", "99"].includes(/^(\d{2})/.exec(g.canal ?? "")?.[1] ?? "") ? "99" : (g.lineas[0]?.sector ?? ""),
-				vkbur: /^(\d{4})/.exec(perfil.oficina ?? "")?.[1] ?? "",
-				claseOferta: g.claseOferta ?? "",
-				clasePedido: g.clasePedido ?? "",
-				modalidad: g.modalidad ?? "",
-				// Los regalos ZNA0 los genera SAP al crear la oferta; enviarlos aqui los duplicaria.
-				lineas: g.lineas
-					.filter((l) => !l.bonificacion)
-					.map((l) => ({
-						material: l.material,
-						cantidad: l.cantidad,
-						um: "UN",
-						centro: perfil.centro,
-						almacen: ALMACEN_POR_DEFECTO,
-						precio: l.precio
-					}))
-			}))
+			grupos: gruposParaGuardar(grupos, perfil, ALMACEN_POR_DEFECTO)
 		};
 		const vista = this.getView();
 		vista?.setBusy(true);

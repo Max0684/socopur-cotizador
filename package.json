@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "ui5lint",
     "gen:types": "node scripts/gen-odata-types.mjs",
-    "start:sap": "ui5 serve --config ui5-sap.yaml --open index.html"
+    "start:sap": "ui5 serve --config ui5-sap.yaml --open index.html",
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"tests/**/*.test.ts\""
   },
   "devDependencies": {
     "@sapui5/types": "~1.120.52",

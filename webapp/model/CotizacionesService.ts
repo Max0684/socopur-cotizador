@@ -1,5 +1,5 @@
-import ODataModel from "sap/ui/model/odata/v4/ODataModel";
-import Context from "sap/ui/model/odata/v4/Context";
+import type ODataModel from "sap/ui/model/odata/v4/ODataModel";
+import type Context from "sap/ui/model/odata/v4/Context";
 import type { Cotizacion, Grupo, GrupoEstado, Item } from "./odata/Entidades";
 
 const NS = "com.sap.gateway.srvd_a2x.yui_cotiz_srv.v0001";
