@@ -505,7 +505,7 @@
 									<Column width="10rem" minScreenWidth="84rem" demandPopin="true"><Text text="{i18n>colBloqueoHasta}" /></Column>
 									<Column width="5rem"><Text text="{i18n>clasePedido}" /></Column>
 									<Column width="7rem"><Text text="{i18n>colEstado}" /></Column>
-									<Column width="14rem"><Text text="{i18n>validarLiberacion}" /></Column>
+									<Column width="14rem"><Text text="{i18n>colLiberacionSap}" /></Column>
 								</columns>
 								<items>
 									<ColumnListItem>

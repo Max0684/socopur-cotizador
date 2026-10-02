@@ -1,6 +1,6 @@
 import ODataModel from "sap/ui/model/odata/v4/ODataModel";
 import Context from "sap/ui/model/odata/v4/Context";
-import type { Cotizacion, Grupo, Item } from "./odata/Entidades";
+import type { Cotizacion, Grupo, GrupoEstado, Item } from "./odata/Entidades";
 
 const NS = "com.sap.gateway.srvd_a2x.yui_cotiz_srv.v0001";
 
@@ -144,6 +144,20 @@ export async function crearPedidoGrupo(modelo: ODataModel, cotizId: string, grup
 		throw new Error(cabecera.Comentario || "SAP no genero el pedido");
 	}
 	return { vbelnPedido: grupo.VbelnPedido, estado: grupo.Estado, liberacion: grupo.Liberacion };
+}
+
+/**
+ * Estado real del pedido de un grupo (vista YC_COTIZ_GRUPOESTADO sobre VBAK): credito (CMGST), bloqueo de entrega (LIFSK),
+ * bloqueo de facturacion (FAKSK) y Liberado ("X" si el credito no esta en B y no hay bloqueo de entrega).
+ * Devuelve null si no se puede leer: el llamador debe mostrar "sin informacion" y no inventar un estado.
+ */
+export async function leerEstadoPedido(modelo: ODataModel, cotizId: string, grupoNo: string): Promise<GrupoEstado | null> {
+	try {
+		const ruta = `/GrupoEstado(CotizId=${cotizId},GrupoNo='${grupoNo.replace(/'/g, "''")}')`;
+		return (await modelo.bindContext(ruta, undefined, { $$ownRequest: true }).requestObject()) as GrupoEstado;
+	} catch {
+		return null;
+	}
 }
 
 /** Mejor esfuerzo: si el descarte falla se deja el error original, que es el que importa al usuario. */

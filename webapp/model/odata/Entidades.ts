@@ -1,6 +1,25 @@
 // GENERADO por scripts/gen-odata-types.mjs desde localService/mainService/metadata.xml. No editar a mano.
 // Servicio: YUI_COTIZ_SRV (OData V4). Decimal, Date y DateTimeOffset llegan como string en UI5.
 
+/** Claves: Vbeln */
+export interface Oferta {
+	Vbeln: string;
+	Auart: string;
+	Kunnr: string;
+	ClienteNombre: string;
+	Erdat?: string;
+	Audat?: string;
+	Angdt?: string;
+	Bnddt?: string;
+	Vkorg: string;
+	Vtweg: string;
+	Spart: string;
+	Vkbur: string;
+	Netwr: string;
+	Waerk: string;
+	_Pos?: OfertaPos[];
+}
+
 /** Claves: CotizId, PartnRole, IsActiveEntity */
 export interface Direc {
 	CotizId: string;
@@ -46,6 +65,17 @@ export interface ItemCar {
 	_Item?: Item;
 }
 
+/** Claves: CotizId, GrupoNo */
+export interface GrupoEstado {
+	CotizId: string;
+	GrupoNo: string;
+	VbelnPedido: string;
+	EstadoCredito: string;
+	BloqueoEntrega: string;
+	BloqueoFactura: string;
+	Liberado: string;
+}
+
 /** Claves: CotizId, GrupoNo, IsActiveEntity */
 export interface Grupo {
 	CotizId: string;
@@ -70,6 +100,21 @@ export interface Grupo {
 	DraftAdministrativeData?: I_DraftAdministrativeData;
 	SiblingEntity?: Grupo;
 	_Cotizacion?: Cotizacion;
+	_Estado?: GrupoEstado;
+}
+
+/** Claves: Modalidad */
+export interface Modalidad {
+	Modalidad: string;
+	Descripcion: string;
+	Tipo: string;
+	AuartOferta: string;
+	AuartPedido: string;
+	Vtweg: string;
+	SinCargo: string;
+	RequiereAprob: string;
+	Activo: string;
+	Confirmado: string;
 }
 
 /** Claves: CotizId, Posnr, CondType, IsActiveEntity */
@@ -112,6 +157,27 @@ export interface I_DraftAdministrativeData {
 	CreatedByUserDescription: string;
 	LastChangedByUserDescription: string;
 	InProcessByUserDescription: string;
+}
+
+/** Claves: Kunnr, Vkorg, Vtweg, Spart */
+export interface Cliente {
+	Kunnr: string;
+	Vkorg: string;
+	Vtweg: string;
+	Spart: string;
+	Kdgrp: string;
+	Zterm: string;
+	Vsbed: string;
+	Aufsd: string;
+	Name1: string;
+	Name2: string;
+	Stcd1: string;
+	Stcd2: string;
+	Land1: string;
+	Ort01: string;
+	Stras: string;
+	Sperr: boolean;
+	Loevm: boolean;
 }
 
 /** Claves: CotizId, IsActiveEntity */
@@ -181,13 +247,36 @@ export interface Item {
 	_Grupo?: Grupo;
 }
 
+/** Claves: Vbeln, Posnr */
+export interface OfertaPos {
+	Vbeln: string;
+	Posnr: string;
+	Matnr: string;
+	Arktx: string;
+	Kwmeng: string;
+	Vrkme: string;
+	Werks: string;
+	Lgort: string;
+	Netpr: string;
+	Netwr: string;
+	Waerk: string;
+	Uepos: string;
+	Pstyv: string;
+	_Oferta?: Oferta;
+}
+
 /** Nombre del conjunto de entidades -> tipo. */
 export interface ConjuntosCotizador {
+	Cliente: Cliente;
 	Cotizacion: Cotizacion;
 	Direc: Direc;
 	Grupo: Grupo;
+	GrupoEstado: GrupoEstado;
 	Item: Item;
 	ItemCar: ItemCar;
 	ItemCond: ItemCond;
 	I_DraftAdministrativeData: I_DraftAdministrativeData;
+	Modalidad: Modalidad;
+	Oferta: Oferta;
+	OfertaPos: OfertaPos;
 }

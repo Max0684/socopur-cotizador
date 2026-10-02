@@ -1,7 +1,7 @@
 import Controller from "sap/ui/core/mvc/Controller";
 import ODataModel from "sap/ui/model/odata/v4/ODataModel";
 import { cargarDetalleOferta } from "com/socopur/cotizador/model/OfertasService";
-import { crearPedidoGrupo, guardarCotizacion, type OfertaParaGuardar } from "com/socopur/cotizador/model/CotizacionesService";
+import { crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, type OfertaParaGuardar } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
 import { cargarModalidades, type ModalidadPantalla } from "com/socopur/cotizador/model/ModalidadesService";
 import { ordenarPorTexto } from "com/socopur/cotizador/model/Orden";
@@ -1678,9 +1678,21 @@ export default class Oferta extends Controller {
 			for (const o of guardadas) {
 				const pedido = await crearPedidoGrupo(odata, o.cotizId as string, o.grupoNo as string);
 				numeros.push(pedido.vbelnPedido);
-				// El pedido ya existe en SAP: no se promete "Liberado" por una regla del front. El servicio solo informa
-				// Grupo.Liberacion (hoy vacio: el Cotizador aun no libera el pedido; SAP deja CMGST=B, credito sin aprobar).
-				const informada = Boolean(pedido.liberacion);
+				// Estado REAL leido de SAP (vista GrupoEstado sobre VBAK); si no se puede leer, se dice que no hay informacion.
+				const real = await leerEstadoPedido(odata, o.cotizId as string, o.grupoNo as string);
+				const bloqueos: string[] = [];
+				if (real?.BloqueoEntrega) {
+					bloqueos.push(i18n.getText("pedidoBloqueoEntrega", [real.BloqueoEntrega]) as string);
+				}
+				if (real?.BloqueoFactura) {
+					bloqueos.push(i18n.getText("pedidoBloqueoFactura", [real.BloqueoFactura]) as string);
+				}
+				const credito = !real
+					? (i18n.getText("pedidoEstadoNoLeido") as string)
+					: real.EstadoCredito === "B"
+						? (i18n.getText("pedidoCreditoBloqueado") as string)
+						: (i18n.getText("pedidoCreditoLibre") as string);
+				const liberado = real?.Liberado === "X";
 				filas.push({
 					numero: pedido.vbelnPedido,
 					oferta: o.numero,
@@ -1688,10 +1700,10 @@ export default class Oferta extends Controller {
 					vin: "—",
 					bloqueo: "—",
 					clasePedido: o.clasePedido ?? "",
-					estado: i18n.getText("pedidoPendiente") as string,
-					estadoState: "Warning",
-					liberacion: informada ? pedido.liberacion : (i18n.getText("libNoInformada") as string),
-					liberacionState: informada ? "Success" : "Warning"
+					estado: !real ? (i18n.getText("pedidoPendiente") as string) : liberado ? (i18n.getText("pedidoLiberado") as string) : (i18n.getText("pedidoBloqueado") as string),
+					estadoState: liberado ? "Success" : "Warning",
+					liberacion: [credito, ...bloqueos].join(" · "),
+					liberacionState: !real ? "Warning" : liberado ? "Success" : "Warning"
 				});
 			}
 		} catch (error) {
