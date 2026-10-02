@@ -1,7 +1,7 @@
 import Controller from "sap/ui/core/mvc/Controller";
 import ODataModel from "sap/ui/model/odata/v4/ODataModel";
 import { cargarDetalleOferta } from "com/socopur/cotizador/model/OfertasService";
-import { guardarCotizacion, type OfertaParaGuardar } from "com/socopur/cotizador/model/CotizacionesService";
+import { crearPedidoGrupo, guardarCotizacion, type OfertaParaGuardar } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
 import { cargarModalidades, type ModalidadPantalla } from "com/socopur/cotizador/model/ModalidadesService";
 import { ordenarPorTexto } from "com/socopur/cotizador/model/Orden";
@@ -196,6 +196,9 @@ interface Direccion {
 
 interface OfertaGuardada {
 	numero: string;
+	/** Solo cuando la oferta se guardo en SAP (?odata=1): clave de la cotizacion y del grupo para crear su pedido. */
+	cotizId?: string;
+	grupoNo?: string;
 	titulo: string;
 	lineas: Linea[];
 	modalidad?: string;
@@ -1616,8 +1619,66 @@ export default class Oferta extends Controller {
 		this.dialogoVin?.close();
 	}
 
-	/** SIMULADO: un pedido por cada oferta guardada; el pedido nace pendiente de liberacion. */
+	/**
+	 * Con ?odata=1, ofertas guardadas en SAP y sin vehiculos (asignarVin aun no esta conectado) crea los pedidos
+	 * reales; en cualquier otro caso sigue simulado.
+	 */
 	private crearPedidos(asignaciones: { material: string; vin: string; hasta: string }[]): void {
+		const guardadas = (this.modeloOferta().getProperty("/ofertasGuardadas") as OfertaGuardada[]) ?? [];
+		const real =
+			this.usarOData() && guardadas.length > 0 && guardadas.every((o) => o.cotizId && o.grupoNo && !o.lineas.some((l) => this.esVehiculo(l)));
+		if (real) {
+			void this.crearPedidosSap(guardadas);
+			return;
+		}
+		if (this.usarOData()) {
+			// Con ?odata=1 se explica por que sigue simulado, para no confundirlo con un fallo.
+			const sinGuardarEnSap = guardadas.some((o) => !o.cotizId || !o.grupoNo);
+			MessageBox.information(this.i18n().getText(sinGuardarEnSap ? "pedidoSimuladoSinGuardar" : "pedidoSimuladoVehiculo") as string);
+		}
+		this.crearPedidosSimulado(asignaciones);
+	}
+
+	/** Un pedido real por cada oferta guardada (accion crearPedido). Se detiene en el primer rechazo de SAP. */
+	private async crearPedidosSap(guardadas: OfertaGuardada[]): Promise<void> {
+		const oferta = this.modeloOferta();
+		const i18n = this.i18n();
+		const vista = this.getView();
+		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel;
+		const filas: Record<string, string>[] = [];
+		const numeros: string[] = [];
+		vista?.setBusy(true);
+		try {
+			for (const o of guardadas) {
+				const pedido = await crearPedidoGrupo(odata, o.cotizId as string, o.grupoNo as string);
+				numeros.push(pedido.vbelnPedido);
+				const lib = this.evaluarLiberacion(o);
+				filas.push({
+					numero: pedido.vbelnPedido,
+					oferta: o.numero,
+					detalle: o.titulo,
+					vin: "—",
+					bloqueo: "—",
+					clasePedido: o.clasePedido ?? "",
+					estado: lib.automatica ? (i18n.getText("pedidoLiberado") as string) : (i18n.getText("pedidoBloqueado") as string),
+					estadoState: lib.automatica ? "Success" : "Warning",
+					liberacion: lib.texto,
+					liberacionState: lib.estado
+				});
+			}
+		} catch (error) {
+			MessageBox.error(i18n.getText("pedidoError", [(error as Error).message]) as string);
+		} finally {
+			vista?.setBusy(false);
+		}
+		if (numeros.length > 0) {
+			oferta.setProperty("/pedidos", filas);
+			oferta.setProperty("/guardado", { visible: true, texto: i18n.getText("pedidosCreados", [numeros.join(", ")]) as string });
+		}
+	}
+
+	/** SIMULADO: un pedido por cada oferta guardada; el pedido nace pendiente de liberacion. */
+	private crearPedidosSimulado(asignaciones: { material: string; vin: string; hasta: string }[]): void {
 		const oferta = this.modeloOferta();
 		const i18n = this.i18n();
 		const guardadas = (oferta.getProperty("/ofertasGuardadas") as OfertaGuardada[]) ?? [];
@@ -1764,7 +1825,9 @@ export default class Oferta extends Controller {
 			grupo: elegido.grupo,
 			telefono: "",
 			correo: "",
-			direccion: elegido.direccion
+			direccion: elegido.direccion,
+			// Sin esto el cliente de SAP caia en las areas de ejemplo y siempre faltaba el area de ventas (p. ej. 1103/10).
+			areas: elegido.areas
 		};
 		oferta.setProperty("/cliente", cliente);
 		oferta.setProperty("/clienteNoEncontrado", false);
@@ -2011,7 +2074,17 @@ export default class Oferta extends Controller {
 			const numeros = resultado.ofertas.map((o) => o.vbelnOferta);
 			oferta.setProperty(
 				"/ofertasGuardadas",
-				grupos.map((g, i) => ({ numero: numeros[i] ?? "", titulo: g.titulo, lineas: g.lineas, modalidad: g.modalidad, clasePedido: g.clasePedido, total: g.subtotal, areaFalta: g.areaFalta }))
+				grupos.map((g, i) => ({
+					numero: numeros[i] ?? "",
+					cotizId: resultado.cotizId,
+					grupoNo: resultado.ofertas[i]?.grupoNo,
+					titulo: g.titulo,
+					lineas: g.lineas,
+					modalidad: g.modalidad,
+					clasePedido: g.clasePedido,
+					total: g.subtotal,
+					areaFalta: g.areaFalta
+				}))
 			);
 			oferta.setProperty("/pedidos", []);
 			oferta.setProperty("/vigencia", this.calcularVigencia(new Date().toISOString().slice(0, 10), false));

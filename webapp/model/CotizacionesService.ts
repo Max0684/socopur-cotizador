@@ -118,6 +118,34 @@ export async function guardarCotizacion(modelo: ODataModel, datos: OfertaParaGua
 	return { cotizId, ofertas };
 }
 
+export interface PedidoGenerado {
+	vbelnPedido: string;
+	estado: string;
+	liberacion: string;
+}
+
+/**
+ * Crea el pedido de un grupo (accion crearPedido sobre el grupo ACTIVO que ya tiene oferta), como la prueba
+ * verificada VSP/crear-pedido-prueba.ps1. Devuelve el numero real del pedido (Grupo.VbelnPedido).
+ * Igual que generarOfertas, un rechazo de SAP no da error HTTP: el grupo vuelve sin pedido y el motivo queda
+ * en el Comentario de la cotizacion. Solo repuestos: los vehiculos necesitan asignarVin, que aun no esta conectado.
+ * SIN PROBAR contra SAP desde el front.
+ */
+export async function crearPedidoGrupo(modelo: ODataModel, cotizId: string, grupoNo: string): Promise<PedidoGenerado> {
+	const ruta = `/Grupo(CotizId=${cotizId},GrupoNo='${grupoNo.replace(/'/g, "''")}',IsActiveEntity=true)`;
+	const operacion = modelo.bindContext(`${ruta}/${NS}.crearPedido(...)`);
+	// ui5lint-disable-next-line no-deprecated-api -- invoke() existe desde UI5 1.123; el servidor de Socopur y los tipos son 1.120
+	await operacion.execute("$auto", true);
+	const grupo = operacion.getBoundContext().getObject() as Grupo;
+	if (!grupo?.VbelnPedido) {
+		const cabecera = (await modelo
+			.bindContext(`/Cotizacion(CotizId=${cotizId},IsActiveEntity=true)`, undefined, { $select: "Comentario", $$ownRequest: true })
+			.requestObject()) as Pick<Cotizacion, "Comentario">;
+		throw new Error(cabecera.Comentario || "SAP no genero el pedido");
+	}
+	return { vbelnPedido: grupo.VbelnPedido, estado: grupo.Estado, liberacion: grupo.Liberacion };
+}
+
 /** Mejor esfuerzo: si el descarte falla se deja el error original, que es el que importa al usuario. */
 async function descartarBorrador(modelo: ODataModel, cabecera: Context): Promise<void> {
 	try {
