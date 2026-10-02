@@ -2111,6 +2111,8 @@ export default class Oferta extends Controller {
 		const datos: OfertaParaGuardar = {
 			kunnr: cliente.kunnr,
 			moneda: perfil.moneda || "PEN",
+			// La forma de pago elegida en la pantalla viaja a SAP; antes el pedido heredaba la del maestro del cliente.
+			zterm: perfil.formaPago || "",
 			comentario: (oferta.getProperty("/entregaDatos/comentario") as string) ?? "",
 			grupos: gruposParaGuardar(grupos, perfil, ALMACEN_POR_DEFECTO)
 		};

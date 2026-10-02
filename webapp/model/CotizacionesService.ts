@@ -29,6 +29,8 @@ export interface GrupoParaGuardar {
 export interface OfertaParaGuardar {
 	kunnr: string;
 	moneda: string;
+	/** Forma de pago elegida (p. ej. C000 contado, C030 credito). Vacia = SAP usa la del maestro del cliente. */
+	zterm?: string;
 	comentario: string;
 	grupos: GrupoParaGuardar[];
 }
@@ -65,7 +67,10 @@ async function crearHija<T>(modelo: ODataModel, ruta: string, padre: Context, da
  */
 export async function guardarCotizacion(modelo: ODataModel, datos: OfertaParaGuardar): Promise<ResultadoGuardado> {
 	const raiz = modelo.bindList("/Cotizacion");
-	const cabecera = raiz.create({ Kunnr: datos.kunnr, Waers: datos.moneda, Comentario: datos.comentario }, true);
+	const cabecera = raiz.create(
+		{ Kunnr: datos.kunnr, Waers: datos.moneda, Comentario: datos.comentario, ...(datos.zterm ? { Zterm: datos.zterm } : {}) },
+		true
+	);
 	await cabecera.created();
 	const cotizId = (cabecera.getObject() as Cotizacion).CotizId;
 	let activada = false;

@@ -127,3 +127,15 @@ test("leerEstadoPedido devuelve null si no se puede leer (no inventa un estado)"
 	const { modelo } = crearModeloFalso({ estado: null });
 	assert.equal(await leerEstadoPedido(como(modelo), "COT-1", "01"), null);
 });
+
+test("guardarCotizacion envia la forma de pago elegida en la cabecera", async () => {
+	const { modelo, creadas } = crearModeloFalso({ gruposLeidos: [{ GrupoNo: "01", VbelnOferta: "3100007390" }] });
+	await guardarCotizacion(como(modelo), { ...oferta(), zterm: "C000" });
+	assert.equal(creadas[0].datos.Zterm, "C000");
+});
+
+test("guardarCotizacion sin forma de pago no envia Zterm (SAP usa la del cliente)", async () => {
+	const { modelo, creadas } = crearModeloFalso({ gruposLeidos: [{ GrupoNo: "01", VbelnOferta: "3100007390" }] });
+	await guardarCotizacion(como(modelo), { ...oferta(), zterm: "" });
+	assert.equal("Zterm" in creadas[0].datos, false);
+});
