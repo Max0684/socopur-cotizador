@@ -1,6 +1,7 @@
 import Controller from "sap/ui/core/mvc/Controller";
 import ODataModel from "sap/ui/model/odata/v4/ODataModel";
 import { cargarDetalleOferta } from "com/socopur/cotizador/model/OfertasService";
+import { guardarCotizacion, type OfertaParaGuardar } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
 import { cargarModalidades, type ModalidadPantalla } from "com/socopur/cotizador/model/ModalidadesService";
 import { ordenarPorTexto } from "com/socopur/cotizador/model/Orden";
@@ -26,6 +27,9 @@ import FileUploader from "sap/ui/unified/FileUploader";
 import Fragment from "sap/ui/core/Fragment";
 import { ListBase$SelectionChangeEvent } from "sap/m/ListBase";
 import { Route$PatternMatchedEvent } from "sap/ui/core/routing/Route";
+
+/** Almacen por defecto de las lineas al guardar (el del prueba verificado en DS4/130); falta definir de donde sale. */
+const ALMACEN_POR_DEFECTO = "0001";
 
 interface Cliente {
 	/** Numero de cliente SAP (solo en clientes leidos del servicio). */
@@ -1946,10 +1950,80 @@ export default class Oferta extends Controller {
 	}
 
 	/**
-	 * SIMULADO: cuando exista el RAP, esto llama al servicio y devuelve los numeros reales.
-	 * Aqui solo muestra cuantas ofertas saldrian, una por grupo.
+	 * Con ?odata=1 y una oferta NUEVA guarda en SAP y muestra los numeros reales (una oferta por grupo).
+	 * Sin la bandera, o al modificar una oferta existente (la accion Edit aun no esta conectada), sigue simulado.
 	 */
-	public onGuardar(): void {
+	public async onGuardar(): Promise<void> {
+		const oferta = this.modeloOferta();
+		if (this.usarOData() && !(oferta.getProperty("/numero") as string)) {
+			await this.guardarEnSap();
+			return;
+		}
+		this.guardarSimulado();
+	}
+
+	/** Arma lo que necesita el servicio a partir del carrito y llama a guardarCotizacion. */
+	private async guardarEnSap(): Promise<void> {
+		const oferta = this.modeloOferta();
+		const i18n = this.i18n();
+		const cliente = oferta.getProperty("/cliente") as Cliente | null;
+		const grupos = (oferta.getProperty("/grupos") as Grupo[]) ?? [];
+		if (!cliente?.kunnr) {
+			MessageBox.error(i18n.getText("guardarSinCliente") as string);
+			return;
+		}
+		if (grupos.length === 0 || grupos.every((g) => g.lineas.length === 0)) {
+			MessageBox.error(i18n.getText("guardarSinLineas") as string);
+			return;
+		}
+		const perfil = oferta.getProperty("/perfil") as Record<string, string>;
+		const datos: OfertaParaGuardar = {
+			kunnr: cliente.kunnr,
+			moneda: perfil.moneda || "PEN",
+			comentario: (oferta.getProperty("/entregaDatos/comentario") as string) ?? "",
+			grupos: grupos.map((g) => ({
+				vkorg: g.lineas[0]?.orgVentas ?? "",
+				vtweg: /^(\d{2})/.exec(g.canal ?? "")?.[1] ?? "",
+				spart: g.lineas[0]?.sector ?? "",
+				vkbur: /^(\d{4})/.exec(perfil.oficina ?? "")?.[1] ?? "",
+				claseOferta: g.claseOferta ?? "",
+				clasePedido: g.clasePedido ?? "",
+				modalidad: g.modalidad ?? "",
+				// Los regalos ZNA0 los genera SAP al crear la oferta; enviarlos aqui los duplicaria.
+				lineas: g.lineas
+					.filter((l) => !l.bonificacion)
+					.map((l) => ({
+						material: l.material,
+						cantidad: l.cantidad,
+						um: "UN",
+						centro: perfil.centro,
+						almacen: ALMACEN_POR_DEFECTO,
+						precio: l.precio
+					}))
+			}))
+		};
+		const vista = this.getView();
+		vista?.setBusy(true);
+		try {
+			const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel;
+			const resultado = await guardarCotizacion(odata, datos);
+			const numeros = resultado.ofertas.map((o) => o.vbelnOferta);
+			oferta.setProperty(
+				"/ofertasGuardadas",
+				grupos.map((g, i) => ({ numero: numeros[i] ?? "", titulo: g.titulo, lineas: g.lineas, modalidad: g.modalidad, clasePedido: g.clasePedido, total: g.subtotal, areaFalta: g.areaFalta }))
+			);
+			oferta.setProperty("/pedidos", []);
+			oferta.setProperty("/vigencia", this.calcularVigencia(new Date().toISOString().slice(0, 10), false));
+			oferta.setProperty("/guardado", { visible: true, texto: i18n.getText("guardadoOk", [numeros.join(", ")]) as string });
+		} catch (error) {
+			MessageBox.error(i18n.getText("guardarError", [(error as Error).message]) as string);
+		} finally {
+			vista?.setBusy(false);
+		}
+	}
+
+	/** SIMULADO: muestra cuantas ofertas saldrian, una por grupo, con numeros inventados. */
+	private guardarSimulado(): void {
 		const oferta = this.modeloOferta();
 		const grupos = oferta.getProperty("/grupos") as Grupo[];
 		const existente = oferta.getProperty("/numero") as string;
