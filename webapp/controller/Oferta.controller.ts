@@ -1,7 +1,7 @@
 import Controller from "sap/ui/core/mvc/Controller";
 import ODataModel from "sap/ui/model/odata/v4/ODataModel";
 import { cargarDetalleOferta } from "com/socopur/cotizador/model/OfertasService";
-import { canalDe, faltaAreaDeVentas, gruposParaGuardar } from "com/socopur/cotizador/model/Reglas";
+import { almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, gruposParaGuardar, modalidadPorDefecto } from "com/socopur/cotizador/model/Reglas";
 import { crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, type OfertaParaGuardar } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
 import { cargarModalidades, type ModalidadPantalla } from "com/socopur/cotizador/model/ModalidadesService";
@@ -29,8 +29,6 @@ import Fragment from "sap/ui/core/Fragment";
 import { ListBase$SelectionChangeEvent } from "sap/m/ListBase";
 import { Route$PatternMatchedEvent } from "sap/ui/core/routing/Route";
 
-/** Almacen por defecto de las lineas al guardar (el del prueba verificado en DS4/130); falta definir de donde sale. */
-const ALMACEN_POR_DEFECTO = "0001";
 
 interface Cliente {
 	/** Numero de cliente SAP (solo en clientes leidos del servicio). */
@@ -502,6 +500,45 @@ export default class Oferta extends Controller {
 			finalTxt: this.formatMonto(final),
 			totalTxt: this.formatMonto(this.redondear(final * cantidad))
 		};
+	}
+
+	/** Centros validos (TVKWZ) para la organizacion de repuestos y el canal elegido, con su nombre. */
+	private centrosDe(canal: string): { key: string; text: string }[] {
+		const mock = this.modeloMock();
+		const nombres = (mock.getProperty("/opciones/centros") as Record<string, string>) ?? {};
+		const porArea = (mock.getProperty("/opciones/centrosPorArea") as Record<string, string[]>) ?? {};
+		const org = String(mock.getProperty("/perfil/busqueda/orgs/repuestos") ?? "1103");
+		const claves = porArea[`${org}/${canal}`] ?? Object.keys(nombres);
+		return claves.map((k) => ({ key: k, text: nombres[k] ? `${k} \u00b7 ${nombres[k]}` : k }));
+	}
+
+	/** El canal elegido define el canal de la busqueda de materiales, la modalidad propuesta y los centros que se ofrecen. */
+	public onCambiaCanal(): void {
+		const oferta = this.modeloOferta();
+		const canal = String(oferta.getProperty("/perfil/canal") ?? "");
+		oferta.setProperty("/perfil/busqueda/canal", canal);
+		const modalidades = (oferta.getProperty("/modalidades") as Modalidad[]) ?? [];
+		const elegidas = (oferta.getProperty("/modalidadesGrupo") as Record<string, string>) ?? {};
+		((oferta.getProperty("/grupos") as Grupo[]) ?? []).forEach((g) => {
+			const clave = modalidadPorDefecto(g.lineas.some((l) => l.unica) ? "vehiculos" : "repuestos", canal);
+			if (clave && modalidades.some((m) => m.key === clave)) {
+				elegidas[g.clave] = clave;
+			}
+		});
+		const centros = this.centrosDe(canal);
+		oferta.setProperty("/opcionesCentro", centros);
+		if (!centros.some((c) => c.key === oferta.getProperty("/perfil/centro"))) {
+			oferta.setProperty("/perfil/centro", centros.find((c) => c.key === "1101")?.key ?? centros[0]?.key ?? "");
+		}
+		oferta.setProperty("/guardado", { visible: false, texto: "" });
+		this.recalcular();
+	}
+
+	/** 01 Envio / 02 Recojo: define como se entrega (la modalidad tambien lo propone al cambiarla). */
+	public onCambiaExpedicion(): void {
+		const oferta = this.modeloOferta();
+		oferta.setProperty("/entrega", oferta.getProperty("/perfil/expedicion") === "01" ? "envio" : "recojo");
+		oferta.setProperty("/guardado", { visible: false, texto: "" });
 	}
 
 	/** Al cambiar Soles/Dolares se vuelven a calcular los precios de las lineas que vienen del catalogo. */
@@ -2114,8 +2151,15 @@ export default class Oferta extends Controller {
 			// La forma de pago elegida en la pantalla viaja a SAP; antes el pedido heredaba la del maestro del cliente.
 			zterm: perfil.formaPago || "",
 			comentario: (oferta.getProperty("/entregaDatos/comentario") as string) ?? "",
-			grupos: gruposParaGuardar(grupos, perfil, ALMACEN_POR_DEFECTO)
+			grupos: gruposParaGuardar(grupos, perfil, (centro) => almacenDeCentro(centro, this.modeloMock().getProperty("/opciones/almacenPorCentro") ?? {}))
 		};
+		// Un centro que no esta asignado a la organizacion/canal hace que SAP rechace la oferta (visto con el 1103 en 1103/10).
+		const centrosPorArea = (this.modeloMock().getProperty("/opciones/centrosPorArea") as Record<string, string[]>) ?? {};
+		const centroMalo = datos.grupos.find((g) => g.lineas.some((l) => !centroValidoParaArea(centrosPorArea, g.vkorg, g.vtweg, l.centro)));
+		if (centroMalo) {
+			MessageBox.error(i18n.getText("guardarCentroInvalido", [perfil.centro, `${centroMalo.vkorg}/${centroMalo.vtweg}`]) as string);
+			return;
+		}
 		const vista = this.getView();
 		vista?.setBusy(true);
 		try {
@@ -2465,6 +2509,8 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 			modalidadesGrupo: {},
 			formasPago: mock.getProperty("/formasPago") ?? [],
 			perfil: mock.getProperty("/perfil") ?? {},
+			opciones: mock.getProperty("/opciones") ?? {},
+			opcionesCentro: this.centrosDe(String(mock.getProperty("/perfil/canal") ?? "11")),
 			materialElegido: null,
 			elegidosLista: [],
 			solpeds: [],

@@ -66,7 +66,7 @@ export function faltaAreaDeVentas(areasCliente: string[] | undefined, orgVentas:
  * Convierte los grupos del carrito en lo que recibe el servicio. Los regalos (bonificaciones) NO se envian:
  * SAP agrega solo la linea ZNA0 al crear la oferta y enviarla la duplicaria.
  */
-export function gruposParaGuardar(grupos: GrupoCarrito[], perfil: PerfilVenta, almacen: string, unidad = "UN"): GrupoParaGuardar[] {
+export function gruposParaGuardar(grupos: GrupoCarrito[], perfil: PerfilVenta, almacen: string | ((centro: string) => string), unidad = "UN"): GrupoParaGuardar[] {
 	return grupos.map((g) => {
 		const canal = canalDe(g.canal);
 		return {
@@ -84,9 +84,33 @@ export function gruposParaGuardar(grupos: GrupoCarrito[], perfil: PerfilVenta, a
 					cantidad: l.cantidad,
 					um: unidad,
 					centro: perfil.centro ?? "",
-					almacen,
+					almacen: typeof almacen === "function" ? almacen(perfil.centro ?? "") : almacen,
 					precio: l.precio
 				}))
 		};
 	});
+}
+
+/**
+ * true si el centro es valido para la organizacion/canal segun TVKWZ. Si no hay lista para esa area
+ * (por ejemplo 1103/99, que no se leyo completa) no se bloquea.
+ */
+export function centroValidoParaArea(centrosPorArea: Record<string, string[]>, orgVentas: string, canal: string, centro: string): boolean {
+	const validos = centrosPorArea[`${orgVentas}/${canal}`];
+	return !validos || validos.includes(centro);
+}
+
+/** Almacen de las lineas: el 0001 es el normal; el centro 1007 (aduanero) usa el 0008. Leido en MARD. */
+export function almacenDeCentro(centro: string, almacenPorCentro: Record<string, string>): string {
+	return almacenPorCentro[centro] ?? "0001";
+}
+
+const MODALIDAD_POR_DEFECTO: Record<string, Record<string, string>> = {
+	repuestos: { "10": "rep_mayorista", "11": "rep_mostrador" },
+	vehiculos: { "10": "veh_mayorista", "11": "veh_retail" }
+};
+
+/** Modalidad que se propone al elegir un canal; undefined si no hay una por defecto para ese canal. */
+export function modalidadPorDefecto(tipo: "repuestos" | "vehiculos", canal: string): string | undefined {
+	return MODALIDAD_POR_DEFECTO[tipo][canal];
 }

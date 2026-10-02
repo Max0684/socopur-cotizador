@@ -1,10 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+	almacenDeCentro,
 	areasOrgCanal,
 	canalDe,
+	centroValidoParaArea,
 	faltaAreaDeVentas,
 	gruposParaGuardar,
+	modalidadPorDefecto,
 	oficinaDe,
 	sectorDeCabecera,
 	type GrupoCarrito
@@ -111,4 +114,34 @@ test("gruposParaGuardar: un grupo por oferta y datos faltantes quedan vacios, no
 		modalidad: "",
 		lineas: []
 	});
+});
+
+test("centroValidoParaArea: el 1103 no es valido en 1103/10 pero si en 1103/12 (TVKWZ)", () => {
+	const mapa = { "1103/10": ["1101", "1201"], "1103/12": ["1101", "1103"] };
+	assert.equal(centroValidoParaArea(mapa, "1103", "10", "1103"), false);
+	assert.equal(centroValidoParaArea(mapa, "1103", "12", "1103"), true);
+	assert.equal(centroValidoParaArea(mapa, "1103", "10", "1101"), true);
+});
+
+test("centroValidoParaArea: sin lista para el area no bloquea (p. ej. 1103/99)", () => {
+	assert.equal(centroValidoParaArea({ "1103/10": ["1101"] }, "1103", "99", "9999"), true);
+});
+
+test("almacenDeCentro: 0001 por defecto y 0008 en el aduanero 1007", () => {
+	assert.equal(almacenDeCentro("1101", { "1007": "0008" }), "0001");
+	assert.equal(almacenDeCentro("1007", { "1007": "0008" }), "0008");
+});
+
+test("modalidadPorDefecto propone la modalidad del canal 10 y 11", () => {
+	assert.equal(modalidadPorDefecto("repuestos", "10"), "rep_mayorista");
+	assert.equal(modalidadPorDefecto("repuestos", "11"), "rep_mostrador");
+	assert.equal(modalidadPorDefecto("vehiculos", "10"), "veh_mayorista");
+	assert.equal(modalidadPorDefecto("repuestos", "14"), undefined);
+});
+
+test("gruposParaGuardar acepta una funcion de almacen por centro", () => {
+	const grupo = { canal: "10 Mayorista", lineas: [{ orgVentas: "1103", sector: "50", material: "M", cantidad: 1, precio: 1 }] };
+	const [g] = gruposParaGuardar([grupo], { oficina: "1101", centro: "1007" }, (c) => almacenDeCentro(c, { "1007": "0008" }));
+	assert.equal(g.lineas[0].almacen, "0008");
+	assert.equal(g.lineas[0].centro, "1007");
 });

@@ -1,13 +1,331 @@
 {
  "_aviso": "Datos de ejemplo para el prototipo visual. Estructura real (lectura DS4/130 del 29/09): tipos de busqueda Repuestos/Vehiculos, segmentos Linea>Clase>Familia>Subfamilia>Marca, sectores 10-20 marcas de moto y 50-56 lineas de repuesto, orgs 1101 vehiculos y 1103 repuestos. Nombres de familias solo conocidos para G-01 y M-01; marcas de repuestos, precios y stock inventados. Regla confirmada por lectura DS4/130: el sector de la CABECERA de una oferta de repuestos es 99 (procedimiento de precios Z31001 solo existe para sector 99 en la org 1103), aunque cada material conserve su sector real (50-56) para buscar. En vehiculos el sector de cabecera es la marca (10-20). Stock por almacen y transito: ilustrativos; falta confirmar con Socopur/BASIS que expone realmente el WMS/SGA (Propuesta D). Semantica real (lectura DS4/130): fisico = MARD-LABST, disponible = chequeo ATP, comprometido = fisico - disponible; transito = pendiente de pedidos de traslado Z204 (fecha = la prometida). Centros y almacenes reales; numeros de pedido y cantidades de ejemplo. VINs de ejemplo. El plazo de bloqueo (bloqueoHoras) es un valor de ejemplo: por definir con Socopur; VELO no trae vencimiento propio, hace falta un proceso que libere los bloqueos vencidos. Precios de lista en USD como en SAP (Z101/Z200/Z300); la oferta es en PEN al tipo de cambio del perfil. Importes reales vistos en DS4: KTM 390 Duke USD 7,799; lubricante USD 46.50; el resto son de ejemplo. Tipo de cambio 3.406 (tipo M USD->PEN al 29/09/2026, vigente desde 25/09, medido en DS4/130).",
+ "opciones": {
+  "canales": [
+   {
+    "key": "10",
+    "text": "10 Mayorista"
+   },
+   {
+    "key": "11",
+    "text": "11 Retail"
+   },
+   {
+    "key": "12",
+    "text": "12 Institucional"
+   },
+   {
+    "key": "14",
+    "text": "14 Web"
+   },
+   {
+    "key": "15",
+    "text": "15 Administrativo"
+   },
+   {
+    "key": "99",
+    "text": "99 Intercomp./Traslados"
+   }
+  ],
+  "oficinas": [
+   {
+    "key": "1001",
+    "text": "1001 LIMA - ATE"
+   },
+   {
+    "key": "1004",
+    "text": "1004 LIMA - SAN BARTOLO"
+   },
+   {
+    "key": "1101",
+    "text": "1101 PCP - CENTENARIO"
+   },
+   {
+    "key": "1201",
+    "text": "1201 IQT - QUIÑONES"
+   },
+   {
+    "key": "1202",
+    "text": "1202 IQT - PROSPERO"
+   },
+   {
+    "key": "1302",
+    "text": "1302 TPT - HURTADO"
+   },
+   {
+    "key": "1303",
+    "text": "1303 TPT - COMPAGÑON"
+   },
+   {
+    "key": "1401",
+    "text": "1401 YUR - INDEPENDENCIA"
+   },
+   {
+    "key": "1502",
+    "text": "1502 PTO - DOS MAYO 1"
+   }
+  ],
+  "expediciones": [
+   {
+    "key": "01",
+    "text": "01 Envío"
+   },
+   {
+    "key": "02",
+    "text": "02 Recojo"
+   }
+  ],
+  "centros": {
+   "1001": "LIMA - ATE",
+   "1002": "LIMA - LURIN",
+   "1003": "LIMA - CHORRILLOS",
+   "1004": "LIMA - SAN BARTOLO",
+   "1005": "LIMA - TERCEROS",
+   "1006": "LIMA - DEPOSITO ADUANERO",
+   "1007": "LIMA - ADUANERO CALLAO",
+   "1008": "LIMA - ENDOSO",
+   "1009": "LIMA - CONTRANS",
+   "1101": "PUCALLPA - CENTENARIO",
+   "1102": "PUCALLPA - KM23",
+   "1103": "PUCALLPA - TERCEROS",
+   "1104": "PUCALLPA - KM17",
+   "1201": "IQUITOS - QUIÑONES",
+   "1202": "IQUITOS - PROSPERO",
+   "1203": "IQUITOS - YAVARI",
+   "1301": "TARAPOTO - ILO",
+   "1302": "TARAPOTO - HURTADO",
+   "1303": "TARAPOTO - COMPAGÑON",
+   "1304": "TARAPOTO - COMPAGÑON 1",
+   "1305": "TARAPOTO - COMPAGÑON 2",
+   "1306": "TARAPOTO - CARDENAS",
+   "1401": "YURIMAGUAS - INDEPENDENCIA",
+   "1501": "PUERTO MALDONADO - CACERES",
+   "1502": "PUERTO MALDONADO - DOS MAYO 1",
+   "1503": "PUERTO MALDONADO - DOS MAYO 2",
+   "1504": "PUERTO MALDONADO - LA JOYA"
+  },
+  "centrosPorArea": {
+   "1103/10": [
+    "1001",
+    "1002",
+    "1003",
+    "1004",
+    "1005",
+    "1007",
+    "1008",
+    "1009",
+    "1101",
+    "1102",
+    "1104",
+    "1201",
+    "1202",
+    "1301",
+    "1302",
+    "1303",
+    "1304",
+    "1305",
+    "1306",
+    "1401",
+    "1501",
+    "1502",
+    "1503",
+    "1504"
+   ],
+   "1103/11": [
+    "1001",
+    "1002",
+    "1003",
+    "1004",
+    "1005",
+    "1007",
+    "1008",
+    "1009",
+    "1101",
+    "1102",
+    "1104",
+    "1201",
+    "1202",
+    "1301",
+    "1302",
+    "1303",
+    "1304",
+    "1305",
+    "1306",
+    "1401",
+    "1501",
+    "1502",
+    "1503",
+    "1504"
+   ],
+   "1103/12": [
+    "1001",
+    "1002",
+    "1003",
+    "1004",
+    "1005",
+    "1006",
+    "1007",
+    "1008",
+    "1009",
+    "1101",
+    "1102",
+    "1103",
+    "1104",
+    "1201",
+    "1202",
+    "1203",
+    "1301",
+    "1302",
+    "1303",
+    "1304",
+    "1305",
+    "1306",
+    "1401",
+    "1501",
+    "1502",
+    "1503",
+    "1504"
+   ],
+   "1103/14": [
+    "1001",
+    "1002",
+    "1004",
+    "1005",
+    "1009",
+    "1101",
+    "1201",
+    "1202",
+    "1301",
+    "1302",
+    "1303",
+    "1304",
+    "1305",
+    "1401",
+    "1501",
+    "1502",
+    "1503"
+   ],
+   "1103/15": [
+    "1001",
+    "1002",
+    "1004",
+    "1005",
+    "1009",
+    "1101",
+    "1102",
+    "1104",
+    "1201",
+    "1202",
+    "1301",
+    "1302",
+    "1303",
+    "1304",
+    "1305",
+    "1401",
+    "1501",
+    "1502",
+    "1503"
+   ],
+   "1101/10": [
+    "1001",
+    "1002",
+    "1003",
+    "1004",
+    "1005",
+    "1006",
+    "1007",
+    "1008",
+    "1009",
+    "1101",
+    "1102",
+    "1103",
+    "1104",
+    "1201",
+    "1202",
+    "1203",
+    "1301",
+    "1302",
+    "1303",
+    "1304",
+    "1305",
+    "1306",
+    "1401",
+    "1501",
+    "1502",
+    "1503",
+    "1504"
+   ],
+   "1101/11": [
+    "1001",
+    "1002",
+    "1003",
+    "1004",
+    "1005",
+    "1006",
+    "1007",
+    "1008",
+    "1009",
+    "1101",
+    "1102",
+    "1103",
+    "1104",
+    "1201",
+    "1202",
+    "1203",
+    "1301",
+    "1302",
+    "1303",
+    "1304",
+    "1305",
+    "1306",
+    "1401",
+    "1501",
+    "1502",
+    "1503",
+    "1504"
+   ],
+   "1101/12": [
+    "1001",
+    "1002",
+    "1003",
+    "1004",
+    "1005",
+    "1006",
+    "1007",
+    "1008",
+    "1009",
+    "1101",
+    "1102",
+    "1103",
+    "1104",
+    "1201",
+    "1202",
+    "1203",
+    "1301",
+    "1302",
+    "1303",
+    "1304",
+    "1305",
+    "1306",
+    "1401",
+    "1501",
+    "1502",
+    "1503",
+    "1504"
+   ]
+  },
+  "almacenPorCentro": {
+   "1007": "0008"
+  }
+ },
  "perfil": {
   "vendedor": "V-1042 · Diego Salvatierra",
-  "canal": "11 Retail",
-  "oficina": "1101 PCP - Centenario",
+  "canal": "11",
+  "oficina": "1101",
   "centro": "1101",
   "moneda": "PEN",
   "formaPago": "C000",
-  "expedicion": "02 Recojo",
+  "expedicion": "02",
   "tipoCambio": "3.406",
   "busqueda": {
    "tipo": "repuestos",

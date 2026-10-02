@@ -184,11 +184,11 @@
 								<Label text="{i18n>vendedor}" />
 								<Input value="{oferta>/perfil/vendedor}" editable="false" />
 								<Label text="{i18n>canal}" />
-								<Input value="{oferta>/perfil/canal}" />
+								<Select selectedKey="{oferta>/perfil/canal}" change=".onCambiaCanal" items="{oferta>/opciones/canales}"><core:Item key="{oferta>key}" text="{oferta>text}" /></Select>
 								<Label text="{i18n>oficina}" />
-								<Input value="{oferta>/perfil/oficina}" />
+								<Select selectedKey="{oferta>/perfil/oficina}" items="{oferta>/opciones/oficinas}"><core:Item key="{oferta>key}" text="{oferta>text}" /></Select>
 								<Label text="{i18n>centro}" />
-								<Input value="{oferta>/perfil/centro}" />
+								<Select selectedKey="{oferta>/perfil/centro}" items="{oferta>/opcionesCentro}"><core:Item key="{oferta>key}" text="{oferta>text}" /></Select>
 								<Label text="{i18n>moneda}" />
 								<Select selectedKey="{oferta>/perfil/moneda}" change=".onCambiaMoneda"><core:Item key="PEN" text="{i18n>monedaSoles}" /><core:Item key="USD" text="{i18n>monedaDolares}" /></Select>
 								<Label text="{i18n>formaPago}" />
@@ -196,7 +196,7 @@
 									<core:Item key="{oferta>key}" text="{oferta>text}" />
 								</Select>
 								<Label text="{i18n>expedicion}" />
-								<Input value="{oferta>/perfil/expedicion}" />
+								<Select selectedKey="{oferta>/perfil/expedicion}" change=".onCambiaExpedicion" items="{oferta>/opciones/expediciones}"><core:Item key="{oferta>key}" text="{oferta>text}" /></Select>
 								<Label text="{i18n>tipoCambio}" />
 								<Input value="{oferta>/perfil/tipoCambio}" editable="false" description="{i18n>tipoCambioNota}" />
 							</form:SimpleForm>
