@@ -932,7 +932,8 @@ export default class Oferta extends Controller {
 		const cliente = oferta.getProperty("/cliente") as Cliente | null;
 		const canalNum = /^(\d{2})/.exec(m.canal)?.[1];
 		const area = canalNum ? `${grupo.lineas[0]?.orgVentas}/${canalNum}` : "";
-		const areasCliente = cliente?.areas ?? ["1101/11", "1103/11"];
+		// Los clientes de SAP traen sus areas como organizacion/canal/sector; aqui se compara organizacion/canal.
+		const areasCliente = (cliente?.areas ?? ["1101/11", "1103/11"]).map((a) => a.split("/").slice(0, 2).join("/"));
 		grupo.areaFalta = !!cliente && !!area && !areasCliente.includes(area);
 		if (grupo.areaFalta) {
 			const nombre = (this.modeloMock().getProperty("/canalesArea") as { key: string; text: string }[]).find((x) => x.key === area)?.text ?? area;

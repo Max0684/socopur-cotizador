@@ -304,6 +304,27 @@
   ],
   "repuestos": [
    {
+    "material": "SFX428H-150-MTK",
+    "denominacion": "Cadena SFX 428H 150 eslabones (MATERIAL DE PRUEBA SAP)",
+    "marca": "SFX",
+    "linea": "M",
+    "clase": "01",
+    "familia": "01",
+    "sector": "50",
+    "sectorTxt": "Transmision",
+    "orgVentas": "1103",
+    "grupo": "Repuestos y accesorios",
+    "disponible": 500,
+    "comprometido": 0,
+    "total": 500,
+    "um": "UN",
+    "condicionPct": 0,
+    "promocion": null,
+    "sectorOferta": "50",
+    "precioUsd": 5.14,
+    "iscPct": 0
+   },
+   {
     "material": "LUB-1040",
     "denominacion": "Aceite de Motor 10W-40",
     "marca": "Motul",

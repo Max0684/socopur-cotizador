@@ -108,12 +108,14 @@ export async function guardarCotizacion(modelo: ODataModel, datos: OfertaParaGua
 	// ui5lint-disable-next-line no-deprecated-api -- invoke() existe desde UI5 1.123; el servidor de Socopur y los tipos son 1.120
 	await modelo.bindContext(`${activa}/${NS}.generarOfertas(...)`).execute("$auto", true);
 	const leido = (await modelo
-		.bindContext(activa, undefined, { $expand: { _Grupo: { $select: "GrupoNo,VbelnOferta", $orderby: "GrupoNo" } } })
-		.requestObject()) as Cotizacion & { _Grupo?: Pick<Grupo, "GrupoNo" | "VbelnOferta">[] };
-	return {
-		cotizId,
-		ofertas: (leido._Grupo ?? []).map((g) => ({ grupoNo: g.GrupoNo, vbelnOferta: g.VbelnOferta }))
-	};
+		.bindContext(activa, undefined, { $select: "CotizId,Comentario", $expand: { _Grupo: { $select: "GrupoNo,VbelnOferta,Estado", $orderby: "GrupoNo" } } })
+		.requestObject()) as Cotizacion & { _Grupo?: Pick<Grupo, "GrupoNo" | "VbelnOferta" | "Estado">[] };
+	const ofertas = (leido._Grupo ?? []).map((g) => ({ grupoNo: g.GrupoNo, vbelnOferta: g.VbelnOferta }));
+	// generarOfertas no falla cuando SAP rechaza la oferta: deja el motivo en Comentario y el grupo sin numero.
+	if (ofertas.length === 0 || ofertas.some((o) => !o.vbelnOferta)) {
+		throw new Error(leido.Comentario || "SAP no genero la oferta");
+	}
+	return { cotizId, ofertas };
 }
 
 /** Mejor esfuerzo: si el descarte falla se deja el error original, que es el que importa al usuario. */
