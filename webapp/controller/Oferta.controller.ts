@@ -2,6 +2,8 @@ import Controller from "sap/ui/core/mvc/Controller";
 import ODataModel from "sap/ui/model/odata/v4/ODataModel";
 import { cargarDetalleOferta } from "com/socopur/cotizador/model/OfertasService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
+import { cargarModalidades, type ModalidadPantalla } from "com/socopur/cotizador/model/ModalidadesService";
+import { ordenarPorTexto } from "com/socopur/cotizador/model/Orden";
 import UIComponent from "sap/ui/core/UIComponent";
 import Router from "sap/ui/core/routing/Router";
 import JSONModel from "sap/ui/model/json/JSONModel";
@@ -380,6 +382,9 @@ export default class Oferta extends Controller {
 				)
 			);
 		}
+		// Resultados en orden alfabetico por descripcion.
+		const clave = tipo === "vehiculos" ? "/vehiculos" : "/repuestos";
+		b.setProperty(clave, ordenarPorTexto(b.getProperty(clave) as { denominacion: string }[], (x) => x.denominacion));
 	}
 
 	private limpiarSeleccion(): void {
@@ -746,7 +751,7 @@ export default class Oferta extends Controller {
 			oferta.setProperty("/cliente/direcciones", dirs);
 		}
 		// Ultima opcion: direccion de un solo uso, que se guarda solo en la oferta (SAP crea una direccion propia del documento).
-		oferta.setProperty("/opcionesDireccion", [...dirs, { id: "__unica__", alias: this.i18n().getText("direccionUnica") as string, tipo: "", texto: "" }]);
+		oferta.setProperty("/opcionesDireccion", [...ordenarPorTexto(dirs, (d) => d.alias), { id: "__unica__", alias: this.i18n().getText("direccionUnica") as string, tipo: "", texto: "" }]);
 		const actual = oferta.getProperty("/entregaDatos/direccionId") as string;
 		if (actual === "__unica__") {
 			oferta.setProperty("/entregaDatos/direccionEnvio", oferta.getProperty("/entregaDatos/direccionUnica") ?? "");
@@ -2148,9 +2153,28 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 		}
 	}
 
+	/** Con ?odata=1 reemplaza las modalidades de ejemplo por las de SAP (YCOTIZ_MODAL); si falla, deja las de ejemplo. */
+	private async sincronizarModalidades(mock: JSONModel): Promise<void> {
+		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel | undefined;
+		if (!odata) {
+			return;
+		}
+		try {
+			const reales = await cargarModalidades(odata, (mock.getProperty("/modalidades") as ModalidadPantalla[]) ?? []);
+			if (reales.length > 0) {
+				mock.setProperty("/modalidades", reales);
+			}
+		} catch (error) {
+			MessageToast.show(this.i18n().getText("odataModalidadesError", [(error as Error).message]) as string);
+		}
+	}
+
 	private cargar(numero?: string): void {
 		const mock = this.modeloMock();
-		mock.dataLoaded().then(() => {
+		mock.dataLoaded().then(async () => {
+			if (this.usarOData()) {
+				await this.sincronizarModalidades(mock);
+			}
 			let clonada = false;
 			const oferta = this.modeloOferta();
 			oferta.setData(this.crearOferta());

@@ -1,4 +1,5 @@
 import ODataModel from "sap/ui/model/odata/v4/ODataModel";
+import { ordenarPorTexto } from "com/socopur/cotizador/model/Orden";
 
 /** Fila de la vista YI_COTIZ_CLIENTE (cliente por area de ventas). */
 interface ClienteSapFila {
@@ -56,7 +57,8 @@ export async function buscarClientes(modelo: ODataModel, texto: string, vkorg: s
 		$orderby: "Name1",
 		$count: false
 	});
-	const contextos = await binding.requestContexts(0, 100);
+	// La vista trae una fila por area de venta (un cliente puede tener 10 o mas): se leen bastantes filas para no cortar clientes.
+	const contextos = await binding.requestContexts(0, 500);
 	const porCliente = new Map<string, ClienteSap>();
 	for (const contexto of contextos) {
 		const f = contexto.getObject() as ClienteSapFila;
@@ -82,5 +84,5 @@ export async function buscarClientes(modelo: ODataModel, texto: string, vkorg: s
 			break;
 		}
 	}
-	return Array.from(porCliente.values());
+	return ordenarPorTexto(Array.from(porCliente.values()), (c) => c.nombre);
 }
