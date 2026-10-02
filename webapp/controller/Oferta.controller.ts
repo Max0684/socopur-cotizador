@@ -2020,10 +2020,38 @@ export default class Oferta extends Controller {
 	public async onGuardar(): Promise<void> {
 		const oferta = this.modeloOferta();
 		if (this.usarOData() && !(oferta.getProperty("/numero") as string)) {
+			const previas = (oferta.getProperty("/ofertasGuardadas") as OfertaGuardada[]) ?? [];
+			if (previas.some((o) => o.cotizId)) {
+				// Guardar de nuevo crea OTRA oferta en SAP: se pide confirmacion para evitar duplicados por doble clic.
+				const i18n = this.i18n();
+				MessageBox.confirm(i18n.getText("guardarOtraVez", [previas.map((o) => o.numero).join(", ")]) as string, {
+					actions: [i18n.getText("guardarOtraVezSi") as string, MessageBox.Action.CANCEL],
+					emphasizedAction: MessageBox.Action.CANCEL,
+					onClose: (accion: string) => {
+						if (accion === i18n.getText("guardarOtraVezSi")) {
+							void this.guardarEnSap();
+						}
+					}
+				});
+				return;
+			}
 			await this.guardarEnSap();
 			return;
 		}
 		this.guardarSimulado();
+	}
+
+	/** Despues de guardar, vuelve a leer las posiciones del documento SAP: asi aparecen los regalos que SAP agrega solo. */
+	private async refrescarLineasDesdeSap(odata: ODataModel, numeros: string[]): Promise<void> {
+		try {
+			const detalles = await Promise.all(numeros.map((n) => cargarDetalleOferta(odata, n)));
+			const oferta = this.modeloOferta();
+			oferta.setProperty("/lineas", detalles.flatMap((d) => d.lineas.map((l) => ({ ...l }))));
+			this.recalcular();
+			this.instantanea = JSON.stringify(oferta.getProperty("/lineas") ?? []);
+		} catch (error) {
+			MessageToast.show(this.i18n().getText("odataDetalleError", [(error as Error).message]) as string);
+		}
 	}
 
 	/** Arma lo que necesita el servicio a partir del carrito y llama a guardarCotizacion. */
@@ -2072,6 +2100,7 @@ export default class Oferta extends Controller {
 			const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel;
 			const resultado = await guardarCotizacion(odata, datos);
 			const numeros = resultado.ofertas.map((o) => o.vbelnOferta);
+			await this.refrescarLineasDesdeSap(odata, numeros);
 			oferta.setProperty(
 				"/ofertasGuardadas",
 				grupos.map((g, i) => ({
