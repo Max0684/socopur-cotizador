@@ -1,6 +1,7 @@
 import Controller from "sap/ui/core/mvc/Controller";
 import ODataModel from "sap/ui/model/odata/v4/ODataModel";
 import { cargarDetalleOferta } from "com/socopur/cotizador/model/OfertasService";
+import type { GrupoEstado } from "com/socopur/cotizador/model/odata/Entidades";
 import { almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, gruposParaGuardar, modalidadPorDefecto, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
 import { crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, type OfertaParaGuardar } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
@@ -1703,6 +1704,62 @@ export default class Oferta extends Controller {
 		this.crearPedidosSimulado(asignaciones);
 	}
 
+	/** Fila de la tabla de pedidos con el estado real de SAP (credito, bloqueos, liberado y total con IGV). */
+	private filaPedidoReal(real: GrupoEstado | null, numeroPedido: string, numeroOferta: string, detalle: string, clasePedido: string): Record<string, string> {
+		const i18n = this.i18n();
+		const bloqueos: string[] = [];
+		if (real?.BloqueoEntrega) {
+			bloqueos.push(i18n.getText("pedidoBloqueoEntrega", [real.BloqueoEntrega]) as string);
+		}
+		if (real?.BloqueoFactura) {
+			bloqueos.push(i18n.getText("pedidoBloqueoFactura", [real.BloqueoFactura]) as string);
+		}
+		const credito = !real
+			? (i18n.getText("pedidoEstadoNoLeido") as string)
+			: real.EstadoCredito === "B"
+				? (i18n.getText("pedidoCreditoBloqueado") as string)
+				: (i18n.getText("pedidoCreditoLibre") as string);
+		const liberado = real?.Liberado === "X";
+		return {
+			numero: numeroPedido,
+			oferta: numeroOferta,
+			detalle,
+			vin: "\u2014",
+			bloqueo: "\u2014",
+			clasePedido,
+			estado: !real ? (i18n.getText("pedidoPendiente") as string) : liberado ? (i18n.getText("pedidoLiberado") as string) : (i18n.getText("pedidoBloqueado") as string),
+			estadoState: liberado ? "Success" : "Warning",
+			liberacion: [credito, ...bloqueos].join(" \u00b7 "),
+			liberacionState: !real ? "Warning" : liberado ? "Success" : "Warning",
+			totalSap: real && real.TotalPedido !== undefined && real.TotalPedido !== "" ? `${this.formatMonto(Number(real.NetoPedido))} + IGV ${this.formatMonto(Number(real.ImpuestoPedido))} = ${this.formatMonto(Number(real.TotalPedido))} ${real.MonedaPedido}` : "\u2014"
+		};
+	}
+
+	/** Al abrir una oferta que ya tiene pedido, muestra el pedido REAL (antes salia un numero de ejemplo). */
+	private async cargarPedidoReal(cotizId: string, numeroOferta: string): Promise<void> {
+		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel | undefined;
+		if (!odata) {
+			return;
+		}
+		try {
+			const cot = (await odata
+				.bindContext(`/Cotizacion(CotizId=${cotizId},IsActiveEntity=true)`, undefined, {
+					$select: "CotizId",
+					$expand: { _Grupo: { $select: "GrupoNo,VbelnOferta,VbelnPedido,AuartPedido" } },
+					$$ownRequest: true
+				})
+				.requestObject()) as { _Grupo?: { GrupoNo: string; VbelnOferta: string; VbelnPedido: string; AuartPedido: string }[] };
+			const g = (cot._Grupo ?? []).find((x) => x.VbelnOferta === numeroOferta && x.VbelnPedido);
+			if (!g) {
+				return;
+			}
+			const real = await leerEstadoPedido(odata, cotizId, g.GrupoNo);
+			this.modeloOferta().setProperty("/pedidos", [this.filaPedidoReal(real, g.VbelnPedido, numeroOferta, "\u2014", g.AuartPedido)]);
+		} catch (error) {
+			MessageToast.show(this.i18n().getText("odataDetalleError", [(error as Error).message]) as string);
+		}
+	}
+
 	/** Un pedido real por cada oferta guardada (accion crearPedido). Se detiene en el primer rechazo de SAP. */
 	private async crearPedidosSap(guardadas: OfertaGuardada[]): Promise<void> {
 		const oferta = this.modeloOferta();
@@ -1718,32 +1775,7 @@ export default class Oferta extends Controller {
 				numeros.push(pedido.vbelnPedido);
 				// Estado REAL leido de SAP (vista GrupoEstado sobre VBAK); si no se puede leer, se dice que no hay informacion.
 				const real = await leerEstadoPedido(odata, o.cotizId as string, o.grupoNo as string);
-				const bloqueos: string[] = [];
-				if (real?.BloqueoEntrega) {
-					bloqueos.push(i18n.getText("pedidoBloqueoEntrega", [real.BloqueoEntrega]) as string);
-				}
-				if (real?.BloqueoFactura) {
-					bloqueos.push(i18n.getText("pedidoBloqueoFactura", [real.BloqueoFactura]) as string);
-				}
-				const credito = !real
-					? (i18n.getText("pedidoEstadoNoLeido") as string)
-					: real.EstadoCredito === "B"
-						? (i18n.getText("pedidoCreditoBloqueado") as string)
-						: (i18n.getText("pedidoCreditoLibre") as string);
-				const liberado = real?.Liberado === "X";
-				filas.push({
-					numero: pedido.vbelnPedido,
-					oferta: o.numero,
-					detalle: o.titulo,
-					vin: "—",
-					bloqueo: "—",
-					clasePedido: o.clasePedido ?? "",
-					estado: !real ? (i18n.getText("pedidoPendiente") as string) : liberado ? (i18n.getText("pedidoLiberado") as string) : (i18n.getText("pedidoBloqueado") as string),
-					estadoState: liberado ? "Success" : "Warning",
-					liberacion: [credito, ...bloqueos].join(" · "),
-					liberacionState: !real ? "Warning" : liberado ? "Success" : "Warning",
-					totalSap: real && real.TotalPedido !== undefined && real.TotalPedido !== "" ? `${this.formatMonto(Number(real.NetoPedido))} + IGV ${this.formatMonto(Number(real.ImpuestoPedido))} = ${this.formatMonto(Number(real.TotalPedido))} ${real.MonedaPedido}` : "\u2014"
-				});
+				filas.push(this.filaPedidoReal(real, pedido.vbelnPedido, o.numero, o.titulo, o.clasePedido ?? ""));
 			}
 		} catch (error) {
 			MessageBox.error(i18n.getText("pedidoError", [(error as Error).message]) as string);
@@ -2393,6 +2425,8 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 			const clienteActual = oferta.getProperty("/cliente") as Cliente | null;
 			if (clienteActual) {
 				oferta.setProperty("/cliente", { ...clienteActual, nombre: detalle.cliente || clienteActual.nombre });
+			} else {
+				oferta.setProperty("/cliente", { kunnr: detalle.kunnr, doc: "", tipoDoc: "", nombre: detalle.cliente, estado: "", estadoState: "None", condicion: "", grupo: "", telefono: "", correo: "", direccion: "" });
 			}
 			oferta.setProperty("/lineas", detalle.lineas.map((l) => ({ ...l })));
 			this.recalcular();
@@ -2439,8 +2473,9 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 				oferta.setProperty("/titulo", esperaNumero ? this.i18n().getText("ofertaSinNumero") : this.i18n().getText("ofertaTitulo", [numero]));
 				oferta.setProperty("/numero", esperaNumero ? "" : numero);
 				// Oferta real (lista leida del servicio) con numero SAP: el detalle se carga del documento SAP.
-				if (cabecera?.cotizId && cabecera.numero) {
-					void this.cargarDetalleReal(cabecera.numero);
+				const numeroSap = cabecera?.numero || numero;
+				if (this.usarOData() && /^\d{10}$/.test(numeroSap)) {
+					void this.cargarDetalleReal(numeroSap);
 				}
 				if (detalle) {
 					const clientes = mock.getProperty("/clientes") as Record<string, Cliente>;
@@ -2455,7 +2490,9 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 			if (numero) {
 				const cab = (mock.getProperty("/ofertas") as { numero: string; fecha: string; estado: string; cotizId?: string }[]).find((o) => o.numero === numero || o.cotizId === numero);
 				const conPedido = cab?.estado === i18n.getText("estadoPedido");
-				if (conPedido) {
+				if (conPedido && this.usarOData() && cab?.cotizId) {
+					void this.cargarPedidoReal(cab.cotizId, cab.numero);
+				} else if (conPedido) {
 					// Oferta con pedido: solo lectura (se usa el mismo bloqueo que tras crear el pedido)
 					oferta.setProperty("/pedidos", [{ numero: "1300001480", oferta: numero, detalle: "\u2014", vin: "\u2014", bloqueo: "\u2014", clasePedido: "", estado: i18n.getText("pedidoLiberado"), estadoState: "Success", liberacion: "\u2014", liberacionState: "None" }]);
 				}
