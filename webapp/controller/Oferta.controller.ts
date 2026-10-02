@@ -452,6 +452,11 @@ export default class Oferta extends Controller {
 		return Math.round(v * 100) / 100;
 	}
 
+	/** Moneda de la oferta: PEN por defecto; en USD los precios de lista se usan tal cual, en PEN se convierten al tipo de cambio del perfil. */
+	private aMoneda(usd: number): number {
+		return this.modeloOferta().getProperty("/perfil/moneda") === "USD" ? usd : this.redondear(usd * this.tc());
+	}
+
 	/** Los precios de lista vienen en USD; la oferta es en PEN al tipo de cambio del perfil (solo lectura, lo fija Tesoreria). */
 	public formatPen(usd: number): string {
 		return typeof usd === "number" ? `S/ ${this.formatMonto(this.redondear(usd * this.tc()))}` : "";
@@ -473,7 +478,7 @@ export default class Oferta extends Controller {
 		const siguiente = tramos.find((t) => t.min > cantidad);
 		const escalaUsd = this.redondear(listaUsd * ((aplicado?.pct ?? 0) / 100));
 		const finalUsd = this.redondear(listaUsd - condicionUsd - escalaUsd - promoUsd);
-		const final = this.redondear(finalUsd * this.tc());
+		const final = this.aMoneda(finalUsd);
 		const escalaTxt = !tramos.length
 			? ""
 			: aplicado
@@ -496,6 +501,27 @@ export default class Oferta extends Controller {
 			finalTxt: this.formatMonto(final),
 			totalTxt: this.formatMonto(this.redondear(final * cantidad))
 		};
+	}
+
+	/** Al cambiar Soles/Dolares se vuelven a calcular los precios de las lineas que vienen del catalogo. */
+	public onCambiaMoneda(): void {
+		const oferta = this.modeloOferta();
+		const mock = this.modeloMock();
+		const catalogo = [
+			...((mock.getProperty("/catalogo/repuestos") as Repuesto[]) ?? []).map((m) => ({ ...m, tipo: "repuestos" })),
+			...((mock.getProperty("/catalogo/vehiculos") as Vehiculo[]) ?? []).map((m) => ({ ...m, tipo: "vehiculos" }))
+		] as (Vehiculo & Repuesto & { tipo: string })[];
+		const lineas = (oferta.getProperty("/lineas") as Linea[]) ?? [];
+		lineas.forEach((l) => {
+			const m = l.bonificacion ? undefined : catalogo.find((x) => x.material === l.material);
+			if (m) {
+				l.precio = (this.filaPrecio(m, l.cantidad) as { final: number }).final;
+				l.total = this.redondear(l.cantidad * l.precio);
+			}
+		});
+		oferta.setProperty("/lineas", lineas);
+		oferta.setProperty("/guardado", { visible: false, texto: "" });
+		this.recalcular();
 	}
 
 	public onCambiaCantidadFila(event: Event<{ value: number }>): void {
@@ -1206,7 +1232,7 @@ export default class Oferta extends Controller {
 		const condicionUsd = this.redondear(listaUsd * (m.condicionPct / 100));
 		const promoUsd = m.promocion?.monto ?? 0;
 		const finalUsd = this.redondear(listaUsd - condicionUsd - promoUsd);
-		const final = this.redondear(finalUsd * this.tc());
+		const final = this.aMoneda(finalUsd);
 		// El precio de lista de vehiculos ya incluye el ISC; con cliente SAP separa neto + ISC (+ IGV, 0 en las pruebas de DEV).
 		const hayCliente = !!oferta.getProperty("/cliente");
 		const iscPct = m.iscPct ?? 0;
@@ -1652,7 +1678,9 @@ export default class Oferta extends Controller {
 			for (const o of guardadas) {
 				const pedido = await crearPedidoGrupo(odata, o.cotizId as string, o.grupoNo as string);
 				numeros.push(pedido.vbelnPedido);
-				const lib = this.evaluarLiberacion(o);
+				// El pedido ya existe en SAP: no se promete "Liberado" por una regla del front. El servicio solo informa
+				// Grupo.Liberacion (hoy vacio: el Cotizador aun no libera el pedido; SAP deja CMGST=B, credito sin aprobar).
+				const informada = Boolean(pedido.liberacion);
 				filas.push({
 					numero: pedido.vbelnPedido,
 					oferta: o.numero,
@@ -1660,10 +1688,10 @@ export default class Oferta extends Controller {
 					vin: "—",
 					bloqueo: "—",
 					clasePedido: o.clasePedido ?? "",
-					estado: lib.automatica ? (i18n.getText("pedidoLiberado") as string) : (i18n.getText("pedidoBloqueado") as string),
-					estadoState: lib.automatica ? "Success" : "Warning",
-					liberacion: lib.texto,
-					liberacionState: lib.estado
+					estado: i18n.getText("pedidoPendiente") as string,
+					estadoState: "Warning",
+					liberacion: informada ? pedido.liberacion : (i18n.getText("libNoInformada") as string),
+					liberacionState: informada ? "Success" : "Warning"
 				});
 			}
 		} catch (error) {
@@ -2076,7 +2104,8 @@ export default class Oferta extends Controller {
 			grupos: grupos.map((g) => ({
 				vkorg: g.lineas[0]?.orgVentas ?? "",
 				vtweg: /^(\d{2})/.exec(g.canal ?? "")?.[1] ?? "",
-				spart: g.lineas[0]?.sector ?? "",
+				// Regla leida en TVAKZ (org 1103): los canales 11, 14 y 99 solo existen con sector 99; el 10 y el 12 usan el del material.
+				spart: ["11", "14", "99"].includes(/^(\d{2})/.exec(g.canal ?? "")?.[1] ?? "") ? "99" : (g.lineas[0]?.sector ?? ""),
 				vkbur: /^(\d{4})/.exec(perfil.oficina ?? "")?.[1] ?? "",
 				claseOferta: g.claseOferta ?? "",
 				clasePedido: g.clasePedido ?? "",
@@ -2199,8 +2228,8 @@ export default class Oferta extends Controller {
 <td style="vertical-align:top"><b>${e(i18n.getText("secEntrega"))}</b><br/>${e(envio ? i18n.getText("entregaEnvio") : i18n.getText("entregaRecojo"))}: ${e(dirEnvio)}<br/>${e(i18n.getText("transportista"))}: ${e(transportista)}</td></tr>
 <tr><td style="vertical-align:top;padding-top:6px">${e(i18n.getText("vendedor"))}: ${e(perfil.vendedor)}<br/>${e(i18n.getText("formaPago"))}: ${e(formas.find((f) => f.key === perfil.formaPago)?.text ?? "")}</td>
 <td style="vertical-align:top;padding-top:6px">${e(i18n.getText("tipoCambio"))}: ${e(perfil.tipoCambio)}<br/>${e(i18n.getText("modalidad"))}: ${e(mod?.texto ?? "")}</td></tr></table>
-<table style="${tabla}"><thead><tr><th style="${th}">${e(i18n.getText("colMaterial"))}</th><th style="${th}">${e(i18n.getText("colDescripcion"))}</th><th style="${th}">${e(i18n.getText("colDetalle"))}</th><th style="${th}${der}">${e(i18n.getText("colCantidad"))}</th><th style="${th}${der}">${e(i18n.getText("colPrecio"))} (PEN)</th><th style="${th}${der}">${e(i18n.getText("colTotalLinea"))}</th></tr></thead><tbody>${filas}</tbody></table>
-<table style="width:40%;margin-left:60%;margin-top:8px"><tr><td>${e(i18n.getText("valorNeto"))}</td><td style="${der}">${m(neto)}</td></tr>${isc > 0 ? `<tr><td>${e(i18n.getText("iscIncluido"))}</td><td style="${der}">${m(isc)}</td></tr>` : ""}<tr><td>${e(i18n.getText("igv"))}</td><td style="${der}">${m(0)}</td></tr><tr><td><b>${e(i18n.getText("totalOferta"))}</b></td><td style="${der}"><b>PEN ${m(g.subtotal)}</b></td></tr></table>
+<table style="${tabla}"><thead><tr><th style="${th}">${e(i18n.getText("colMaterial"))}</th><th style="${th}">${e(i18n.getText("colDescripcion"))}</th><th style="${th}">${e(i18n.getText("colDetalle"))}</th><th style="${th}${der}">${e(i18n.getText("colCantidad"))}</th><th style="${th}${der}">${e(i18n.getText("colPrecio"))} (${e(perfil.moneda || "PEN")})</th><th style="${th}${der}">${e(i18n.getText("colTotalLinea"))}</th></tr></thead><tbody>${filas}</tbody></table>
+<table style="width:40%;margin-left:60%;margin-top:8px"><tr><td>${e(i18n.getText("valorNeto"))}</td><td style="${der}">${m(neto)}</td></tr>${isc > 0 ? `<tr><td>${e(i18n.getText("iscIncluido"))}</td><td style="${der}">${m(isc)}</td></tr>` : ""}<tr><td>${e(i18n.getText("igv"))}</td><td style="${der}">${m(0)}</td></tr><tr><td><b>${e(i18n.getText("totalOferta"))}</b></td><td style="${der}"><b>${e(perfil.moneda || "PEN")} ${m(g.subtotal)}</b></td></tr></table>
 ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentario)}</p>` : ""}
 <p style="margin-top:14px"><b>${e(i18n.getText("impresionCuentas"))}</b></p>
 <table style="${tabla}">${bancos.map((b) => `<tr><td style="${td}">${e(b.banco)} (${e(b.moneda)})</td><td style="${td}">${e(b.cuenta)}</td><td style="${td}">CCI ${e(b.cci)}</td></tr>`).join("")}</table>

@@ -62,9 +62,13 @@
 					<Label text="{i18n>hdrTotal}" />
 					<ObjectNumber
 						number="{path: 'oferta>/totales/total', formatter: '.formatMonto'}"
-						unit="PEN"
+						unit="{oferta>/perfil/moneda}"
 						emphasized="true"
 						state="Success" />
+					<Select selectedKey="{oferta>/perfil/moneda}" change=".onCambiaMoneda" width="9rem" tooltip="{i18n>moneda}">
+						<core:Item key="PEN" text="{i18n>monedaSoles}" />
+						<core:Item key="USD" text="{i18n>monedaDolares}" />
+					</Select>
 				</VBox>
 			</FlexBox>
 		</uxap:headerContent>
@@ -186,7 +190,7 @@
 								<Label text="{i18n>centro}" />
 								<Input value="{oferta>/perfil/centro}" />
 								<Label text="{i18n>moneda}" />
-								<Input value="{oferta>/perfil/moneda}" />
+								<Select selectedKey="{oferta>/perfil/moneda}" change=".onCambiaMoneda"><core:Item key="PEN" text="{i18n>monedaSoles}" /><core:Item key="USD" text="{i18n>monedaDolares}" /></Select>
 								<Label text="{i18n>formaPago}" />
 								<Select selectedKey="{oferta>/perfil/formaPago}" items="{oferta>/formasPago}">
 									<core:Item key="{oferta>key}" text="{oferta>text}" />
@@ -253,9 +257,9 @@
 													<ObjectStatus visible="{= !!${oferta>proximoTxt} }" text="{oferta>proximoTxt}" state="Information" />
 												</VBox>
 												<Text text="{oferta>promoTxt}" />
-												<ObjectNumber number="{oferta>finalTxt}" unit="PEN" />
+												<ObjectNumber number="{oferta>finalTxt}" unit="{oferta>/perfil/moneda}" />
 												<StepInput value="{oferta>cantidad}" min="1" width="7rem" change=".onCambiaCantidadFila" />
-												<ObjectNumber number="{oferta>totalTxt}" unit="PEN" emphasized="true" />
+												<ObjectNumber number="{oferta>totalTxt}" unit="{oferta>/perfil/moneda}" emphasized="true" />
 												<Button icon="sap-icon://inventory" type="Transparent" tooltip="{i18n>verStock}" press=".onVerStock" />
 											</cells>
 										</ColumnListItem>
@@ -326,7 +330,7 @@
 										<Label text="{i18n>precioFinalUnit}" />
 										<ObjectStatus text="{oferta>/vista/finalDualTxt}" state="Success" />
 										<Label text="{i18n>totalLinea}" />
-										<ObjectNumber number="{oferta>/vista/totalTxt}" unit="PEN" emphasized="true" />
+										<ObjectNumber number="{oferta>/vista/totalTxt}" unit="{oferta>/perfil/moneda}" emphasized="true" />
 									</form:SimpleForm>
 									<Text visible="{oferta>/vista/sinClienteVisible}" text="{i18n>impuestosSinCliente}" />
 								</Panel>
@@ -406,7 +410,7 @@
 									</Table>
 									<HBox justifyContent="End" class="sapUiSmallMarginTop">
 										<Label text="{i18n>subtotal}:" class="sapUiTinyMarginEnd" />
-										<ObjectNumber number="{path: 'oferta>subtotal', formatter: '.formatMonto'}" unit="PEN" />
+										<ObjectNumber number="{path: 'oferta>subtotal', formatter: '.formatMonto'}" unit="{oferta>/perfil/moneda}" />
 									</HBox>
 								</Panel>
 							</VBox>
@@ -539,16 +543,16 @@
 				<HBox alignItems="Center" visible="{= ${oferta>/totales/hayIsc} &amp;&amp; ${device>/ancho} > 1250 }">
 					<layoutData><OverflowToolbarLayoutData priority="Low" /></layoutData>
 					<Label text="{i18n>valorNeto}:" class="sapUiTinyMarginEnd" />
-					<ObjectNumber number="{path: 'oferta>/totales/neto', formatter: '.formatMonto'}" unit="PEN" class="sapUiSmallMarginEnd" />
+					<ObjectNumber number="{path: 'oferta>/totales/neto', formatter: '.formatMonto'}" unit="{oferta>/perfil/moneda}" class="sapUiSmallMarginEnd" />
 					<Label text="{i18n>iscIncluido}:" class="sapUiTinyMarginEnd" />
-					<ObjectNumber number="{path: 'oferta>/totales/isc', formatter: '.formatMonto'}" unit="PEN" class="sapUiSmallMarginEnd" />
+					<ObjectNumber number="{path: 'oferta>/totales/isc', formatter: '.formatMonto'}" unit="{oferta>/perfil/moneda}" class="sapUiSmallMarginEnd" />
 				</HBox>
 				<HBox alignItems="Center">
 					<layoutData><OverflowToolbarLayoutData priority="NeverOverflow" /></layoutData>
 					<Label visible="{= ${device>/ancho} > 640 }" text="{i18n>igv}:" class="sapUiTinyMarginEnd" />
-					<ObjectNumber visible="{= ${device>/ancho} > 640 }" number="{path: 'oferta>/totales/igv', formatter: '.formatMonto'}" unit="PEN" class="sapUiSmallMarginEnd" />
+					<ObjectNumber visible="{= ${device>/ancho} > 640 }" number="{path: 'oferta>/totales/igv', formatter: '.formatMonto'}" unit="{oferta>/perfil/moneda}" class="sapUiSmallMarginEnd" />
 					<Label text="{i18n>totalOferta}:" class="sapUiTinyMarginEnd" />
-					<ObjectNumber number="{path: 'oferta>/totales/total', formatter: '.formatMonto'}" unit="PEN" emphasized="true" state="Success" class="sapUiSmallMarginEnd" />
+					<ObjectNumber number="{path: 'oferta>/totales/total', formatter: '.formatMonto'}" unit="{oferta>/perfil/moneda}" emphasized="true" state="Success" class="sapUiSmallMarginEnd" />
 				</HBox>
 				<Button
 					text="{= ${oferta>/numero} ? ${i18n>guardarCambios} : ${i18n>guardarOferta} }"

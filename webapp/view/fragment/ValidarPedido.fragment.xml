@@ -35,7 +35,7 @@
 								<ObjectIdentifier title="{validar>numero}" text="{validar>titulo}" />
 								<Text text="{validar>modalidadTxt}" />
 								<Text text="{validar>clasePedido}" />
-								<ObjectNumber number="{validar>totalTxt}" unit="PEN" />
+								<ObjectNumber number="{validar>totalTxt}" unit="{oferta>/perfil/moneda}" />
 								<ObjectStatus text="{validar>liberacion}" state="{validar>estado}" />
 							</cells>
 						</ColumnListItem>
