@@ -2130,13 +2130,15 @@ export default class Oferta extends Controller {
 			const resultado = await guardarCotizacion(odata, datos);
 			const numeros = resultado.ofertas.map((o) => o.vbelnOferta);
 			await this.refrescarLineasDesdeSap(odata, numeros);
+			// Tras releer SAP los grupos pueden cambiar de sector (p. ej. canal 11 -> 99): el titulo se toma de ahi.
+			const gruposSap = (oferta.getProperty("/grupos") as Grupo[]) ?? [];
 			oferta.setProperty(
 				"/ofertasGuardadas",
 				grupos.map((g, i) => ({
 					numero: numeros[i] ?? "",
 					cotizId: resultado.cotizId,
 					grupoNo: resultado.ofertas[i]?.grupoNo,
-					titulo: g.titulo,
+					titulo: gruposSap[i]?.titulo ?? g.titulo,
 					lineas: g.lineas,
 					modalidad: g.modalidad,
 					clasePedido: g.clasePedido,
