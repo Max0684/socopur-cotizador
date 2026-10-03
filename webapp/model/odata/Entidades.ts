@@ -50,6 +50,27 @@ export interface Direc {
 	_Cotizacion?: Cotizacion;
 }
 
+/** Claves: Kunnr, Vkorg, Vtweg, Spart, Auart, Matnr, Werks, Waers, Cantidad */
+export interface Precio {
+	Kunnr: string;
+	Vkorg: string;
+	Vtweg: string;
+	Spart: string;
+	Auart: string;
+	Matnr: string;
+	Werks: string;
+	Waers: string;
+	Cantidad: string;
+	Fecha?: string;
+	Moneda: string;
+	PrecioLista: string;
+	PrecioUnitario: string;
+	Neto: string;
+	Impuestos: string;
+	Respuesta: number;
+	Mensaje: string;
+}
+
 /** Claves: CotizId, Posnr, Atnam, IsActiveEntity */
 export interface ItemCar {
 	CotizId: string;
@@ -288,4 +309,5 @@ export interface ConjuntosCotizador {
 	Modalidad: Modalidad;
 	Oferta: Oferta;
 	OfertaPos: OfertaPos;
+	Precio: Precio;
 }

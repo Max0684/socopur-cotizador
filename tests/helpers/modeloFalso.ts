@@ -15,6 +15,8 @@ export interface OpcionesModeloFalso {
 	grupoDePedido?: Record<string, unknown>;
 	/** Lo que devuelve la lectura de GrupoEstado; null = la lectura falla. */
 	estado?: Record<string, unknown> | null;
+	/** Filas que devuelve la entidad Precio. */
+	precios?: Record<string, unknown>[];
 }
 
 export interface Creada {
@@ -29,8 +31,12 @@ export function crearModeloFalso(opciones: OpcionesModeloFalso = {}) {
 	let contadorItem = 0;
 
 	const modelo = {
-		bindList(ruta: string) {
+		bindList(ruta: string, _padre?: unknown, _a?: unknown, _b?: unknown, parametros?: { $filter?: string }) {
 			return {
+				async requestContexts() {
+					llamadas.push(`read ${ruta} ${parametros?.$filter ?? ""}`);
+					return (opciones.precios ?? []).map((o) => ({ getObject: () => o }));
+				},
 				create(datos: Record<string, unknown>) {
 					llamadas.push(`create ${ruta}`);
 					creadas.push({ ruta, datos });
