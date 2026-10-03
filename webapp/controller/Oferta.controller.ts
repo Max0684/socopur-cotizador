@@ -1,4 +1,5 @@
 import Controller from "sap/ui/core/mvc/Controller";
+import Messaging from "sap/ui/core/Messaging";
 import ODataModel from "sap/ui/model/odata/v4/ODataModel";
 import { cargarDetalleOferta } from "com/socopur/cotizador/model/OfertasService";
 import type { GrupoEstado } from "com/socopur/cotizador/model/odata/Entidades";
@@ -2571,10 +2572,25 @@ export default class Oferta extends Controller {
 			oferta.setProperty("/vigencia", this.calcularVigencia(new Date().toISOString().slice(0, 10), false));
 			oferta.setProperty("/guardado", { visible: true, texto: i18n.getText("guardadoOk", [numeros.join(", ")]) as string });
 		} catch (error) {
-			MessageBox.error(i18n.getText("guardarError", [(error as Error).message]) as string);
+			MessageBox.error(i18n.getText("guardarError", [this.motivoDeError(error)]) as string);
 		} finally {
 			vista?.setBusy(false);
 		}
+	}
+
+	/**
+	 * Motivo real de un error de OData. Cuando un $batch falla UI5 deja "HTTP request was not processed because $batch failed" y el
+	 * motivo verdadero esta en la causa o en los mensajes del servicio; se muestran para no ocultar lo que dijo SAP.
+	 */
+	private motivoDeError(error: unknown): string {
+		const e = error as Error & { cause?: Error };
+		const partes = [e.cause?.message ?? ""];
+		if (!partes[0] || e.message.includes("$batch failed")) {
+			const mensajes = (Messaging.getMessageModel().getData() as { message?: string; technical?: boolean; type?: string }[]) ?? [];
+			partes.push(...mensajes.filter((m) => m.type === "Error" && m.message && !m.message.includes("$batch failed")).map((m) => m.message as string));
+		}
+		const unicos = [...new Set(partes.filter(Boolean))];
+		return unicos.length ? unicos.join(" | ") : e.message;
 	}
 
 	/** SIMULADO: muestra cuantas ofertas saldrian, una por grupo, con numeros inventados. */
