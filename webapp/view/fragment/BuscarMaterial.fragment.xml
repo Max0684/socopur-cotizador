@@ -165,7 +165,7 @@
 									<ObjectNumber visible="{= !${busqueda>sinPrecio} }" number="{path: 'busqueda>precioUsd', formatter: '.formatMonto'}" unit="USD" textAlign="End" />
 									<Text visible="{= !${busqueda>sinPrecio} }" text="{busqueda>precioPenTxt}" textAlign="End" />
 									<Text visible="{= ${busqueda>sinPrecio} &amp;&amp; !${busqueda>sinPrecioSap} }" text="{i18n>precioAlElegir}" textAlign="End" />
-									<ObjectStatus visible="{busqueda>sinPrecioSap}" text="{i18n>sinPrecioSap}" state="Error" class="sapUiTinyMarginBegin" />
+									<ObjectStatus visible="{= !!${busqueda>sinPrecioSap} }" text="{i18n>sinPrecioSap}" state="Error" class="sapUiTinyMarginBegin" />
 								</VBox>
 								<Button icon="sap-icon://inventory" type="Transparent" tooltip="{i18n>verStock}" press=".onVerStockFila" />
 							</cells>
