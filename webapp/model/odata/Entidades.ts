@@ -212,6 +212,14 @@ export interface ItemCond {
 	_Item?: Item;
 }
 
+/** Claves: Vkorg, Vtweg, Vkbur */
+export interface Oficina {
+	Vkorg: string;
+	Vtweg: string;
+	Vkbur: string;
+	NombreOficina: string;
+}
+
 /** Claves: Segmento1, Segmento2 */
 export interface Clase {
 	Segmento1: string;
@@ -349,8 +357,17 @@ export interface OfertaPos {
 	_Oferta?: Oferta;
 }
 
+/** Claves: Vkorg, Vtweg, Werks */
+export interface Centro {
+	Vkorg: string;
+	Vtweg: string;
+	Werks: string;
+	NombreCentro: string;
+}
+
 /** Nombre del conjunto de entidades -> tipo. */
 export interface ConjuntosCotizador {
+	Centro: Centro;
 	Clase: Clase;
 	Cliente: Cliente;
 	Cotizacion: Cotizacion;
@@ -368,5 +385,6 @@ export interface ConjuntosCotizador {
 	Modalidad: Modalidad;
 	Oferta: Oferta;
 	OfertaPos: OfertaPos;
+	Oficina: Oficina;
 	Precio: Precio;
 }

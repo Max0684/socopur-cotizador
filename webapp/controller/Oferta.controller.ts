@@ -2,6 +2,7 @@ import Controller from "sap/ui/core/mvc/Controller";
 import ODataModel from "sap/ui/model/odata/v4/ODataModel";
 import { cargarDetalleOferta } from "com/socopur/cotizador/model/OfertasService";
 import type { GrupoEstado } from "com/socopur/cotizador/model/odata/Entidades";
+import { leerCentros, leerOficinas } from "com/socopur/cotizador/model/CatalogosService";
 import { buscarMateriales, cargarSegmentos, materialesDisponibles, stockPorCentro } from "com/socopur/cotizador/model/MaterialesService";
 import { consultarPrecio } from "com/socopur/cotizador/model/PreciosService";
 import { almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, gruposParaGuardar, modalidadPorDefecto, sectorDeCabecera, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
@@ -647,6 +648,36 @@ export default class Oferta extends Controller {
 		};
 	}
 
+	/**
+	 * Con ?odata=1 reemplaza las listas estaticas de centros y oficinas por las de SAP (entidades Centro y Oficina) para la
+	 * organizacion de repuestos y el canal. Si falla deja las listas de mock.json.
+	 */
+	private async sincronizarCatalogosArea(canal: string): Promise<void> {
+		if (!this.usarOData()) {
+			return;
+		}
+		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel | undefined;
+		if (!odata) {
+			return;
+		}
+		const mock = this.modeloMock();
+		const org = String(mock.getProperty("/perfil/busqueda/orgs/repuestos") ?? "1103");
+		try {
+			const [centros, oficinas] = await Promise.all([leerCentros(odata, org, canal), leerOficinas(odata, org, canal)]);
+			if (centros.codigos.length > 0) {
+				const nombres = { ...((mock.getProperty("/opciones/centros") as Record<string, string>) ?? {}), ...centros.nombres };
+				const porArea = { ...((mock.getProperty("/opciones/centrosPorArea") as Record<string, string[]>) ?? {}), [`${org}/${canal}`]: centros.codigos };
+				mock.setProperty("/opciones/centros", nombres);
+				mock.setProperty("/opciones/centrosPorArea", porArea);
+			}
+			if (oficinas.length > 0) {
+				this.modeloOferta().setProperty("/opciones/oficinas", oficinas);
+			}
+		} catch (error) {
+			MessageToast.show(this.i18n().getText("odataDetalleError", [(error as Error).message]) as string);
+		}
+	}
+
 	/** Centros validos (TVKWZ) para la organizacion de repuestos y el canal elegido, con su nombre. */
 	private centrosDe(canal: string): { key: string; text: string }[] {
 		const mock = this.modeloMock();
@@ -658,9 +689,10 @@ export default class Oferta extends Controller {
 	}
 
 	/** El canal elegido define el canal de la busqueda de materiales, la modalidad propuesta y los centros que se ofrecen. */
-	public onCambiaCanal(): void {
+	public async onCambiaCanal(): Promise<void> {
 		const oferta = this.modeloOferta();
 		const canal = String(oferta.getProperty("/perfil/canal") ?? "");
+		await this.sincronizarCatalogosArea(canal);
 		oferta.setProperty("/perfil/busqueda/canal", canal);
 		const modalidades = (oferta.getProperty("/modalidades") as Modalidad[]) ?? [];
 		const elegidas = (oferta.getProperty("/modalidadesGrupo") as Record<string, string>) ?? {};
@@ -2609,6 +2641,11 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 			let clonada = false;
 			const oferta = this.modeloOferta();
 			oferta.setData(this.crearOferta());
+			if (this.usarOData()) {
+				const canalInicial = String(mock.getProperty("/perfil/canal") ?? "11");
+				await this.sincronizarCatalogosArea(canalInicial);
+				oferta.setProperty("/opcionesCentro", this.centrosDe(canalInicial));
+			}
 			if (numero) {
 				const cabecera = (mock.getProperty("/ofertas") as { numero: string; doc: string; cliente?: string; cotizId?: string }[]).find(
 					(o) => o.numero === numero || o.cotizId === numero
