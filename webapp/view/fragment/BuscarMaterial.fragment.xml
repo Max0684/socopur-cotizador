@@ -141,7 +141,7 @@
 						<Column><Text text="{i18n>colDescripcion}" /></Column>
 						<Column width="12rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colVariante}" /></Column>
 						<Column width="7rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colMarca}" /></Column>
-						<Column width="6rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colColor}" /></Column>
+						<Column width="10rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colColor}" /></Column>
 						<Column width="3.5rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colAnio}" /></Column>
 						<Column width="6rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colCondicion}" /></Column>
 						<Column width="6rem" hAlign="End"><Text text="{i18n>colStockMio}" /></Column>
@@ -155,7 +155,7 @@
 								<Text text="{busqueda>denominacion}" />
 								<Text text="{busqueda>variante}" />
 								<Text text="{busqueda>sectorTxt}" />
-								<Text text="{busqueda>color}" />
+								<Text text="{= ${busqueda>colorTxt} ? ${busqueda>color} + ' · ' + ${busqueda>colorTxt} : ${busqueda>color} }" />
 								<Text text="{busqueda>anio}" />
 								<Text text="{busqueda>condicion}" tooltip="{= ${busqueda>condicion} === 'CBU' ? ${i18n>condicionCBU} : ${busqueda>condicion} === 'CKD' ? ${i18n>condicionCKD} : '' }" />
 								<ObjectStatus

@@ -74,6 +74,7 @@ interface Vehiculo {
 	/** Fila leida de la entidad Vehiculo de SAP (no del catalogo de ejemplo). */
 	origen?: string;
 	vin?: string;
+	colorTxt?: string;
 	/** Precio unitario real de SAP en soles (se pide con el cliente elegido). */
 	precioPenSap?: number;
 	/** Variante (modelo + condicion + ano + color): con ella se pide el precio. */
@@ -598,7 +599,7 @@ export default class Oferta extends Controller {
 			.map((objeto) => ({
 				...objeto,
 				tipo: esVehiculo ? "vehiculos" : "repuestos",
-				detalle: esVehiculo ? `${objeto.color} · ${objeto.anio} · ${objeto.condicion}${objeto.vin ? ` · ${objeto.vin}` : ""}` : objeto.marca,
+				detalle: esVehiculo ? `${objeto.colorTxt || objeto.color} · ${objeto.anio} · ${objeto.condicion}${objeto.vin ? ` · ${objeto.vin}` : ""}` : objeto.marca,
 				stockTexto: esVehiculo
 					? `${objeto.stockMio} ${i18n.getText("enTuAlmacen")} · ${objeto.stockOtros} ${i18n.getText("otrosAlmacenes")}`
 					: `${objeto.disponible} ${i18n.getText("colDisponible")} (${objeto.comprometido} ${i18n.getText("colComprometido")})`

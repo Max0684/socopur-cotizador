@@ -64,3 +64,10 @@ test("agruparVehiculos junta las unidades iguales y suma la cantidad", () => {
 	assert.deepEqual(g[0].vins, ["LF3HCM0X9SG004459", "VIN2"]);
 	assert.equal(g[0].vin, "");
 });
+
+test("filaDeVehiculo guarda el nombre del color y la busqueda libre lo encuentra", () => {
+	const v = filaDeVehiculo(fila({ ColorTxt: "AZUL" }));
+	assert.equal(v.colorTxt, "AZUL");
+	assert.equal(filtrarVehiculos([v], { texto: "azul" }).length, 1);
+	assert.equal(filaDeVehiculo(fila()).colorTxt, "");
+});

@@ -30,6 +30,8 @@ export interface FilaVehiculoSap {
 	Sdsta: string;
 	Mmsta: string;
 	Color: string;
+	/** Nombre del color (de las caracteristicas de color de la clasificacion); puede venir vacio. */
+	ColorTxt?: string;
 	AnoModelo: string;
 	Condicion: string;
 	VersionModelo: string;
@@ -50,6 +52,7 @@ export interface VehiculoSap {
 	marca: string;
 	modelo: string;
 	color: string;
+	colorTxt: string;
 	anio: number;
 	condicion: string;
 	stockMio: number;
@@ -107,6 +110,7 @@ export function filaDeVehiculo(f: FilaVehiculoSap): VehiculoSap {
 		marca: f.Marca,
 		modelo: f.VersionModelo || f.Matnr,
 		color: f.Color,
+		colorTxt: f.ColorTxt ?? "",
 		anio: Number(f.AnoModelo) || 0,
 		condicion: f.Condicion,
 		stockMio: Number(f.StockLote),
@@ -140,7 +144,7 @@ export function filtrarVehiculos(filas: VehiculoSap[], f: { codigo?: string; des
 			(!f.clase || v.clase === f.clase) &&
 			contiene(v.material, f.codigo) &&
 			contiene(`${v.denominacion} ${v.modelo}`, f.descripcion) &&
-			contiene(`${v.denominacion} ${v.marca} ${v.modelo} ${v.material} ${v.vin} ${v.variante}`, f.texto)
+			contiene(`${v.denominacion} ${v.marca} ${v.modelo} ${v.material} ${v.vin} ${v.variante} ${v.colorTxt}`, f.texto)
 	);
 }
 
