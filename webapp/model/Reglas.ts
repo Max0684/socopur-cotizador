@@ -59,6 +59,11 @@ export function sectorDeCabecera(canal: string, sectorDelMaterial: string, orgVe
 	return CANALES_SECTOR_99.includes(canal) ? "99" : sectorDelMaterial;
 }
 
+/** Une las areas ya conocidas de un cliente con las filas leidas (organizacion/canal/sector) sin repetir. */
+export function unirAreas(actuales: string[], filas: { Vkorg: string; Vtweg: string; Spart: string }[]): string[] {
+	return [...new Set([...actuales, ...filas.map((f) => `${f.Vkorg}/${f.Vtweg}/${f.Spart}`)])];
+}
+
 /** Los clientes de SAP traen sus areas como organizacion/canal/sector; para comparar se usa organizacion/canal. */
 export function areasOrgCanal(areas: string[]): string[] {
 	return areas.map((a) => a.split("/").slice(0, 2).join("/"));

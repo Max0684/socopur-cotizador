@@ -1,5 +1,6 @@
 import type ODataModel from "sap/ui/model/odata/v4/ODataModel";
 import { ordenarPorTexto } from "./Orden";
+import { unirAreas } from "./Reglas";
 
 /** Fila de la vista YI_COTIZ_CLIENTE (cliente por area de ventas). */
 interface ClienteSapFila {
@@ -101,12 +102,8 @@ async function completarAreas(modelo: ODataModel, clientes: ClienteSap[]): Promi
 	try {
 		const filtro = clientes.map((c) => `Kunnr eq '${comillas(c.kunnr)}'`).join(" or ");
 		const filas = await modelo.bindList("/Cliente", undefined, undefined, undefined, { $select: "Kunnr,Vkorg,Vtweg,Spart", $filter: filtro, $count: false }).requestContexts(0, 2000);
-		const porKunnr = new Map(clientes.map((c) => [c.kunnr, new Set(c.areas)]));
-		for (const contexto of filas) {
-			const f = contexto.getObject() as ClienteSapFila;
-			porKunnr.get(f.Kunnr)?.add(`${f.Vkorg}/${f.Vtweg}/${f.Spart}`);
-		}
-		clientes.forEach((c) => (c.areas = [...(porKunnr.get(c.kunnr) ?? c.areas)]));
+		const leidas = filas.map((c) => c.getObject() as ClienteSapFila);
+		clientes.forEach((c) => (c.areas = unirAreas(c.areas, leidas.filter((f) => f.Kunnr === c.kunnr))));
 	} catch {
 		// se conservan las areas de la organizacion buscada
 	}

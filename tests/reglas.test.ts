@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+	unirAreas,
 	almacenDeCentro,
 	areasOrgCanal,
 	canalDe,
@@ -220,4 +221,10 @@ test("gruposParaGuardar: un vehiculo de la org 1101 en canal 11 sale con el sect
 		"0001"
 	);
 	assert.equal(g[0].spart, "16");
+});
+
+test("unirAreas suma las areas leidas a las conocidas sin repetir (un cliente de 1103 tambien vende vehiculos en 1101)", () => {
+	const r = unirAreas(["1103/10/50"], [{ Vkorg: "1103", Vtweg: "10", Spart: "50" }, { Vkorg: "1101", Vtweg: "11", Spart: "10" }]);
+	assert.deepEqual(r, ["1103/10/50", "1101/11/10"]);
+	assert.equal(faltaAreaDeVentas(r, "1101", "11"), false);
 });
