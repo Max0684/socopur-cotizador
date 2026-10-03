@@ -261,3 +261,26 @@ test("guardarCotizacion: los repuestos (sin grupo en proceso) no esperan", async
 	await guardarCotizacion(como(modelo), oferta(), { pausa: async () => { pausas++; } });
 	assert.equal(pausas, 0);
 });
+
+test("crearPedidoGrupo espera a que termine un pedido de vehiculo en segundo plano (Estado P)", async () => {
+	const { modelo } = crearModeloFalso({
+		grupoDePedido: { Estado: "P", VbelnPedido: "", Liberacion: "" },
+		secuenciaPedido: [{ Estado: "P", VbelnPedido: "" }, { Estado: "P", VbelnPedido: "3300008300", Liberacion: "X" }]
+	});
+	const r = await crearPedidoGrupo(como(modelo), "COT-1", "01", { intervaloMs: 1, maximoMs: 100, pausa: async () => {} });
+	assert.equal(r.vbelnPedido, "3300008300");
+});
+
+test("crearPedidoGrupo: si el pedido de vehiculo falla en segundo plano (vuelve a O) lanza el motivo del Comentario", async () => {
+	const { modelo } = crearModeloFalso({
+		grupoDePedido: { Estado: "P", VbelnPedido: "" },
+		secuenciaPedido: [{ Estado: "O", VbelnPedido: "" }],
+		comentario: "[Pedido grupo 01] sin credito"
+	});
+	await assert.rejects(() => crearPedidoGrupo(como(modelo), "COT-1", "01", sinPausa), /\[Pedido grupo 01\] sin credito/);
+});
+
+test("crearPedidoGrupo: si el pedido sigue en proceso al agotar la espera lo dice", async () => {
+	const { modelo } = crearModeloFalso({ grupoDePedido: { Estado: "P", VbelnPedido: "" }, secuenciaPedido: [{ Estado: "P", VbelnPedido: "" }] });
+	await assert.rejects(() => crearPedidoGrupo(como(modelo), "COT-1", "01", sinPausa), (e: Error) => e instanceof OfertaEnProcesoError);
+});

@@ -68,6 +68,8 @@ async function crearHijaCtx(modelo: ODataModel, ruta: string, padre: Context, da
 
 /** Grupo.Estado de un grupo cuya oferta (o pedido) se esta creando en segundo plano. */
 const ESTADO_EN_PROCESO = "Q";
+/** Grupo.Estado de un grupo cuyo pedido se esta creando en segundo plano. */
+const ESTADO_PEDIDO_EN_PROCESO = "P";
 
 /** Caracteristica donde asignarVin busca la variante del vehiculo (ItemCar.Atnam). */
 export const ATNAM_VARIANTE = "ZVARIANTE";
@@ -181,12 +183,28 @@ export interface PedidoGenerado {
  * en el Comentario de la cotizacion. Solo repuestos: los vehiculos necesitan asignarVin, que aun no esta conectado.
  * SIN PROBAR contra SAP desde el front.
  */
-export async function crearPedidoGrupo(modelo: ODataModel, cotizId: string, grupoNo: string): Promise<PedidoGenerado> {
+export async function crearPedidoGrupo(modelo: ODataModel, cotizId: string, grupoNo: string, espera: EsperaOfertas = {}): Promise<PedidoGenerado> {
 	const ruta = `/Grupo(CotizId=${cotizId},GrupoNo='${grupoNo.replace(/'/g, "''")}',IsActiveEntity=true)`;
 	const operacion = modelo.bindContext(`${ruta}/${NS}.crearPedido(...)`);
 	// ui5lint-disable-next-line no-deprecated-api -- invoke() existe desde UI5 1.123; el servidor de Socopur y los tipos son 1.120
 	await operacion.execute("$auto", true);
-	const grupo = operacion.getBoundContext().getObject() as Grupo;
+	let grupo = operacion.getBoundContext().getObject() as Grupo;
+	// Un pedido de vehiculo se crea en segundo plano en SAP (Estado P = pedido en proceso): se espera a que aparezca su numero.
+	if (grupo?.Estado === ESTADO_PEDIDO_EN_PROCESO && !grupo.VbelnPedido) {
+		const intervalo = espera.intervaloMs ?? 2500;
+		const maximo = espera.maximoMs ?? 60000;
+		const pausa = espera.pausa ?? pausaReal;
+		for (let transcurrido = 0; transcurrido < maximo; transcurrido += intervalo) {
+			await pausa(intervalo);
+			grupo = (await modelo.bindContext(ruta, undefined, { $select: "GrupoNo,Estado,VbelnPedido,Liberacion", $$ownRequest: true }).requestObject()) as Grupo;
+			if (grupo.VbelnPedido || grupo.Estado !== ESTADO_PEDIDO_EN_PROCESO) {
+				break;
+			}
+		}
+		if (!grupo.VbelnPedido && grupo.Estado === ESTADO_PEDIDO_EN_PROCESO) {
+			throw new OfertaEnProcesoError("El pedido del vehiculo sigue en proceso en SAP. Revisalo en unos minutos desde la lista de ofertas.");
+		}
+	}
 	if (!grupo?.VbelnPedido) {
 		const cabecera = (await modelo
 			.bindContext(`/Cotizacion(CotizId=${cotizId},IsActiveEntity=true)`, undefined, { $select: "Comentario", $$ownRequest: true })

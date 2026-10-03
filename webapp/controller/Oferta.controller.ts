@@ -2102,7 +2102,11 @@ export default class Oferta extends Controller {
 				vins.forEach((v) => filas.push({ ...base, detalle: `${v.material} · ${v.color}`, vin: v.vin || v.error || "—", bloqueo: v.vin ? (i18n.getText("vinBloqueadoHoras", [this.modeloMock().getProperty("/perfil/bloqueoHoras")]) as string) : "—" }));
 			}
 		} catch (error) {
-			MessageBox.error(i18n.getText("pedidoError", [(error as Error).message]) as string);
+			if (error instanceof OfertaEnProcesoError) {
+				MessageBox.information(error.message);
+			} else {
+				MessageBox.error(i18n.getText("pedidoError", [this.motivoDeError(error)]) as string);
+			}
 		} finally {
 			vista?.setBusy(false);
 		}

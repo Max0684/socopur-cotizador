@@ -13,6 +13,8 @@ export interface OpcionesModeloFalso {
 	secuenciaGrupos?: { GrupoNo: string; VbelnOferta: string; Estado?: string }[][];
 	/** Comentario de la cotizacion (SAP deja ahi el motivo cuando rechaza). */
 	comentario?: string;
+	/** Lecturas sucesivas del Grupo tras crearPedido (pedido en segundo plano); si se acaba, repite la ultima. */
+	secuenciaPedido?: Record<string, unknown>[];
 	/** Lo que devuelve la accion crearPedido (entidad Grupo). */
 	grupoDePedido?: Record<string, unknown>;
 	/** Lo que devuelve la lectura de GrupoEstado; null = la lectura falla. */
@@ -67,6 +69,9 @@ export function crearModeloFalso(opciones: OpcionesModeloFalso = {}) {
 				},
 				async requestObject() {
 					llamadas.push(`read ${ruta}`);
+					if (ruta.startsWith("/Grupo(") && opciones.secuenciaPedido?.length) {
+						return opciones.secuenciaPedido.length > 1 ? opciones.secuenciaPedido.shift() : opciones.secuenciaPedido[0];
+					}
 					if (ruta.startsWith("/GrupoEstado")) {
 						if (opciones.estado === null) {
 							throw new Error("sin lectura");
