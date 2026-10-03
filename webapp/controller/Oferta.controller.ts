@@ -74,6 +74,8 @@ interface Vehiculo {
 	/** Fila leida de la entidad Vehiculo de SAP (no del catalogo de ejemplo). */
 	origen?: string;
 	vin?: string;
+	/** Precio unitario real de SAP en soles (se pide con el cliente elegido). */
+	precioPenSap?: number;
 	/** Variante (modelo + condicion + ano + color): con ella se pide el precio. */
 	variante?: string;
 	/** Centro donde esta el vehiculo. */
@@ -488,13 +490,43 @@ export default class Oferta extends Controller {
 				condicion: g("condicion")
 			});
 			const visibles = filtrarVehiculos(filas, { codigo: g("codigo"), descripcion: g("descripcion"), texto: g("texto"), clase: g("clase") });
-			b.setProperty("/vehiculos", ordenarPorTexto(agruparVehiculos(visibles), (v) => v.denominacion));
+			const agrupados = ordenarPorTexto(agruparVehiculos(visibles), (v) => v.denominacion);
+			b.setProperty("/vehiculos", agrupados);
+			await this.preciosDeLaLista(odata, agrupados);
 		} catch (error) {
 			b.setProperty("/vehiculos", []);
 			MessageBox.error(this.i18n().getText("busquedaMaterialError", [(error as Error).message]) as string);
 		} finally {
 			b.setProperty("/cargando", false);
 		}
+	}
+
+	/**
+	 * Con el cliente elegido pide a SAP el precio de cada fila de vehiculos (pocas filas: una por modelo y variante) para mostrarlo
+	 * en la lista o marcar "Sin precio". Sin cliente deja "al elegir". No inventa ningun precio.
+	 */
+	private async preciosDeLaLista(odata: ODataModel, filas: (Vehiculo & { sinPrecio?: boolean; sinPrecioSap?: boolean; precioPenTxt?: string; precioUsd: number })[]): Promise<void> {
+		const oferta = this.modeloOferta();
+		const kunnr = (oferta.getProperty("/cliente") as Cliente | null)?.kunnr;
+		if (!kunnr || filas.length === 0) {
+			return;
+		}
+		const canal = canalDe(String(this.modeloMock().getProperty("/perfil/busqueda/canal") ?? "11"));
+		await Promise.all(
+			filas.map(async (v) => {
+				const base = { kunnr, vkorg: v.orgVentas, vtweg: canal, spart: v.sectorOferta, auart: CLASE_OFERTA_PRECIO_VEH, matnr: v.material, werks: v.centro ?? "", cantidad: 1, varcond: v.variante };
+				try {
+					const [pen, usd] = await Promise.all([consultarPrecio(odata, { ...base, waers: "PEN" }), consultarPrecio(odata, { ...base, waers: "USD" })]);
+					v.precioPenSap = pen.precioUnitario;
+					v.precioUsd = usd.precioUnitario;
+					v.precioPenTxt = `S/ ${this.formatMonto(pen.precioUnitario)}`;
+					v.sinPrecio = false;
+				} catch {
+					v.sinPrecioSap = true;
+				}
+			})
+		);
+		this.modeloBusqueda().setProperty("/vehiculos", filas);
 	}
 
 	/** Repuestos desde SAP (entidad Material): organizacion y canal del perfil, mas los filtros de la pantalla. */

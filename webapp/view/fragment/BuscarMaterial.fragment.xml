@@ -145,7 +145,6 @@
 						<Column width="3.5rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colAnio}" /></Column>
 						<Column width="4.5rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colCondicion}" /></Column>
 						<Column width="6rem" hAlign="End"><Text text="{i18n>colStockMio}" /></Column>
-						<Column width="7rem" hAlign="End"><Text text="{i18n>colStockOtros}" /></Column>
 						<Column width="9rem" hAlign="End"><Text text="{i18n>colPrecioLista}" /></Column>
 						<Column width="3rem" hAlign="Center"><Text text="" /></Column>
 					</columns>
@@ -162,13 +161,11 @@
 								<ObjectStatus
 									text="{= ${busqueda>stockMio} > 0 ? ${busqueda>stockMio} : ${i18n>sinStock} }"
 									state="{= ${busqueda>stockMio} > 0 ? 'Success' : 'Error' }" />
-								<ObjectStatus
-									text="{busqueda>stockOtros}"
-									state="{= ${busqueda>stockOtros} > 0 ? 'Information' : 'None' }" />
 								<VBox alignItems="End">
 									<ObjectNumber visible="{= !${busqueda>sinPrecio} }" number="{path: 'busqueda>precioUsd', formatter: '.formatMonto'}" unit="USD" textAlign="End" />
-									<Text visible="{= !${busqueda>sinPrecio} }" text="{path: 'busqueda>precioUsd', formatter: '.formatPen'}" textAlign="End" />
-									<Text visible="{busqueda>sinPrecio}" text="{i18n>precioAlElegir}" textAlign="End" />
+									<Text visible="{= !${busqueda>sinPrecio} }" text="{busqueda>precioPenTxt}" textAlign="End" />
+									<Text visible="{= ${busqueda>sinPrecio} &amp;&amp; !${busqueda>sinPrecioSap} }" text="{i18n>precioAlElegir}" textAlign="End" />
+									<ObjectStatus visible="{busqueda>sinPrecioSap}" text="{i18n>sinPrecioSap}" state="Error" class="sapUiTinyMarginBegin" />
 								</VBox>
 								<Button icon="sap-icon://inventory" type="Transparent" tooltip="{i18n>verStock}" press=".onVerStockFila" />
 							</cells>
