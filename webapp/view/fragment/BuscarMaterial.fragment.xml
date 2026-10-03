@@ -157,7 +157,7 @@
 								<Text text="{busqueda>sectorTxt}" />
 								<Text text="{busqueda>color}" />
 								<Text text="{busqueda>anio}" />
-								<Text text="{busqueda>condicion}" />
+								<Text text="{busqueda>condicion}" tooltip="{= ${busqueda>condicion} === 'CBU' ? ${i18n>condicionCBU} : ${busqueda>condicion} === 'CKD' ? ${i18n>condicionCKD} : '' }" />
 								<ObjectStatus
 									text="{= ${busqueda>stockMio} > 0 ? ${busqueda>stockMio} : ${i18n>sinStock} }"
 									state="{= ${busqueda>stockMio} > 0 ? 'Success' : 'Error' }" />
