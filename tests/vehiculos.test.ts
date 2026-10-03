@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buscarVehiculos, filaDeVehiculo, filtrarVehiculos, filtroVehiculos, type FilaVehiculoSap } from "../webapp/model/VehiculosService.ts";
+import { buscarVehiculos, filaDeVehiculo, filtrarVehiculos, filtroVehiculos, agruparVehiculos, type FilaVehiculoSap } from "../webapp/model/VehiculosService.ts";
 
 const fila = (extra: Partial<FilaVehiculoSap> = {}): FilaVehiculoSap => ({
 	Vkorg: "1101", Vtweg: "10", Vhcle: "1000006683", Vhvin: "LF3HCM0X9SG004459", Matnr: "CAR200B", Maktx: "LF200ZH-X", Werks: "1101",
@@ -49,4 +49,18 @@ test("buscarVehiculos consulta la entidad Vehiculo", async () => {
 	assert.equal(r.length, 1);
 	assert.equal(pedidos[0].ruta, "/Vehiculo");
 	assert.equal(pedidos[0].p?.$filter, "Vkorg eq '1101' and Vtweg eq '10' and Werks eq '1101'");
+});
+
+test("agruparVehiculos junta las unidades iguales y suma la cantidad", () => {
+	const filas = [
+		filaDeVehiculo(fila()),
+		filaDeVehiculo(fila({ Vhcle: "1000006685", Vhvin: "VIN2" })),
+		filaDeVehiculo(fila({ Vhvin: "VIN3", Color: "ROJ", Variante: "CAR200BCKD2025ROJ" })),
+		filaDeVehiculo(fila({ Vhvin: "VIN4", Werks: "1102" }))
+	];
+	const g = agruparVehiculos(filas);
+	assert.equal(g.length, 3);
+	assert.equal(g[0].stockMio, 2);
+	assert.deepEqual(g[0].vins, ["LF3HCM0X9SG004459", "VIN2"]);
+	assert.equal(g[0].vin, "");
 });

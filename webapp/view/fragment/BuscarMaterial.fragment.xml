@@ -139,7 +139,7 @@
 					<columns>
 						<Column width="8rem"><Text text="{i18n>colMaterial}" /></Column>
 						<Column><Text text="{i18n>colDescripcion}" /></Column>
-						<Column width="11rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colVin}" /></Column>
+						<Column width="12rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colVariante}" /></Column>
 						<Column width="7rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colSector}" /></Column>
 						<Column width="6rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colColor}" /></Column>
 						<Column width="3.5rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colAnio}" /></Column>
@@ -154,7 +154,7 @@
 							<cells>
 								<ObjectIdentifier title="{busqueda>material}" />
 								<Text text="{busqueda>denominacion}" />
-								<Text text="{busqueda>vin}" />
+								<Text text="{busqueda>variante}" />
 								<Text text="{busqueda>sectorTxt}" />
 								<Text text="{busqueda>color}" />
 								<Text text="{busqueda>anio}" />

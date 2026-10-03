@@ -5,7 +5,7 @@ import type { GrupoEstado } from "com/socopur/cotizador/model/odata/Entidades";
 import { leerCentros, leerOficinas } from "com/socopur/cotizador/model/CatalogosService";
 import { buscarMateriales, cargarSegmentos, disponibilidadPorCentro, materialesDisponibles, type Disponibilidad } from "com/socopur/cotizador/model/MaterialesService";
 import { consultarPrecio } from "com/socopur/cotizador/model/PreciosService";
-import { buscarVehiculos, filtrarVehiculos } from "com/socopur/cotizador/model/VehiculosService";
+import { agruparVehiculos, buscarVehiculos, filtrarVehiculos } from "com/socopur/cotizador/model/VehiculosService";
 import { almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, gruposParaGuardar, modalidadPorDefecto, sectorDeCabecera, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
 import { crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, type OfertaParaGuardar } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
@@ -488,7 +488,7 @@ export default class Oferta extends Controller {
 				condicion: g("condicion")
 			});
 			const visibles = filtrarVehiculos(filas, { codigo: g("codigo"), descripcion: g("descripcion"), texto: g("texto"), clase: g("clase") });
-			b.setProperty("/vehiculos", ordenarPorTexto(visibles, (v) => v.denominacion));
+			b.setProperty("/vehiculos", ordenarPorTexto(agruparVehiculos(visibles), (v) => v.denominacion));
 		} catch (error) {
 			b.setProperty("/vehiculos", []);
 			MessageBox.error(this.i18n().getText("busquedaMaterialError", [(error as Error).message]) as string);

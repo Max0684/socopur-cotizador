@@ -68,8 +68,11 @@ export interface VehiculoSap {
 	grupo: string;
 	/** El precio se pide al elegir el vehiculo. */
 	sinPrecio: boolean;
+	/** Con una fila por vehiculo es su VIN; en las filas agrupadas queda vacio (ver vins). */
 	vin: string;
 	vhcle: string;
+	/** VIN de cada unidad de la fila agrupada (el VIN se asigna despues, al crear el pedido). */
+	vins: string[];
 	variante: string;
 	centro: string;
 	disponibilidad: string;
@@ -122,6 +125,7 @@ export function filaDeVehiculo(f: FilaVehiculoSap): VehiculoSap {
 		sinPrecio: true,
 		vin: f.Vhvin,
 		vhcle: f.Vhcle,
+		vins: [f.Vhvin],
 		variante: f.Variante,
 		centro: f.Werks,
 		disponibilidad: f.AvailTxt
@@ -145,4 +149,23 @@ export async function buscarVehiculos(modelo: ODataModel, filtro: FiltroVehiculo
 	const lista = modelo.bindList("/Vehiculo", undefined, undefined, undefined, { $filter: filtroVehiculos(filtro), $orderby: "Matnr,Vhvin" });
 	const contextos = await lista.requestContexts(0, 200);
 	return contextos.map((c) => filaDeVehiculo(c.getObject() as FilaVehiculoSap));
+}
+
+/**
+ * Una fila por modelo, variante y centro con la cantidad de unidades disponibles (los vehiculos iguales no se distinguen para
+ * cotizar; el VIN se asigna despues). La cantidad va en stockMio y los VIN de las unidades en vins.
+ */
+export function agruparVehiculos(filas: VehiculoSap[]): VehiculoSap[] {
+	const grupos = new Map<string, VehiculoSap>();
+	filas.forEach((f) => {
+		const clave = `${f.centro}|${f.material}|${f.variante}`;
+		const g = grupos.get(clave);
+		if (g) {
+			g.stockMio += f.stockMio;
+			g.vins.push(...f.vins);
+		} else {
+			grupos.set(clave, { ...f, vins: [...f.vins], vin: "", vhcle: "" });
+		}
+	});
+	return [...grupos.values()];
 }
