@@ -148,6 +148,7 @@ test("guardarCotizacion: un vehiculo guarda su variante como caracteristica ZVAR
 	assert.ok(car);
 	assert.equal(car.datos.Atnam, ATNAM_VARIANTE);
 	assert.equal(car.datos.Atwrt, "CAR200BCBU2025AZU");
+	assert.equal("Posnr" in car.datos || "CotizId" in car.datos, false);
 	assert.equal(ATNAM_VARIANTE, "ZVARIANTE");
 	assert.equal(creadas.find((c) => c.ruta === "_Item")?.datos.Werks, "1008");
 });

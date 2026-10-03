@@ -108,8 +108,8 @@ export async function guardarCotizacion(modelo: ODataModel, datos: OfertaParaGua
 					Waers: datos.moneda
 				});
 				if (l.variante) {
-					const posnr = (item.getObject() as Item).Posnr;
-					await crearHija<ItemCar>(modelo, "_Car", item, { Posnr: posnr, Atnam: ATNAM_VARIANTE, Atwrt: l.variante });
+					// CotizId y Posnr los toma el servicio del item padre: no se mandan.
+					await crearHija<ItemCar>(modelo, "_Car", item, { Atnam: ATNAM_VARIANTE, Atwrt: l.variante });
 				}
 			}
 		}
