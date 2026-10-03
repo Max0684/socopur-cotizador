@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buscarMateriales, construirSegmentos, filaDeMaterial, filtroMateriales, filtroStock, materialesDisponibles, stockPorCentro } from "../webapp/model/MaterialesService.ts";
+import { buscarMateriales, disponibilidadDeFilas, disponibilidadPorCentro, construirSegmentos, filaDeMaterial, filtroMateriales, filtroStock, materialesDisponibles, stockPorCentro } from "../webapp/model/MaterialesService.ts";
 
 const como = (m: unknown) => m as Parameters<typeof buscarMateriales>[0];
 
@@ -99,4 +99,26 @@ test("stockPorCentro devuelve el mayor stock por material y no consulta sin mate
 	assert.deepEqual(await stockPorCentro(como(modelo), "1103", "10", "1101", []), {});
 	assert.equal(llamadas, 0);
 	assert.deepEqual(await stockPorCentro(como(modelo), "1103", "10", "1101", ["A", "B"]), { A: 30, B: 5 });
+});
+
+test("disponibilidadDeFilas toma el almacen de mayor stock y omite filas con Respuesta distinta de 0", () => {
+	const d = disponibilidadDeFilas([
+		{ Matnr: "A", StockLibre: 10, Disponible: 8, Comprometido: 2, Respuesta: 0 },
+		{ Matnr: "A", StockLibre: "30", Disponible: "25", Comprometido: "5", Respuesta: 0 },
+		{ Matnr: "B", StockLibre: 0, Disponible: 0, Comprometido: 0, Respuesta: 1 }
+	]);
+	assert.deepEqual(d, { A: { fisico: 30, disponible: 25, comprometido: 5 } });
+});
+
+test("disponibilidadPorCentro consulta MaterialAtp y no consulta sin materiales", async () => {
+	const rutas: string[] = [];
+	const modelo = {
+		bindList(ruta: string) {
+			rutas.push(ruta);
+			return { async requestContexts() { return [{ getObject: () => ({ Matnr: "A", StockLibre: 38228, Disponible: 34594, Comprometido: 3634, Respuesta: 0 }) }]; } };
+		}
+	};
+	assert.deepEqual(await disponibilidadPorCentro(como(modelo), "1103", "10", "1101", []), {});
+	assert.deepEqual(await disponibilidadPorCentro(como(modelo), "1103", "10", "1101", ["A"]), { A: { fisico: 38228, disponible: 34594, comprometido: 3634 } });
+	assert.deepEqual(rutas, ["/MaterialAtp"]);
 });

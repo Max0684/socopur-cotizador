@@ -193,3 +193,34 @@ export async function stockPorCentro(modelo: ODataModel, vkorg: string, vtweg: s
 	});
 	return res;
 }
+
+export interface Disponibilidad {
+	/** Stock fisico libre. */
+	fisico: number;
+	disponible: number;
+	comprometido: number;
+}
+
+/** Filas de MaterialAtp a disponibilidad por material: se toma el almacen de mayor stock; si SAP no pudo calcular alguna fila (Respuesta != 0) se omite. */
+export function disponibilidadDeFilas(filas: { Matnr: string; StockLibre: number | string; Disponible: number | string; Comprometido: number | string; Respuesta?: number | string }[]): Record<string, Disponibilidad> {
+	const res: Record<string, Disponibilidad> = {};
+	filas.forEach((f) => {
+		if (Number(f.Respuesta ?? 0) !== 0) {
+			return;
+		}
+		const fisico = Number(f.StockLibre);
+		if (fisico >= (res[f.Matnr]?.fisico ?? -1)) {
+			res[f.Matnr] = { fisico, disponible: Number(f.Disponible), comprometido: Number(f.Comprometido) };
+		}
+	});
+	return res;
+}
+
+/** Disponibilidad (stock libre, ATP y comprometido) por material en un centro (entidad MaterialAtp, maximo 50 materiales). */
+export async function disponibilidadPorCentro(modelo: ODataModel, vkorg: string, vtweg: string, werks: string, matnrs: string[]): Promise<Record<string, Disponibilidad>> {
+	if (matnrs.length === 0) {
+		return {};
+	}
+	const contextos = await modelo.bindList("/MaterialAtp", undefined, undefined, undefined, { $filter: filtroStock(vkorg, vtweg, werks, matnrs.slice(0, 50)) }).requestContexts(0, 50);
+	return disponibilidadDeFilas(contextos.map((c) => c.getObject() as Parameters<typeof disponibilidadDeFilas>[0][number]));
+}

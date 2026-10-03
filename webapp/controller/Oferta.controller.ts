@@ -3,7 +3,7 @@ import ODataModel from "sap/ui/model/odata/v4/ODataModel";
 import { cargarDetalleOferta } from "com/socopur/cotizador/model/OfertasService";
 import type { GrupoEstado } from "com/socopur/cotizador/model/odata/Entidades";
 import { leerCentros, leerOficinas } from "com/socopur/cotizador/model/CatalogosService";
-import { buscarMateriales, cargarSegmentos, materialesDisponibles, stockPorCentro } from "com/socopur/cotizador/model/MaterialesService";
+import { buscarMateriales, cargarSegmentos, disponibilidadPorCentro, materialesDisponibles, type Disponibilidad } from "com/socopur/cotizador/model/MaterialesService";
 import { consultarPrecio } from "com/socopur/cotizador/model/PreciosService";
 import { almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, gruposParaGuardar, modalidadPorDefecto, sectorDeCabecera, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
 import { crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, type OfertaParaGuardar } from "com/socopur/cotizador/model/CotizacionesService";
@@ -469,22 +469,22 @@ export default class Oferta extends Controller {
 				sector: g("sector"),
 				marca: g("marca")
 			}, sectorDeCabecera);
-			// Stock libre en el centro del perfil. El comprometido y el ATP no estan en el servicio todavia.
+			// Stock fisico, disponible (ATP) y comprometido en el centro del perfil (entidad MaterialAtp).
 			const vkorg = String(mock.getProperty("/perfil/busqueda/orgs/repuestos") ?? "1103");
 			const vtweg = String(mock.getProperty("/perfil/busqueda/canal") ?? "11");
 			const centro = String(this.modeloOferta().getProperty("/perfil/centro") ?? "");
-			let stock: Record<string, number> = {};
+			let stock: Record<string, Disponibilidad> = {};
 			try {
-				stock = await stockPorCentro(odata, vkorg, vtweg, centro, filas.map((f) => f.material));
+				stock = await disponibilidadPorCentro(odata, vkorg, vtweg, centro, filas.map((f) => f.material));
 			} catch (error) {
 				MessageToast.show(this.i18n().getText("busquedaMaterialError", [(error as Error).message]) as string);
 			}
 			const soloStock = b.getProperty("/soloStock") as boolean;
 			const conDatos = filas.map((f) => ({
 				...f,
-				disponible: stock[f.material] ?? 0,
-				comprometido: "\u2014",
-				total: stock[f.material] ?? 0,
+				disponible: stock[f.material]?.disponible ?? 0,
+				comprometido: stock[f.material] ? stock[f.material].comprometido : "\u2014",
+				total: stock[f.material]?.fisico ?? 0,
 				precioUsd: 0,
 				condicionPct: 0,
 				promocion: null,
