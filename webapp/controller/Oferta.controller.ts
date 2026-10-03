@@ -1906,8 +1906,11 @@ export default class Oferta extends Controller {
 		const oferta = this.modeloOferta();
 		const lineas = (oferta.getProperty("/lineas") as Linea[]) ?? [];
 		const vehiculos = lineas.filter((l) => this.esVehiculo(l));
-		// Vehiculos reales de SAP: no hay dialogo, SAP asigna el VIN (asignarVin) al crear el pedido.
-		if (!vehiculos.length || (this.usarOData() && vehiculos.every((l) => !!l.variante))) {
+		// Ofertas guardadas en SAP (con ?odata=1): no hay dialogo, SAP asigna el VIN (asignarVin) al crear el pedido. Al guardar, las lineas
+		// se vuelven a leer del documento SAP y ya no traen la variante, por eso se decide por la oferta guardada y no por la linea.
+		const guardadas = (oferta.getProperty("/ofertasGuardadas") as OfertaGuardada[]) ?? [];
+		const guardadasEnSap = this.usarOData() && guardadas.length > 0 && guardadas.every((o) => !!o.cotizId && !!o.grupoNo);
+		if (!vehiculos.length || guardadasEnSap) {
 			this.crearPedidos([]);
 			return;
 		}
@@ -2009,7 +2012,7 @@ export default class Oferta extends Controller {
 	private crearPedidos(asignaciones: { material: string; vin: string; hasta: string }[]): void {
 		const guardadas = (this.modeloOferta().getProperty("/ofertasGuardadas") as OfertaGuardada[]) ?? [];
 		const real =
-			this.usarOData() && guardadas.length > 0 && guardadas.every((o) => o.cotizId && o.grupoNo && !o.lineas.some((l) => this.esVehiculo(l) && !l.variante));
+			this.usarOData() && guardadas.length > 0 && guardadas.every((o) => o.cotizId && o.grupoNo);
 		if (real) {
 			void this.crearPedidosSap(guardadas);
 			return;
