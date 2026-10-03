@@ -216,6 +216,13 @@
 									text="{= ${oferta>/materialElegido} ? ${i18n>cambiarMaterial} : ${i18n>buscarMaterial} }"
 									icon="sap-icon://search"
 									press=".onAbrirBusqueda" />
+								<Button
+									text="{i18n>quitarMaterial}"
+									icon="sap-icon://decline"
+									type="Transparent"
+									class="sapUiSmallMarginBegin"
+									visible="{= !!${oferta>/materialElegido} || ${oferta>/elegidosLista}.length > 0 }"
+									press=".onQuitarMaterial" />
 							</HBox>
 							<!-- Solicitudes de traslado (SOLPED) de esta oferta, con su estado visible -->
 							<VBox visible="{= ${oferta>/solpeds}.length > 0 }" class="sapUiSmallMarginBottom">

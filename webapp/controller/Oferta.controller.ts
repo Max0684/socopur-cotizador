@@ -647,6 +647,14 @@ export default class Oferta extends Controller {
 		}
 	}
 
+	/** Descarta el material elegido que todavia no se agrego a la oferta (p. ej. para buscar con otro perfil). No toca las lineas ya agregadas. */
+	public onQuitarMaterial(): void {
+		const oferta = this.modeloOferta();
+		oferta.setProperty("/materialElegido", null);
+		oferta.setProperty("/vista", {});
+		oferta.setProperty("/elegidosLista", []);
+	}
+
 	public async onConfirmarMaterial(): Promise<void> {
 		const b = this.modeloBusqueda();
 		const oferta = this.modeloOferta();
