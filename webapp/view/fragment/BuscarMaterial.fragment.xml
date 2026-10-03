@@ -140,7 +140,7 @@
 						<Column width="8rem"><Text text="{i18n>colMaterial}" /></Column>
 						<Column><Text text="{i18n>colDescripcion}" /></Column>
 						<Column width="12rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colVariante}" /></Column>
-						<Column width="7rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colSector}" /></Column>
+						<Column width="7rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colMarca}" /></Column>
 						<Column width="6rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colColor}" /></Column>
 						<Column width="3.5rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colAnio}" /></Column>
 						<Column width="4.5rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colCondicion}" /></Column>
