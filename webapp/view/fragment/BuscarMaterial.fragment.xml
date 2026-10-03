@@ -143,7 +143,7 @@
 						<Column width="7rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colMarca}" /></Column>
 						<Column width="6rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colColor}" /></Column>
 						<Column width="3.5rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colAnio}" /></Column>
-						<Column width="4.5rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colCondicion}" /></Column>
+						<Column width="6rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colCondicion}" /></Column>
 						<Column width="6rem" hAlign="End"><Text text="{i18n>colStockMio}" /></Column>
 						<Column width="9rem" hAlign="End"><Text text="{i18n>colPrecioLista}" /></Column>
 						<Column width="3rem" hAlign="Center"><Text text="" /></Column>
