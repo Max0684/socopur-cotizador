@@ -7,7 +7,7 @@ import { buscarMateriales, cargarSegmentos, disponibilidadPorCentro, materialesD
 import { consultarPrecio } from "com/socopur/cotizador/model/PreciosService";
 import { agruparVehiculos, buscarVehiculos, filtrarVehiculos } from "com/socopur/cotizador/model/VehiculosService";
 import { almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, gruposParaGuardar, modalidadPorDefecto, sectorDeCabecera, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
-import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, type OfertaParaGuardar, type VinAsignado } from "com/socopur/cotizador/model/CotizacionesService";
+import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, renovarCotizacion, type OfertaParaGuardar, type VinAsignado } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
 import { cargarModalidades, type ModalidadPantalla } from "com/socopur/cotizador/model/ModalidadesService";
 import { ordenarPorTexto } from "com/socopur/cotizador/model/Orden";
@@ -2722,11 +2722,56 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 		};
 	}
 
-	/** SIMULADO: en SAP se renueva copiando la oferta con la fecha de hoy y recalculando precios. */
-	public onRenovar(): void {
+	/**
+	 * Con ?odata=1 y una oferta real renueva en SAP (accion renovar: extiende la validez de la cabecera, no toca las posiciones y se
+	 * omite si la oferta ya tiene pedido). En cualquier otro caso sigue simulado.
+	 */
+	public async onRenovar(): Promise<void> {
 		const oferta = this.modeloOferta();
-		oferta.setProperty("/vigencia", this.calcularVigencia(new Date().toISOString().slice(0, 10), false));
-		MessageToast.show(`${this.i18n().getText("vigenciaRenovada")} (${this.i18n().getText("simulacion")})`);
+		const i18n = this.i18n();
+		const numero = String(oferta.getProperty("/numero") ?? "");
+		const cab = (this.modeloMock().getProperty("/ofertas") as { numero: string; cotizId?: string }[] | undefined)?.find((o) => o.numero === numero);
+		if (!this.usarOData() || !cab?.cotizId || !/^\d{10}$/.test(numero)) {
+			oferta.setProperty("/vigencia", this.calcularVigencia(new Date().toISOString().slice(0, 10), false));
+			MessageToast.show(`${i18n.getText("vigenciaRenovada")} (${i18n.getText("simulacion")})`);
+			return;
+		}
+		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel;
+		const vista = this.getView();
+		vista?.setBusy(true);
+		try {
+			const r = await renovarCotizacion(odata, cab.cotizId);
+			if (r.error) {
+				MessageBox.error(r.error);
+				return;
+			}
+			const hasta = r.grupos.find((g) => g.vbelnOferta === numero)?.vigenciaHasta;
+			if (hasta) {
+				oferta.setProperty("/vigencia", this.vigenciaDesdeFechaHasta(hasta));
+			}
+			MessageToast.show(i18n.getText("vigenciaRenovada") as string);
+		} catch (error) {
+			MessageBox.error((error as Error).message);
+		} finally {
+			vista?.setBusy(false);
+		}
+	}
+
+	/** Vigencia para mostrar a partir de la fecha de fin que devuelve SAP (aaaa-mm-dd). */
+	private vigenciaDesdeFechaHasta(isoHasta: string): Record<string, unknown> {
+		const i18n = this.i18n();
+		const vence = new Date(isoHasta.slice(0, 10));
+		const hoy = new Date(new Date().toISOString().slice(0, 10));
+		const restan = Math.round((vence.getTime() - hoy.getTime()) / 86400000);
+		const fecha = vence.toISOString().slice(0, 10).split("-").reverse().join("/");
+		const vencida = restan < 0;
+		return {
+			nueva: false,
+			vencida,
+			hasta: fecha,
+			estado: vencida ? "Error" : restan <= 2 ? "Warning" : "Success",
+			texto: vencida ? (i18n.getText("vigenciaVencida", [fecha]) as string) : (i18n.getText("vigenciaHasta", [fecha, restan]) as string)
+		};
 	}
 
 	/** Clonar: abre una oferta nueva con el mismo cliente y las mismas lineas (regalos recalculados). */

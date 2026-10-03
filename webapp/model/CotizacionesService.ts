@@ -247,3 +247,35 @@ export async function liberarVinItem(modelo: ODataModel, cotizId: string, posnr:
 	// ui5lint-disable-next-line no-deprecated-api -- invoke() existe desde UI5 1.123; el servidor de Socopur y los tipos son 1.120
 	await operacion.execute("$auto", true);
 }
+
+export interface VigenciaGrupo {
+	grupoNo: string;
+	vbelnOferta: string;
+	/** aaaa-mm-dd */
+	vigenciaHasta: string;
+}
+
+export interface ResultadoRenovar {
+	grupos: VigenciaGrupo[];
+	/** Motivo cuando SAP no pudo cambiar la oferta en el guardado (prefijo "[Renovar grupo NN]"); vacio si todo salio bien. */
+	error: string;
+}
+
+/**
+ * renovar sobre una cotizacion ACTIVA: extiende la validez de cada oferta sin pedido (hoy + dias de vigencia de SAP). Los grupos con
+ * pedido se omiten. Si el BAPI falla en el guardado SAP deja el motivo en Cotizacion.Comentario con el prefijo "[Renovar grupo NN]",
+ * por eso se vuelve a leer. Lanza el error si ningun grupo se puede renovar. SIN PROBAR contra SAP desde el front.
+ */
+export async function renovarCotizacion(modelo: ODataModel, cotizId: string): Promise<ResultadoRenovar> {
+	const activa = `/Cotizacion(CotizId=${cotizId},IsActiveEntity=true)`;
+	// ui5lint-disable-next-line no-deprecated-api -- invoke() existe desde UI5 1.123; el servidor de Socopur y los tipos son 1.120
+	await modelo.bindContext(`${activa}/${NS}.renovar(...)`).execute("$auto", true);
+	const leido = (await modelo
+		.bindContext(activa, undefined, { $select: "CotizId,Comentario", $expand: { _Grupo: { $select: "GrupoNo,VbelnOferta,VigenciaHasta", $orderby: "GrupoNo" } }, $$ownRequest: true })
+		.requestObject()) as Cotizacion & { _Grupo?: Pick<Grupo, "GrupoNo" | "VbelnOferta" | "VigenciaHasta">[] };
+	const comentario = leido.Comentario ?? "";
+	return {
+		grupos: (leido._Grupo ?? []).map((g) => ({ grupoNo: g.GrupoNo, vbelnOferta: g.VbelnOferta, vigenciaHasta: g.VigenciaHasta ?? "" })),
+		error: /\[Renovar grupo/.test(comentario) ? comentario : ""
+	};
+}

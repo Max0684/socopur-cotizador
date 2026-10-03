@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { asignarVinItem, ATNAM_VARIANTE, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, liberarVinItem, type GrupoParaGuardar, type OfertaParaGuardar } from "../webapp/model/CotizacionesService.ts";
+import { asignarVinItem, ATNAM_VARIANTE, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, liberarVinItem, renovarCotizacion, type GrupoParaGuardar, type OfertaParaGuardar } from "../webapp/model/CotizacionesService.ts";
 import { crearModeloFalso } from "./helpers/modeloFalso.ts";
 
 function grupo(extra: Partial<GrupoParaGuardar> = {}): GrupoParaGuardar {
@@ -214,4 +214,23 @@ test("liberarVinItem llama la accion liberarVin sobre el item", async () => {
 	const { modelo, llamadas } = modeloVin({});
 	await liberarVinItem(como(modelo), "COT-1", "000010");
 	assert.ok(llamadas[0].endsWith(".liberarVin(...)"));
+});
+
+test("renovarCotizacion llama la accion sobre la cotizacion activa y devuelve la vigencia de cada grupo", async () => {
+	const { modelo, llamadas } = crearModeloFalso({ gruposLeidos: [{ GrupoNo: "01", VbelnOferta: "3100000001", VigenciaHasta: "2026-10-10" } as never], comentario: "" });
+	const r = await renovarCotizacion(como(modelo), "COT-1");
+	assert.ok(llamadas[0].includes("/Cotizacion(CotizId=COT-1,IsActiveEntity=true)/") && llamadas[0].endsWith(".renovar(...)"));
+	assert.deepEqual(r.grupos, [{ grupoNo: "01", vbelnOferta: "3100000001", vigenciaHasta: "2026-10-10" }]);
+	assert.equal(r.error, "");
+});
+
+test("renovarCotizacion devuelve el motivo si SAP no pudo cambiar la oferta en el guardado", async () => {
+	const { modelo } = crearModeloFalso({ gruposLeidos: [], comentario: "[Renovar grupo 01] Documento bloqueado" });
+	const r = await renovarCotizacion(como(modelo), "COT-1");
+	assert.equal(r.error, "[Renovar grupo 01] Documento bloqueado");
+});
+
+test("renovarCotizacion propaga el rechazo de la accion", async () => {
+	const { modelo } = crearModeloFalso({ fallaExecute: ["renovar"] });
+	await assert.rejects(() => renovarCotizacion(como(modelo), "COT-1"), /rechazado/);
 });
