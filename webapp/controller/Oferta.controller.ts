@@ -8,7 +8,7 @@ import { buscarMateriales, cargarSegmentos, disponibilidadPorCentro, materialesD
 import { consultarPrecio } from "com/socopur/cotizador/model/PreciosService";
 import { agruparVehiculos, buscarVehiculos, filtrarVehiculos } from "com/socopur/cotizador/model/VehiculosService";
 import { almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, gruposParaGuardar, modalidadPorDefecto, sectorDeCabecera, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
-import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, renovarCotizacion, type OfertaParaGuardar, type VinAsignado } from "com/socopur/cotizador/model/CotizacionesService";
+import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type VinAsignado } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
 import { cargarModalidades, type ModalidadPantalla } from "com/socopur/cotizador/model/ModalidadesService";
 import { ordenarPorTexto } from "com/socopur/cotizador/model/Orden";
@@ -2572,7 +2572,11 @@ export default class Oferta extends Controller {
 			oferta.setProperty("/vigencia", this.calcularVigencia(new Date().toISOString().slice(0, 10), false));
 			oferta.setProperty("/guardado", { visible: true, texto: i18n.getText("guardadoOk", [numeros.join(", ")]) as string });
 		} catch (error) {
-			MessageBox.error(i18n.getText("guardarError", [this.motivoDeError(error)]) as string);
+			if (error instanceof OfertaEnProcesoError) {
+				MessageBox.information(error.message);
+			} else {
+				MessageBox.error(i18n.getText("guardarError", [this.motivoDeError(error)]) as string);
+			}
 		} finally {
 			vista?.setBusy(false);
 		}

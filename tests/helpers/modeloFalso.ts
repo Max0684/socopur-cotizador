@@ -9,6 +9,8 @@ export interface OpcionesModeloFalso {
 	fallaExecute?: string[];
 	/** Grupos que devuelve la lectura despues de generarOfertas. */
 	gruposLeidos?: { GrupoNo: string; VbelnOferta: string; Estado?: string }[];
+	/** Lecturas sucesivas de los grupos (una por llamada) para simular un grupo en proceso que termina; si se acaba, repite la ultima. */
+	secuenciaGrupos?: { GrupoNo: string; VbelnOferta: string; Estado?: string }[][];
 	/** Comentario de la cotizacion (SAP deja ahi el motivo cuando rechaza). */
 	comentario?: string;
 	/** Lo que devuelve la accion crearPedido (entidad Grupo). */
@@ -70,6 +72,10 @@ export function crearModeloFalso(opciones: OpcionesModeloFalso = {}) {
 							throw new Error("sin lectura");
 						}
 						return opciones.estado ?? {};
+					}
+					if (opciones.secuenciaGrupos?.length) {
+						const grupos = opciones.secuenciaGrupos.length > 1 ? opciones.secuenciaGrupos.shift() : opciones.secuenciaGrupos[0];
+						return { Comentario: opciones.comentario ?? "", _Grupo: grupos };
 					}
 					return { Comentario: opciones.comentario ?? "", _Grupo: opciones.gruposLeidos ?? [] };
 				},

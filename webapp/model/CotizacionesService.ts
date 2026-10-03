@@ -66,6 +66,9 @@ async function crearHijaCtx(modelo: ODataModel, ruta: string, padre: Context, da
 	return contexto;
 }
 
+/** Grupo.Estado de un grupo cuya oferta (o pedido) se esta creando en segundo plano. */
+const ESTADO_EN_PROCESO = "Q";
+
 /** Caracteristica donde asignarVin busca la variante del vehiculo (ItemCar.Atnam). */
 export const ATNAM_VARIANTE = "ZVARIANTE";
 
@@ -76,7 +79,21 @@ export const ATNAM_VARIANTE = "ZVARIANTE";
  * Si algo falla antes de activar, descarta el borrador para no dejar basura.
  * SIN PROBAR contra SAP desde el front: la verificacion es con ?odata=1 y autorizacion del usuario.
  */
-export async function guardarCotizacion(modelo: ODataModel, datos: OfertaParaGuardar): Promise<ResultadoGuardado> {
+export interface EsperaOfertas {
+	/** Cada cuanto se vuelve a leer el estado de los grupos en proceso (ms). */
+	intervaloMs?: number;
+	/** Tiempo maximo de espera (ms). */
+	maximoMs?: number;
+	/** Pausa entre lecturas; se puede reemplazar en las pruebas. */
+	pausa?: (ms: number) => Promise<void>;
+}
+
+/** La oferta se esta creando en segundo plano y no termino en el tiempo de espera: no es un fallo, hay que revisarla despues. */
+export class OfertaEnProcesoError extends Error {}
+
+const pausaReal = (ms: number): Promise<void> => new Promise((resolver) => setTimeout(resolver, ms));
+
+export async function guardarCotizacion(modelo: ODataModel, datos: OfertaParaGuardar, espera: EsperaOfertas = {}): Promise<ResultadoGuardado> {
 	const raiz = modelo.bindList("/Cotizacion");
 	const cabecera = raiz.create(
 		{ Kunnr: datos.kunnr, Waers: datos.moneda, Comentario: datos.comentario, ...(datos.zterm ? { Zterm: datos.zterm } : {}) },
@@ -127,9 +144,22 @@ export async function guardarCotizacion(modelo: ODataModel, datos: OfertaParaGua
 	const activa = `/Cotizacion(CotizId=${cotizId},IsActiveEntity=true)`;
 	// ui5lint-disable-next-line no-deprecated-api -- invoke() existe desde UI5 1.123; el servidor de Socopur y los tipos son 1.120
 	await modelo.bindContext(`${activa}/${NS}.generarOfertas(...)`).execute("$auto", true);
-	const leido = (await modelo
-		.bindContext(activa, undefined, { $select: "CotizId,Comentario", $expand: { _Grupo: { $select: "GrupoNo,VbelnOferta,Estado", $orderby: "GrupoNo" } } })
-		.requestObject()) as Cotizacion & { _Grupo?: Pick<Grupo, "GrupoNo" | "VbelnOferta" | "Estado">[] };
+	const leer = async () =>
+		(await modelo
+			.bindContext(activa, undefined, { $select: "CotizId,Comentario", $expand: { _Grupo: { $select: "GrupoNo,VbelnOferta,Estado", $orderby: "GrupoNo" } }, $$ownRequest: true })
+			.requestObject()) as Cotizacion & { _Grupo?: Pick<Grupo, "GrupoNo" | "VbelnOferta" | "Estado">[] };
+	let leido = await leer();
+	// Los grupos con vehiculo se crean en segundo plano en SAP (Estado Q = oferta en proceso): se espera a que terminen.
+	const intervalo = espera.intervaloMs ?? 2500;
+	const maximo = espera.maximoMs ?? 60000;
+	const pausa = espera.pausa ?? pausaReal;
+	for (let transcurrido = 0; (leido._Grupo ?? []).some((g) => g.Estado === ESTADO_EN_PROCESO) && transcurrido < maximo; transcurrido += intervalo) {
+		await pausa(intervalo);
+		leido = await leer();
+	}
+	if ((leido._Grupo ?? []).some((g) => g.Estado === ESTADO_EN_PROCESO)) {
+		throw new OfertaEnProcesoError("La oferta del vehiculo sigue en proceso en SAP. Revisala en unos minutos desde la lista de ofertas.");
+	}
 	const ofertas = (leido._Grupo ?? []).map((g) => ({ grupoNo: g.GrupoNo, vbelnOferta: g.VbelnOferta }));
 	// generarOfertas no falla cuando SAP rechaza la oferta: deja el motivo en Comentario y el grupo sin numero.
 	if (ofertas.length === 0 || ofertas.some((o) => !o.vbelnOferta)) {

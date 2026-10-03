@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { asignarVinItem, ATNAM_VARIANTE, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, liberarVinItem, renovarCotizacion, type GrupoParaGuardar, type OfertaParaGuardar } from "../webapp/model/CotizacionesService.ts";
+import { asignarVinItem, ATNAM_VARIANTE, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, OfertaEnProcesoError, liberarVinItem, renovarCotizacion, type GrupoParaGuardar, type OfertaParaGuardar } from "../webapp/model/CotizacionesService.ts";
 import { crearModeloFalso } from "./helpers/modeloFalso.ts";
 
 function grupo(extra: Partial<GrupoParaGuardar> = {}): GrupoParaGuardar {
@@ -233,4 +233,31 @@ test("renovarCotizacion devuelve el motivo si SAP no pudo cambiar la oferta en e
 test("renovarCotizacion propaga el rechazo de la accion", async () => {
 	const { modelo } = crearModeloFalso({ fallaExecute: ["renovar"] });
 	await assert.rejects(() => renovarCotizacion(como(modelo), "COT-1"), /rechazado/);
+});
+
+const sinPausa = { intervaloMs: 1, maximoMs: 5, pausa: async () => {} };
+
+test("guardarCotizacion espera a que termine un grupo en proceso (vehiculo) y devuelve su oferta", async () => {
+	const { modelo } = crearModeloFalso({
+		secuenciaGrupos: [[{ GrupoNo: "01", VbelnOferta: "", Estado: "Q" }], [{ GrupoNo: "01", VbelnOferta: "", Estado: "Q" }], [{ GrupoNo: "01", VbelnOferta: "3100000009", Estado: "O" }]]
+	});
+	const r = await guardarCotizacion(como(modelo), oferta(), { intervaloMs: 1, maximoMs: 100, pausa: async () => {} });
+	assert.deepEqual(r.ofertas, [{ grupoNo: "01", vbelnOferta: "3100000009" }]);
+});
+
+test("guardarCotizacion: si el grupo sigue en proceso al agotar la espera lo dice y no inventa un numero", async () => {
+	const { modelo } = crearModeloFalso({ secuenciaGrupos: [[{ GrupoNo: "01", VbelnOferta: "", Estado: "Q" }]] });
+	await assert.rejects(() => guardarCotizacion(como(modelo), oferta(), sinPausa), (e: Error) => e instanceof OfertaEnProcesoError && /sigue en proceso/.test(e.message));
+});
+
+test("guardarCotizacion: un grupo con error de segundo plano lanza el motivo del Comentario", async () => {
+	const { modelo } = crearModeloFalso({ secuenciaGrupos: [[{ GrupoNo: "01", VbelnOferta: "", Estado: "E" }]], comentario: "[Oferta grupo 01] material sin precio" });
+	await assert.rejects(() => guardarCotizacion(como(modelo), oferta(), sinPausa), /\[Oferta grupo 01\] material sin precio/);
+});
+
+test("guardarCotizacion: los repuestos (sin grupo en proceso) no esperan", async () => {
+	let pausas = 0;
+	const { modelo } = crearModeloFalso({ gruposLeidos: [{ GrupoNo: "01", VbelnOferta: "3100000001", Estado: "O" }] });
+	await guardarCotizacion(como(modelo), oferta(), { pausa: async () => { pausas++; } });
+	assert.equal(pausas, 0);
 });
