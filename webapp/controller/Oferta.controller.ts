@@ -359,10 +359,17 @@ export default class Oferta extends Controller {
 		b.setProperty("/avisoEjemplo", this.i18n().getText(this.usarOData() ? "catalogoEjemploAviso" : "catalogoEjemploAvisoLocal") as string);
 	}
 
+	/** Reinicia los filtros de busqueda sin perder de donde vienen los materiales (SAP o ejemplo) ni su aviso. */
+	private reiniciarBusqueda(inicial: Record<string, unknown>): void {
+		const b = this.modeloBusqueda();
+		const origen = { ejemplo: b.getProperty("/ejemplo"), avisoEjemplo: b.getProperty("/avisoEjemplo") };
+		b.setData({ ...inicial, ...origen });
+	}
+
 	/** Al cambiar de tipo se limpian los segmentos (como hoy) y se precargan los del perfil. */
 	public onCambiaTipo(): void {
 		const tipo = this.modeloBusqueda().getProperty("/tipo") as string;
-		this.modeloBusqueda().setData(this.busquedaInicial(tipo, true));
+		this.reiniciarBusqueda(this.busquedaInicial(tipo, true));
 		this.limpiarSeleccion();
 	}
 
@@ -372,7 +379,7 @@ export default class Oferta extends Controller {
 
 	public onLimpiar(): void {
 		const tipo = this.modeloBusqueda().getProperty("/tipo") as string;
-		this.modeloBusqueda().setData(this.busquedaInicial(tipo, false));
+		this.reiniciarBusqueda(this.busquedaInicial(tipo, false));
 		this.limpiarSeleccion();
 	}
 
