@@ -1,5 +1,5 @@
-import ODataModel from "sap/ui/model/odata/v4/ODataModel";
-import { ordenarPorTexto } from "com/socopur/cotizador/model/Orden";
+import type ODataModel from "sap/ui/model/odata/v4/ODataModel";
+import { ordenarPorTexto } from "./Orden";
 
 /** Fila de la vista YI_COTIZ_CLIENTE (cliente por area de ventas). */
 interface ClienteSapFila {

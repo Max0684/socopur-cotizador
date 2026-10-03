@@ -1,4 +1,4 @@
-import JSONModel from "sap/ui/model/json/JSONModel";
+import type JSONModel from "sap/ui/model/json/JSONModel";
 
 /** Comparador alfabetico en espanol: ignora mayusculas y tildes y ordena los numeros por su valor (2 antes que 10). */
 const colador = new Intl.Collator("es", { sensitivity: "base", numeric: true });
