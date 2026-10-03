@@ -2,7 +2,8 @@ import Controller from "sap/ui/core/mvc/Controller";
 import ODataModel from "sap/ui/model/odata/v4/ODataModel";
 import { cargarDetalleOferta } from "com/socopur/cotizador/model/OfertasService";
 import type { GrupoEstado } from "com/socopur/cotizador/model/odata/Entidades";
-import { almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, gruposParaGuardar, modalidadPorDefecto, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
+import { buscarMateriales, materialesDisponibles } from "com/socopur/cotizador/model/MaterialesService";
+import { almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, gruposParaGuardar, modalidadPorDefecto, sectorDeCabecera, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
 import { crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, type OfertaParaGuardar } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
 import { cargarModalidades, type ModalidadPantalla } from "com/socopur/cotizador/model/ModalidadesService";
@@ -309,6 +310,22 @@ export default class Oferta extends Controller {
 		const tipo = (this.modeloMock().getProperty("/perfil/busqueda/tipo") as string) ?? "repuestos";
 		this.modeloBusqueda().setData(this.busquedaInicial(tipo, true));
 		this.dialogoBusqueda.open();
+		void this.definirOrigenDeMateriales();
+	}
+
+	/**
+	 * Con ?odata=1 y la entidad Material en el servicio, la busqueda de repuestos va a SAP. Si no, usa el catalogo de
+	 * EJEMPLO (mock.json) y lo avisa en pantalla para que nadie lo confunda con materiales o precios reales.
+	 */
+	private async definirOrigenDeMateriales(): Promise<void> {
+		const b = this.modeloBusqueda();
+		let sap = false;
+		if (this.usarOData()) {
+			const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel | undefined;
+			sap = odata ? await materialesDisponibles(odata) : false;
+		}
+		b.setProperty("/ejemplo", !sap);
+		b.setProperty("/avisoEjemplo", this.i18n().getText(this.usarOData() ? "catalogoEjemploAviso" : "catalogoEjemploAvisoLocal") as string);
 	}
 
 	/** Al cambiar de tipo se limpian los segmentos (como hoy) y se precargan los del perfil. */
@@ -332,7 +349,7 @@ export default class Oferta extends Controller {
 	 * Igual que el programa actual: no busca sin al menos un filtro, y se busca con el boton.
 	 * Con el catalogo real (decenas de miles de materiales) una busqueda en vivo no es viable.
 	 */
-	public onBuscar(): void {
+	public async onBuscar(): Promise<void> {
 		const b = this.modeloBusqueda();
 		const g = (campo: string): string => String(b.getProperty(`/${campo}`) ?? "").trim();
 		const tipo = g("tipo");
@@ -348,6 +365,11 @@ export default class Oferta extends Controller {
 		if (!hayFiltro) {
 			b.setProperty("/vehiculos", []);
 			b.setProperty("/repuestos", []);
+			return;
+		}
+
+		if (tipo !== "vehiculos" && b.getProperty("/ejemplo") === false) {
+			await this.buscarRepuestosEnSap(g);
 			return;
 		}
 
@@ -394,6 +416,32 @@ export default class Oferta extends Controller {
 		// Resultados en orden alfabetico por descripcion.
 		const clave = tipo === "vehiculos" ? "/vehiculos" : "/repuestos";
 		b.setProperty(clave, ordenarPorTexto(b.getProperty(clave) as { denominacion: string }[], (x) => x.denominacion));
+	}
+
+	/** Repuestos desde SAP (entidad Material): organizacion y canal del perfil, mas los filtros de la pantalla. */
+	private async buscarRepuestosEnSap(g: (campo: string) => string): Promise<void> {
+		const b = this.modeloBusqueda();
+		const mock = this.modeloMock();
+		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel;
+		b.setProperty("/cargando", true);
+		try {
+			const filas = await buscarMateriales(odata, {
+				vkorg: String(mock.getProperty("/perfil/busqueda/orgs/repuestos") ?? "1103"),
+				vtweg: String(mock.getProperty("/perfil/busqueda/canal") ?? "11"),
+				linea: g("linea"),
+				clase: g("clase"),
+				familia: g("familia"),
+				codigo: g("codigo"),
+				descripcion: g("descripcion"),
+				texto: g("texto")
+			}, sectorDeCabecera);
+			b.setProperty("/repuestos", filas);
+		} catch (error) {
+			b.setProperty("/repuestos", []);
+			MessageBox.error(this.i18n().getText("busquedaMaterialError", [(error as Error).message]) as string);
+		} finally {
+			b.setProperty("/cargando", false);
+		}
 	}
 
 	private limpiarSeleccion(): void {

@@ -16,6 +16,12 @@
 					type="Information"
 					showIcon="true"
 					class="sapUiSmallMarginBottom" />
+				<MessageStrip
+					visible="{busqueda>/ejemplo}"
+					text="{busqueda>/avisoEjemplo}"
+					type="Warning"
+					showIcon="true"
+					class="sapUiSmallMarginBottom" />
 
 				<!-- Tipo de busqueda: hoy solo hay dos (Repuestos y Vehiculos) -->
 				<HBox alignItems="Center" class="sapUiSmallMarginBottom">
