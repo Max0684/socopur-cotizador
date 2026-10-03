@@ -139,6 +139,7 @@
 					<columns>
 						<Column width="8rem"><Text text="{i18n>colMaterial}" /></Column>
 						<Column><Text text="{i18n>colDescripcion}" /></Column>
+						<Column width="11rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colVin}" /></Column>
 						<Column width="7rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colSector}" /></Column>
 						<Column width="6rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colColor}" /></Column>
 						<Column width="3.5rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colAnio}" /></Column>
@@ -153,6 +154,7 @@
 							<cells>
 								<ObjectIdentifier title="{busqueda>material}" />
 								<Text text="{busqueda>denominacion}" />
+								<Text text="{busqueda>vin}" />
 								<Text text="{busqueda>sectorTxt}" />
 								<Text text="{busqueda>color}" />
 								<Text text="{busqueda>anio}" />
@@ -164,8 +166,9 @@
 									text="{busqueda>stockOtros}"
 									state="{= ${busqueda>stockOtros} > 0 ? 'Information' : 'None' }" />
 								<VBox alignItems="End">
-									<ObjectNumber number="{path: 'busqueda>precioUsd', formatter: '.formatMonto'}" unit="USD" textAlign="End" />
-									<Text text="{path: 'busqueda>precioUsd', formatter: '.formatPen'}" textAlign="End" />
+									<ObjectNumber visible="{= !${busqueda>sinPrecio} }" number="{path: 'busqueda>precioUsd', formatter: '.formatMonto'}" unit="USD" textAlign="End" />
+									<Text visible="{= !${busqueda>sinPrecio} }" text="{path: 'busqueda>precioUsd', formatter: '.formatPen'}" textAlign="End" />
+									<Text visible="{busqueda>sinPrecio}" text="{i18n>precioAlElegir}" textAlign="End" />
 								</VBox>
 								<Button icon="sap-icon://inventory" type="Transparent" tooltip="{i18n>verStock}" press=".onVerStockFila" />
 							</cells>
