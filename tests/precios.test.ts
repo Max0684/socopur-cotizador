@@ -57,3 +57,9 @@ test("consultarPrecio lanza error si el servicio no devuelve filas", async () =>
 	const { modelo } = crearModeloFalso({ precios: [] });
 	await assert.rejects(() => consultarPrecio(como(modelo), consulta), { message: "SAP no devolvio precio" });
 });
+
+test("filtroPrecio agrega Varcond solo si es un vehiculo", () => {
+	const base = { kunnr: "1", vkorg: "1101", vtweg: "10", spart: "10", auart: "Z100", matnr: "DU200Z0", werks: "1101", cantidad: 1, waers: "PEN" as const };
+	assert.ok(!filtroPrecio(base).includes("Varcond"));
+	assert.ok(filtroPrecio({ ...base, varcond: "DU200Z0CBU2025ANA" }).endsWith("and Varcond eq 'DU200Z0CBU2025ANA'"));
+});

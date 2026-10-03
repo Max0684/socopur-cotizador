@@ -5,6 +5,7 @@ import type { GrupoEstado } from "com/socopur/cotizador/model/odata/Entidades";
 import { leerCentros, leerOficinas } from "com/socopur/cotizador/model/CatalogosService";
 import { buscarMateriales, cargarSegmentos, disponibilidadPorCentro, materialesDisponibles, type Disponibilidad } from "com/socopur/cotizador/model/MaterialesService";
 import { consultarPrecio } from "com/socopur/cotizador/model/PreciosService";
+import { buscarVehiculos, filtrarVehiculos } from "com/socopur/cotizador/model/VehiculosService";
 import { almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, gruposParaGuardar, modalidadPorDefecto, sectorDeCabecera, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
 import { crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, type OfertaParaGuardar } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
@@ -36,6 +37,8 @@ import { Route$PatternMatchedEvent } from "sap/ui/core/routing/Route";
 
 /** Clase de oferta con la que se consulta el precio al elegir un material (todas las modalidades de repuestos usan Z300). */
 const CLASE_OFERTA_PRECIO = "Z300";
+/** Clase de oferta con la que se pide el precio de un vehiculo (la tabla de modalidades dice Z100 para todas las VEH_*). */
+const CLASE_OFERTA_PRECIO_VEH = "Z100";
 
 interface Cliente {
 	/** Numero de cliente SAP (solo en clientes leidos del servicio). */
@@ -68,6 +71,14 @@ interface LineaMock {
 }
 
 interface Vehiculo {
+	/** Fila leida de la entidad Vehiculo de SAP (no del catalogo de ejemplo). */
+	origen?: string;
+	vin?: string;
+	/** Variante (modelo + condicion + ano + color): con ella se pide el precio. */
+	variante?: string;
+	/** Centro donde esta el vehiculo. */
+	centro?: string;
+	disponibilidad?: string;
 	material: string;
 	denominacion: string;
 	marca: string;
@@ -183,6 +194,10 @@ interface Linea extends LineaMock {
 	impuesto?: number;
 	iscPct?: number;
 	unica?: boolean;
+	/** Solo vehiculos de SAP: variante, centro y VIN del vehiculo elegido. */
+	variante?: string;
+	centroVeh?: string;
+	vin?: string;
 	uid?: string;
 	bonificacion?: boolean;
 	/** Regalo de promocion de repuestos (ZNA0/Zeta): no tiene talla. */
@@ -384,8 +399,8 @@ export default class Oferta extends Controller {
 			return;
 		}
 
-		if (tipo !== "vehiculos" && b.getProperty("/ejemplo") === false) {
-			await this.buscarRepuestosEnSap(g);
+		if (b.getProperty("/ejemplo") === false) {
+			await (tipo === "vehiculos" ? this.buscarVehiculosEnSap(g) : this.buscarRepuestosEnSap(g));
 			return;
 		}
 
@@ -447,6 +462,31 @@ export default class Oferta extends Controller {
 			this.refrescarListas();
 		} catch (error) {
 			MessageToast.show(this.i18n().getText("busquedaMaterialError", [(error as Error).message]) as string);
+		}
+	}
+
+	/** Vehiculos vendibles desde SAP (entidad Vehiculo): organizacion de vehiculos, canal y centro del perfil, mas los filtros de la pantalla. */
+	private async buscarVehiculosEnSap(g: (campo: string) => string): Promise<void> {
+		const b = this.modeloBusqueda();
+		const mock = this.modeloMock();
+		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel;
+		b.setProperty("/cargando", true);
+		try {
+			const filas = await buscarVehiculos(odata, {
+				vkorg: String(mock.getProperty("/perfil/busqueda/orgs/vehiculos") ?? "1101"),
+				vtweg: String(mock.getProperty("/perfil/busqueda/canal") ?? "11"),
+				werks: String(this.modeloOferta().getProperty("/perfil/centro") ?? ""),
+				color: g("color"),
+				anio: g("anio"),
+				condicion: g("condicion")
+			});
+			const visibles = filtrarVehiculos(filas, { codigo: g("codigo"), descripcion: g("descripcion"), texto: g("texto"), clase: g("clase") });
+			b.setProperty("/vehiculos", ordenarPorTexto(visibles, (v) => v.denominacion));
+		} catch (error) {
+			b.setProperty("/vehiculos", []);
+			MessageBox.error(this.i18n().getText("busquedaMaterialError", [(error as Error).message]) as string);
+		} finally {
+			b.setProperty("/cargando", false);
 		}
 	}
 
@@ -519,7 +559,7 @@ export default class Oferta extends Controller {
 			.map((objeto) => ({
 				...objeto,
 				tipo: esVehiculo ? "vehiculos" : "repuestos",
-				detalle: esVehiculo ? `${objeto.color} · ${objeto.anio} · ${objeto.condicion}` : objeto.marca,
+				detalle: esVehiculo ? `${objeto.color} · ${objeto.anio} · ${objeto.condicion}${objeto.vin ? ` · ${objeto.vin}` : ""}` : objeto.marca,
 				stockTexto: esVehiculo
 					? `${objeto.stockMio} ${i18n.getText("enTuAlmacen")} · ${objeto.stockOtros} ${i18n.getText("otrosAlmacenes")}`
 					: `${objeto.disponible} ${i18n.getText("colDisponible")} (${objeto.comprometido} ${i18n.getText("colComprometido")})`
@@ -551,7 +591,10 @@ export default class Oferta extends Controller {
 		try {
 			await Promise.all(
 				delSap.map(async (m) => {
-					const base = { kunnr, vkorg: m.orgVentas, vtweg: canal, spart: m.sectorOferta, auart: CLASE_OFERTA_PRECIO, matnr: m.material, werks: centro, cantidad };
+					// Vehiculo: Matnr = modelo, el precio sale de la variante y el centro es el del vehiculo.
+					const base = m.variante
+						? { kunnr, vkorg: m.orgVentas, vtweg: canal, spart: m.sectorOferta, auart: CLASE_OFERTA_PRECIO_VEH, matnr: m.material, werks: m.centro ?? centro, cantidad, varcond: m.variante }
+						: { kunnr, vkorg: m.orgVentas, vtweg: canal, spart: m.sectorOferta, auart: CLASE_OFERTA_PRECIO, matnr: m.material, werks: centro, cantidad };
 					const [pen, usd] = await Promise.all([consultarPrecio(odata, { ...base, waers: "PEN" }), consultarPrecio(odata, { ...base, waers: "USD" })]);
 					m.precioPenSap = pen.precioUnitario;
 					m.precioUsd = usd.precioUnitario;
@@ -725,7 +768,8 @@ export default class Oferta extends Controller {
 	private async repreciarLineasSap(): Promise<void> {
 		const oferta = this.modeloOferta();
 		const lineas = (oferta.getProperty("/lineas") as Linea[]) ?? [];
-		const delSap = lineas.filter((l) => l.precioPenSap !== undefined && !l.bonificacion);
+		// Los vehiculos son de a una unidad: su precio no cambia con la cantidad.
+		const delSap = lineas.filter((l) => l.precioPenSap !== undefined && !l.bonificacion && !l.variante);
 		const kunnr = (oferta.getProperty("/cliente") as Cliente | null)?.kunnr;
 		if (delSap.length === 0 || !kunnr || !this.usarOData()) {
 			return;
@@ -830,7 +874,8 @@ export default class Oferta extends Controller {
 				precio: final,
 				iscPct: m.iscPct ?? 0,
 				total: Math.round(cantidad * final * 100) / 100,
-				...(m.origen === "sap" ? { precioPenSap: m.precioPenSap, precioUsdSap: m.precioUsd } : {})
+				...(m.origen === "sap" ? { precioPenSap: m.precioPenSap, precioUsdSap: m.precioUsd } : {}),
+				...(m.tipo === "vehiculos" && m.variante ? { variante: m.variante, centroVeh: m.centro, vin: m.vin } : {})
 			});
 			if (m.tipo === "vehiculos") {
 				this.agregarBonificaciones(lineas, uid, m);
@@ -1491,7 +1536,8 @@ export default class Oferta extends Controller {
 		const condicionUsd = this.redondear(listaUsd * (m.condicionPct / 100));
 		const promoUsd = m.promocion?.monto ?? 0;
 		const finalUsd = this.redondear(listaUsd - condicionUsd - promoUsd);
-		const final = this.aMoneda(finalUsd);
+		// Con precio real de SAP, en soles se usa el que calculo SAP (no el tipo de cambio del perfil).
+		const final = m.origen === "sap" && m.precioPenSap !== undefined && oferta.getProperty("/perfil/moneda") !== "USD" ? m.precioPenSap : this.aMoneda(finalUsd);
 		// El precio de lista de vehiculos ya incluye el ISC; con cliente SAP separa neto + ISC (+ IGV, 0 en las pruebas de DEV).
 		const hayCliente = !!oferta.getProperty("/cliente");
 		const iscPct = m.iscPct ?? 0;

@@ -14,6 +14,8 @@ export interface ConsultaPrecio {
 	waers: "PEN" | "USD";
 	/** aaaa-mm-dd; vacia = hoy. */
 	fecha?: string;
+	/** Solo vehiculos: variante (modelo + condicion + ano + color); el precio sale de ella, con Matnr = el modelo. */
+	varcond?: string;
 }
 
 /** Precio real de SAP: en la moneda pedida SAP ya convierte, no hace falta un tipo de cambio en el front. */
@@ -44,6 +46,9 @@ export function filtroPrecio(c: ConsultaPrecio): string {
 	];
 	if (c.fecha) {
 		partes.push(`Fecha eq ${c.fecha}`);
+	}
+	if (c.varcond) {
+		partes.push(`Varcond eq '${comillas(c.varcond)}'`);
 	}
 	return partes.join(" and ");
 }
