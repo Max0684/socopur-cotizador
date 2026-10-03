@@ -25,6 +25,7 @@ export interface FilaVehiculoSap {
 	Matnr: string;
 	Maktx: string;
 	Werks: string;
+	Lgort?: string;
 	Avail: string;
 	AvailTxt: string;
 	Sdsta: string;
@@ -78,6 +79,8 @@ export interface VehiculoSap {
 	vins: string[];
 	variante: string;
 	centro: string;
+	/** Almacen donde esta el stock del vehiculo. */
+	almacen: string;
 	disponibilidad: string;
 }
 
@@ -132,6 +135,7 @@ export function filaDeVehiculo(f: FilaVehiculoSap): VehiculoSap {
 		vins: [f.Vhvin],
 		variante: f.Variante,
 		centro: f.Werks,
+		almacen: f.Lgort ?? "",
 		disponibilidad: f.AvailTxt
 	};
 }

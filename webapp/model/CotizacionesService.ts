@@ -1,6 +1,6 @@
 import type ODataModel from "sap/ui/model/odata/v4/ODataModel";
 import type Context from "sap/ui/model/odata/v4/Context";
-import type { Cotizacion, Grupo, GrupoEstado, Item } from "./odata/Entidades";
+import type { Cotizacion, Grupo, GrupoEstado, Item, ItemCar } from "./odata/Entidades";
 
 const NS = "com.sap.gateway.srvd_a2x.yui_cotiz_srv.v0001";
 
@@ -12,6 +12,8 @@ export interface LineaParaGuardar {
 	centro: string;
 	almacen: string;
 	precio: number;
+	/** Solo vehiculos: se guarda como caracteristica ZVARIANTE de la posicion (asignarVin la usa para proponer el VIN). */
+	variante?: string;
 }
 
 /** Un grupo del carrito = una oferta SAP (organizacion de ventas + sector). */
@@ -58,6 +60,15 @@ async function crearHija<T>(modelo: ODataModel, ruta: string, padre: Context, da
 	return contexto.getObject() as T;
 }
 
+async function crearHijaCtx(modelo: ODataModel, ruta: string, padre: Context, datos: Record<string, unknown>): Promise<Context> {
+	const contexto = modelo.bindList(ruta, padre).create(datos, true);
+	await contexto.created();
+	return contexto;
+}
+
+/** Caracteristica donde asignarVin busca la variante del vehiculo (ItemCar.Atnam). */
+export const ATNAM_VARIANTE = "ZVARIANTE";
+
 /**
  * Guarda el carrito en SAP, en el mismo orden que la prueba verificada (VSP/prueba-cotizacion-completa.ps1):
  * 1) cabecera en borrador, 2) un grupo por oferta, 3) las lineas de cada grupo, 4) Activate, 5) generarOfertas,
@@ -86,7 +97,7 @@ export async function guardarCotizacion(modelo: ODataModel, datos: OfertaParaGua
 				Modalidad: g.modalidad
 			});
 			for (const l of g.lineas) {
-				await crearHija<Item>(modelo, "_Item", cabecera, {
+				const item = await crearHijaCtx(modelo, "_Item", cabecera, {
 					GrupoNo: grupo.GrupoNo,
 					Matnr: l.material,
 					Cantidad: decimal(l.cantidad),
@@ -96,6 +107,10 @@ export async function guardarCotizacion(modelo: ODataModel, datos: OfertaParaGua
 					PrecioLista: decimal(l.precio),
 					Waers: datos.moneda
 				});
+				if (l.variante) {
+					const posnr = (item.getObject() as Item).Posnr;
+					await crearHija<ItemCar>(modelo, "_Car", item, { Posnr: posnr, Atnam: ATNAM_VARIANTE, Atwrt: l.variante });
+				}
 			}
 		}
 		// If-Match: * (ignorar ETag), igual que la prueba verificada.
@@ -173,4 +188,62 @@ async function descartarBorrador(modelo: ODataModel, cabecera: Context): Promise
 	} catch {
 		// el borrador queda en SAP; se limpia desde la aplicacion de borradores
 	}
+}
+
+/** VIN asignado a una posicion de vehiculo (Item.Vhcle y los datos del vehiculo que expone el servicio). */
+export interface VinAsignado {
+	posnr: string;
+	material: string;
+	vhcle: string;
+	vin: string;
+	color: string;
+	variante: string;
+}
+
+const claveItem = (cotizId: string, posnr: string): string => `/Item(CotizId=${cotizId},Posnr='${posnr.replace(/'/g, "''")}',IsActiveEntity=true)`;
+
+function vinDeItem(i: Partial<Item> & { Vhvin?: string; ColorTxt?: string; Color?: string; Variante?: string }): VinAsignado {
+	return {
+		posnr: String(i.Posnr ?? ""),
+		material: String(i.Matnr ?? ""),
+		vhcle: String(i.Vhcle ?? ""),
+		vin: String(i.Vhvin ?? ""),
+		color: String(i.ColorTxt || i.Color || ""),
+		variante: String(i.Variante ?? "")
+	};
+}
+
+/** Items del grupo que son vehiculos de SAP (tienen variante guardada) con su VIN actual (vacio si aun no se asigno). */
+export async function leerVinsGrupo(modelo: ODataModel, cotizId: string, grupoNo: string): Promise<VinAsignado[]> {
+	const filtro = `GrupoNo eq '${grupoNo.replace(/'/g, "''")}'`;
+	const lista = modelo.bindList(`/Cotizacion(CotizId=${cotizId},IsActiveEntity=true)/_Item`, undefined, undefined, undefined, {
+		$filter: filtro,
+		$select: "Posnr,Matnr,Vhcle,Vhvin,Color,ColorTxt,Variante,Mtart",
+		$orderby: "Posnr"
+	});
+	const contextos = await lista.requestContexts(0, 200);
+	return contextos
+		.map((c) => c.getObject() as Item & { Mtart?: string })
+		.filter((i) => i.Mtart === "ZVEH")
+		.map(vinDeItem);
+}
+
+/**
+ * asignarVin sobre un Item de una cotizacion ACTIVA con pedido creado. Sin vhcle el sistema propone el VIN mas antiguo del mismo
+ * modelo, centro y variante; con vhcle se valida el elegido. Siempre se manda el cuerpo, aunque vaya vacio.
+ * Un rechazo de SAP llega como error HTTP con el mensaje de negocio. SIN PROBAR contra SAP desde el front.
+ */
+export async function asignarVinItem(modelo: ODataModel, cotizId: string, posnr: string, vhcle?: string): Promise<VinAsignado> {
+	const operacion = modelo.bindContext(`${claveItem(cotizId, posnr)}/${NS}.asignarVin(...)`);
+	operacion.setParameter("Vhcle", vhcle ?? "");
+	// ui5lint-disable-next-line no-deprecated-api -- invoke() existe desde UI5 1.123; el servidor de Socopur y los tipos son 1.120
+	await operacion.execute("$auto", true);
+	return vinDeItem(operacion.getBoundContext().getObject() as Item);
+}
+
+/** liberarVin: libera el VIN (el bloqueo pasa a L) para poder asignar otro. Usar siempre antes de borrar una linea con VIN. */
+export async function liberarVinItem(modelo: ODataModel, cotizId: string, posnr: string): Promise<void> {
+	const operacion = modelo.bindContext(`${claveItem(cotizId, posnr)}/${NS}.liberarVin(...)`);
+	// ui5lint-disable-next-line no-deprecated-api -- invoke() existe desde UI5 1.123; el servidor de Socopur y los tipos son 1.120
+	await operacion.execute("$auto", true);
 }

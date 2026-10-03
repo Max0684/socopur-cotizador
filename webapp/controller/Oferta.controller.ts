@@ -7,7 +7,7 @@ import { buscarMateriales, cargarSegmentos, disponibilidadPorCentro, materialesD
 import { consultarPrecio } from "com/socopur/cotizador/model/PreciosService";
 import { agruparVehiculos, buscarVehiculos, filtrarVehiculos } from "com/socopur/cotizador/model/VehiculosService";
 import { almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, gruposParaGuardar, modalidadPorDefecto, sectorDeCabecera, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
-import { crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, type OfertaParaGuardar } from "com/socopur/cotizador/model/CotizacionesService";
+import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, type OfertaParaGuardar, type VinAsignado } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
 import { cargarModalidades, type ModalidadPantalla } from "com/socopur/cotizador/model/ModalidadesService";
 import { ordenarPorTexto } from "com/socopur/cotizador/model/Orden";
@@ -79,8 +79,9 @@ interface Vehiculo {
 	precioPenSap?: number;
 	/** Variante (modelo + condicion + ano + color): con ella se pide el precio. */
 	variante?: string;
-	/** Centro donde esta el vehiculo. */
+	/** Centro y almacen donde esta el vehiculo. */
 	centro?: string;
+	almacen?: string;
 	disponibilidad?: string;
 	material: string;
 	denominacion: string;
@@ -200,6 +201,7 @@ interface Linea extends LineaMock {
 	/** Solo vehiculos de SAP: variante, centro y VIN del vehiculo elegido. */
 	variante?: string;
 	centroVeh?: string;
+	almacenVeh?: string;
 	vin?: string;
 	uid?: string;
 	bonificacion?: boolean;
@@ -923,7 +925,7 @@ export default class Oferta extends Controller {
 				iscPct: m.iscPct ?? 0,
 				total: Math.round(cantidad * final * 100) / 100,
 				...(m.origen === "sap" ? { precioPenSap: m.precioPenSap, precioUsdSap: m.precioUsd } : {}),
-				...(m.tipo === "vehiculos" && m.variante ? { variante: m.variante, centroVeh: m.centro, vin: m.vin } : {})
+				...(m.tipo === "vehiculos" && m.variante ? { variante: m.variante, centroVeh: m.centro, almacenVeh: m.almacen, vin: m.vin } : {})
 			});
 			if (m.tipo === "vehiculos") {
 				this.agregarBonificaciones(lineas, uid, m);
@@ -1903,7 +1905,8 @@ export default class Oferta extends Controller {
 		const oferta = this.modeloOferta();
 		const lineas = (oferta.getProperty("/lineas") as Linea[]) ?? [];
 		const vehiculos = lineas.filter((l) => this.esVehiculo(l));
-		if (!vehiculos.length) {
+		// Vehiculos reales de SAP: no hay dialogo, SAP asigna el VIN (asignarVin) al crear el pedido.
+		if (!vehiculos.length || (this.usarOData() && vehiculos.every((l) => !!l.variante))) {
 			this.crearPedidos([]);
 			return;
 		}
@@ -2005,7 +2008,7 @@ export default class Oferta extends Controller {
 	private crearPedidos(asignaciones: { material: string; vin: string; hasta: string }[]): void {
 		const guardadas = (this.modeloOferta().getProperty("/ofertasGuardadas") as OfertaGuardada[]) ?? [];
 		const real =
-			this.usarOData() && guardadas.length > 0 && guardadas.every((o) => o.cotizId && o.grupoNo && !o.lineas.some((l) => this.esVehiculo(l)));
+			this.usarOData() && guardadas.length > 0 && guardadas.every((o) => o.cotizId && o.grupoNo && !o.lineas.some((l) => this.esVehiculo(l) && !l.variante));
 		if (real) {
 			void this.crearPedidosSap(guardadas);
 			return;
@@ -2089,7 +2092,13 @@ export default class Oferta extends Controller {
 				numeros.push(pedido.vbelnPedido);
 				// Estado REAL leido de SAP (vista GrupoEstado sobre VBAK); si no se puede leer, se dice que no hay informacion.
 				const real = await leerEstadoPedido(odata, o.cotizId as string, o.grupoNo as string);
-				filas.push(this.filaPedidoReal(real, pedido.vbelnPedido, o.numero, o.titulo, o.clasePedido ?? ""));
+				const base = this.filaPedidoReal(real, pedido.vbelnPedido, o.numero, o.titulo, o.clasePedido ?? "");
+				const vins = await this.asignarVinsDelGrupo(odata, o.cotizId as string, o.grupoNo as string);
+				if (vins.length === 0) {
+					filas.push(base);
+				}
+				// Una fila por vehiculo, con su VIN; si SAP no pudo asignarlo la fila lo dice (el pedido ya existe, el VIN queda pendiente).
+				vins.forEach((v) => filas.push({ ...base, detalle: `${v.material} · ${v.color}`, vin: v.vin || v.error || "—", bloqueo: v.vin ? (i18n.getText("vinBloqueadoHoras", [this.modeloMock().getProperty("/perfil/bloqueoHoras")]) as string) : "—" }));
 			}
 		} catch (error) {
 			MessageBox.error(i18n.getText("pedidoError", [(error as Error).message]) as string);
@@ -2100,6 +2109,32 @@ export default class Oferta extends Controller {
 			oferta.setProperty("/pedidos", filas);
 			oferta.setProperty("/guardado", { visible: true, texto: i18n.getText("pedidosCreados", [numeros.join(", ")]) as string });
 		}
+	}
+
+	/**
+	 * Asigna el VIN de cada vehiculo del grupo despues de crear el pedido (asignarVin: SAP propone el mas antiguo del mismo modelo,
+	 * centro y variante). Si falla para un vehiculo, el pedido queda y ese vehiculo queda "VIN pendiente" con el motivo.
+	 */
+	private async asignarVinsDelGrupo(odata: ODataModel, cotizId: string, grupoNo: string): Promise<(VinAsignado & { error?: string })[]> {
+		let items: VinAsignado[] = [];
+		try {
+			items = await leerVinsGrupo(odata, cotizId, grupoNo);
+		} catch {
+			return [];
+		}
+		const resultado: (VinAsignado & { error?: string })[] = [];
+		for (const i of items) {
+			if (i.vin) {
+				resultado.push(i);
+				continue;
+			}
+			try {
+				resultado.push(await asignarVinItem(odata, cotizId, i.posnr));
+			} catch (error) {
+				resultado.push({ ...i, error: (error as Error).message });
+			}
+		}
+		return resultado;
 	}
 
 	/** SIMULADO: un pedido por cada oferta guardada; el pedido nace pendiente de liberacion. */

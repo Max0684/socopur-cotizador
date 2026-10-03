@@ -190,3 +190,18 @@ test("sectorDeCabecera: el canal 15 (Administrativo) solo admite sector 90", () 
 	assert.equal(sectorDeCabecera("15", "50"), "90");
 	assert.equal(sectorDeCabecera("12", "54"), "54");
 });
+
+test("gruposParaGuardar: un vehiculo de SAP sale del centro y almacen donde esta, con su variante", () => {
+	const g = gruposParaGuardar(
+		[{ canal: "11 Retail", claseOferta: "Z100", clasePedido: "Z311", modalidad: "veh_retail", lineas: [{ orgVentas: "1101", sector: "16", material: "CAR200B", cantidad: 1, precio: 9533.39, variante: "CAR200BCBU2025AZU", centroVeh: "1008", almacenVeh: "0008" }] }],
+		{ oficina: "1101", centro: "1001" },
+		"0001"
+	);
+	assert.deepEqual(g[0].lineas[0], { material: "CAR200B", cantidad: 1, um: "UN", centro: "1008", almacen: "0008", precio: 9533.39, variante: "CAR200BCBU2025AZU" });
+});
+
+test("gruposParaGuardar: una linea de repuesto no lleva variante y usa el centro del perfil", () => {
+	const g = gruposParaGuardar([grupoMayorista()], perfil, "0001");
+	assert.equal("variante" in g[0].lineas[0], false);
+	assert.equal(g[0].lineas[0].centro, "1101");
+});

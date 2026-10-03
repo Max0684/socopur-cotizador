@@ -12,6 +12,10 @@ export interface LineaCarrito {
 	cantidad: number;
 	precio: number;
 	bonificacion?: boolean;
+	/** Solo vehiculos de SAP: variante, centro y almacen del vehiculo elegido. */
+	variante?: string;
+	centroVeh?: string;
+	almacenVeh?: string;
 }
 
 /** Grupo del carrito = una oferta SAP. */
@@ -87,9 +91,11 @@ export function gruposParaGuardar(grupos: GrupoCarrito[], perfil: PerfilVenta, a
 					material: l.material,
 					cantidad: l.cantidad,
 					um: unidad,
-					centro: perfil.centro ?? "",
-					almacen: typeof almacen === "function" ? almacen(perfil.centro ?? "") : almacen,
-					precio: l.precio
+					// Un vehiculo se vende desde el centro y el almacen donde esta, no desde el centro del perfil.
+					centro: l.centroVeh || perfil.centro || "",
+					almacen: l.almacenVeh || (typeof almacen === "function" ? almacen(perfil.centro ?? "") : almacen),
+					precio: l.precio,
+					...(l.variante ? { variante: l.variante } : {})
 				}))
 		};
 	});

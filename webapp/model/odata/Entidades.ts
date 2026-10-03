@@ -7,6 +7,42 @@ export interface Linea {
 	Descripcion: string;
 }
 
+/** Claves: Kunnr, Vkorg, Vtweg, Spart, Auart, Matnr, Werks, Waers, Cantidad, Indice */
+export interface PrecioCond {
+	Kunnr: string;
+	Vkorg: string;
+	Vtweg: string;
+	Spart: string;
+	Auart: string;
+	Matnr: string;
+	Werks: string;
+	Waers: string;
+	Cantidad: string;
+	Indice: number;
+	Varcond: string;
+	CondType: string;
+	Valor: string;
+	Moneda: string;
+	Unidad: string;
+	Base: string;
+	Total: string;
+	Escala: string;
+}
+
+/** Claves: Vkorg, Vtweg, Matnr, Werks, Lgort */
+export interface MaterialAtp {
+	Vkorg: string;
+	Vtweg: string;
+	Matnr: string;
+	Werks: string;
+	Lgort: string;
+	Meins: string;
+	StockLibre: string;
+	Disponible: string;
+	Comprometido: string;
+	Respuesta: number;
+}
+
 /** Claves: Vbeln */
 export interface Oferta {
 	Vbeln: string;
@@ -68,6 +104,7 @@ export interface Precio {
 	Waers: string;
 	Cantidad: string;
 	Fecha?: string;
+	Varcond: string;
 	Moneda: string;
 	PrecioLista: string;
 	PrecioUnitario: string;
@@ -227,6 +264,42 @@ export interface Clase {
 	Descripcion: string;
 }
 
+/** Claves: Vkorg, Vtweg, Vhcle */
+export interface Vehiculo {
+	Vkorg: string;
+	Vtweg: string;
+	Vhcle: string;
+	Vhvin: string;
+	Matnr: string;
+	Maktx: string;
+	Charg: string;
+	Werks: string;
+	NombreCentro: string;
+	Lgort: string;
+	Avail: string;
+	AvailTxt: string;
+	Sdsta: string;
+	SdstaTxt: string;
+	Mmsta: string;
+	MmstaTxt: string;
+	Color: string;
+	ColorTxt: string;
+	AnoModelo: string;
+	Condicion: string;
+	VersionModelo: string;
+	Variante: string;
+	Meins: string;
+	StockLote: string;
+	Segmento1: string;
+	Segmento2: string;
+	DescLinea: string;
+	DescClase: string;
+	Marca: string;
+	Spart: string;
+	SpartCabecera: string;
+	Mtart: string;
+}
+
 /** Claves: DraftUUID, DraftEntityType */
 export interface I_DraftAdministrativeData {
 	DraftUUID: string;
@@ -321,6 +394,10 @@ export interface Item {
 	Bonif: string;
 	PosnrPadre: string;
 	Vhcle: string;
+	Vhvin: string;
+	Color: string;
+	ColorTxt: string;
+	Variante: string;
 	PrecioLista: string;
 	Waers: string;
 	HasDraftEntity: boolean;
@@ -381,10 +458,13 @@ export interface ConjuntosCotizador {
 	I_DraftAdministrativeData: I_DraftAdministrativeData;
 	Linea: Linea;
 	Material: Material;
+	MaterialAtp: MaterialAtp;
 	MaterialCentro: MaterialCentro;
 	Modalidad: Modalidad;
 	Oferta: Oferta;
 	OfertaPos: OfertaPos;
 	Oficina: Oficina;
 	Precio: Precio;
+	PrecioCond: PrecioCond;
+	Vehiculo: Vehiculo;
 }

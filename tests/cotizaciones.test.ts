@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, type GrupoParaGuardar, type OfertaParaGuardar } from "../webapp/model/CotizacionesService.ts";
+import { asignarVinItem, ATNAM_VARIANTE, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, liberarVinItem, type GrupoParaGuardar, type OfertaParaGuardar } from "../webapp/model/CotizacionesService.ts";
 import { crearModeloFalso } from "./helpers/modeloFalso.ts";
 
 function grupo(extra: Partial<GrupoParaGuardar> = {}): GrupoParaGuardar {
@@ -138,4 +138,79 @@ test("guardarCotizacion sin forma de pago no envia Zterm (SAP usa la del cliente
 	const { modelo, creadas } = crearModeloFalso({ gruposLeidos: [{ GrupoNo: "01", VbelnOferta: "3100007390" }] });
 	await guardarCotizacion(como(modelo), { ...oferta(), zterm: "" });
 	assert.equal("Zterm" in creadas[0].datos, false);
+});
+
+test("guardarCotizacion: un vehiculo guarda su variante como caracteristica ZVARIANTE de la posicion", async () => {
+	const { modelo, creadas } = crearModeloFalso({ gruposLeidos: [{ GrupoNo: "01", VbelnOferta: "3100000001" }] });
+	const g = grupo({ lineas: [{ material: "CAR200B", cantidad: 1, um: "UN", centro: "1008", almacen: "0008", precio: 9533.39, variante: "CAR200BCBU2025AZU" }] });
+	await guardarCotizacion(como(modelo), oferta([g]));
+	const car = creadas.find((c) => c.ruta === "_Car");
+	assert.ok(car);
+	assert.equal(car.datos.Atnam, ATNAM_VARIANTE);
+	assert.equal(car.datos.Atwrt, "CAR200BCBU2025AZU");
+	assert.equal(ATNAM_VARIANTE, "ZVARIANTE");
+	assert.equal(creadas.find((c) => c.ruta === "_Item")?.datos.Werks, "1008");
+});
+
+test("guardarCotizacion: una linea sin variante no crea caracteristicas", async () => {
+	const { modelo, creadas } = crearModeloFalso({ gruposLeidos: [{ GrupoNo: "01", VbelnOferta: "3100000001" }] });
+	await guardarCotizacion(como(modelo), oferta());
+	assert.equal(creadas.some((c) => c.ruta === "_Car"), false);
+});
+
+function modeloVin(item: Record<string, unknown>, filas: Record<string, unknown>[] = []) {
+	const llamadas: string[] = [];
+	const parametros: Record<string, unknown> = {};
+	return {
+		llamadas,
+		parametros,
+		modelo: {
+			bindList(ruta: string, _a?: unknown, _b?: unknown, _c?: unknown, p?: { $filter?: string }) {
+				llamadas.push(`list ${ruta} ${p?.$filter ?? ""}`);
+				return { async requestContexts() { return filas.map((o) => ({ getObject: () => o })); } };
+			},
+			bindContext(ruta: string) {
+				return {
+					setParameter(n: string, v: unknown) { parametros[n] = v; },
+					async execute() { llamadas.push(`execute ${ruta}`); },
+					getBoundContext() { return { getObject: () => item }; }
+				};
+			}
+		}
+	};
+}
+
+test("asignarVinItem llama la accion con cuerpo (vacio si no se elige VIN) y devuelve el VIN asignado", async () => {
+	const { modelo, llamadas, parametros } = modeloVin({ Posnr: "000010", Matnr: "CAR200B", Vhcle: "1000006683", Vhvin: "LF3HCM0X9SG004459", Color: "AZU", ColorTxt: "AZUL", Variante: "CAR200BCKD2025AZU" });
+	const r = await asignarVinItem(como(modelo), "COT-1", "000010");
+	assert.deepEqual(parametros, { Vhcle: "" });
+	assert.ok(llamadas[0].startsWith("execute /Item(CotizId=COT-1,Posnr='000010',IsActiveEntity=true)/"));
+	assert.ok(llamadas[0].endsWith(".asignarVin(...)"));
+	assert.deepEqual(r, { posnr: "000010", material: "CAR200B", vhcle: "1000006683", vin: "LF3HCM0X9SG004459", color: "AZUL", variante: "CAR200BCKD2025AZU" });
+	await asignarVinItem(como(modelo), "COT-1", "000010", "1000006685");
+	assert.equal(parametros.Vhcle, "1000006685");
+});
+
+test("asignarVinItem propaga el rechazo de SAP", async () => {
+	const { modelo } = modeloVin({});
+	(modelo as { bindContext: (r: string) => unknown }).bindContext = () => ({ setParameter() {}, async execute() { throw new Error("No quedan unidades disponibles"); }, getBoundContext() { return { getObject: () => ({}) }; } });
+	await assert.rejects(() => asignarVinItem(como(modelo), "COT-1", "000010"), /No quedan unidades/);
+});
+
+test("leerVinsGrupo devuelve solo los items de vehiculo (ZVEH) del grupo", async () => {
+	const { modelo, llamadas } = modeloVin({}, [
+		{ Posnr: "000010", Matnr: "CAR200B", Vhcle: "", Vhvin: "", Color: "", ColorTxt: "", Variante: "CAR200BCKD2025AZU", Mtart: "ZVEH" },
+		{ Posnr: "000020", Matnr: "SFX428H-150-MTK", Vhcle: "", Vhvin: "", Color: "", ColorTxt: "", Variante: "", Mtart: "ZREP" }
+	]);
+	const r = await leerVinsGrupo(como(modelo), "COT-1", "01");
+	assert.equal(r.length, 1);
+	assert.equal(r[0].material, "CAR200B");
+	assert.equal(r[0].vin, "");
+	assert.ok(llamadas[0].includes("GrupoNo eq '01'"));
+});
+
+test("liberarVinItem llama la accion liberarVin sobre el item", async () => {
+	const { modelo, llamadas } = modeloVin({});
+	await liberarVinItem(como(modelo), "COT-1", "000010");
+	assert.ok(llamadas[0].endsWith(".liberarVin(...)"));
 });
