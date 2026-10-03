@@ -533,7 +533,7 @@ export default class Oferta extends Controller {
 	 * Para las filas leidas de SAP pide el precio unitario real (entidad Precio) en soles y en dolares: SAP convierte la
 	 * moneda, no se usa el tipo de cambio fijo. El precio depende del cliente. Devuelve false si no se pudo (ya avisado).
 	 */
-	private async completarPreciosSap(elegidos: (Vehiculo & Repuesto & { tipo: string })[]): Promise<boolean> {
+	private async completarPreciosSap(elegidos: (Vehiculo & Repuesto & { tipo: string })[], cantidad = 1): Promise<boolean> {
 		const delSap = elegidos.filter((m) => m.origen === "sap");
 		if (delSap.length === 0) {
 			return true;
@@ -551,7 +551,7 @@ export default class Oferta extends Controller {
 		try {
 			await Promise.all(
 				delSap.map(async (m) => {
-					const base = { kunnr, vkorg: m.orgVentas, vtweg: canal, spart: m.sectorOferta, auart: CLASE_OFERTA_PRECIO, matnr: m.material, werks: centro, cantidad: 1 };
+					const base = { kunnr, vkorg: m.orgVentas, vtweg: canal, spart: m.sectorOferta, auart: CLASE_OFERTA_PRECIO, matnr: m.material, werks: centro, cantidad };
 					const [pen, usd] = await Promise.all([consultarPrecio(odata, { ...base, waers: "PEN" }), consultarPrecio(odata, { ...base, waers: "USD" })]);
 					m.precioPenSap = pen.precioUnitario;
 					m.precioUsd = usd.precioUnitario;
@@ -718,6 +718,39 @@ export default class Oferta extends Controller {
 		oferta.setProperty("/guardado", { visible: false, texto: "" });
 	}
 
+	/**
+	 * Vuelve a pedir a SAP el precio unitario de las lineas de SAP para su cantidad actual (las escalas de cantidad
+	 * cambian el precio) y recalcula los totales. Si SAP no responde deja el precio anterior y avisa.
+	 */
+	private async repreciarLineasSap(): Promise<void> {
+		const oferta = this.modeloOferta();
+		const lineas = (oferta.getProperty("/lineas") as Linea[]) ?? [];
+		const delSap = lineas.filter((l) => l.precioPenSap !== undefined && !l.bonificacion);
+		const kunnr = (oferta.getProperty("/cliente") as Cliente | null)?.kunnr;
+		if (delSap.length === 0 || !kunnr || !this.usarOData()) {
+			return;
+		}
+		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel;
+		const canal = canalDe(String(oferta.getProperty("/perfil/busqueda/canal") ?? "11"));
+		const centro = String(oferta.getProperty("/perfil/centro") ?? "");
+		try {
+			await Promise.all(
+				delSap.map(async (l) => {
+					const base = { kunnr, vkorg: l.orgVentas, vtweg: canal, spart: l.sector, auart: CLASE_OFERTA_PRECIO, matnr: l.material, werks: centro, cantidad: l.cantidad };
+					const [pen, usd] = await Promise.all([consultarPrecio(odata, { ...base, waers: "PEN" }), consultarPrecio(odata, { ...base, waers: "USD" })]);
+					l.precioPenSap = pen.precioUnitario;
+					l.precioUsdSap = usd.precioUnitario;
+					l.precio = oferta.getProperty("/perfil/moneda") === "USD" ? usd.precioUnitario : pen.precioUnitario;
+					l.total = this.redondear(l.cantidad * l.precio);
+				})
+			);
+			oferta.setProperty("/lineas", lineas);
+			this.recalcular();
+		} catch (error) {
+			MessageToast.show(this.i18n().getText("precioSapError", [(error as Error).message]) as string);
+		}
+	}
+
 	/** Al cambiar Soles/Dolares se vuelven a calcular los precios de las lineas que vienen del catalogo. */
 	public onCambiaMoneda(): void {
 		const oferta = this.modeloOferta();
@@ -744,14 +777,19 @@ export default class Oferta extends Controller {
 		this.recalcular();
 	}
 
-	public onCambiaCantidadFila(event: Event<{ value: number }>): void {
+	public async onCambiaCantidadFila(event: Event<{ value: number }>): Promise<void> {
 		const ruta = (event.getSource() as unknown as Control).getBindingContext("oferta")?.getPath();
 		if (!ruta) {
 			return;
 		}
 		const oferta = this.modeloOferta();
 		const fila = oferta.getProperty(ruta) as Vehiculo & Repuesto & { tipo: string; cantidad: number };
-		oferta.setProperty(ruta, this.filaPrecio(fila, Math.max(1, Number(fila.cantidad) || 1)));
+		const cantidad = Math.max(1, Number(fila.cantidad) || 1);
+		// En SAP el precio unitario cambia por tramos de cantidad (verificado: MOT112999 34.06 / 29.63 / 26.23 PEN).
+		if (fila.origen === "sap") {
+			await this.completarPreciosSap([fila], cantidad);
+		}
+		oferta.setProperty(ruta, this.filaPrecio(fila, cantidad));
 	}
 
 	/** Agrega todas las filas elegidas al carrito, cada una en su grupo (org. ventas + sector). */
@@ -762,6 +800,7 @@ export default class Oferta extends Controller {
 		oferta.setProperty("/elegidosLista", []);
 		oferta.setProperty("/guardado", { visible: false, texto: "" });
 		this.recalcular();
+		void this.repreciarLineasSap();
 	}
 
 	private agregarLinea(
@@ -1142,6 +1181,7 @@ export default class Oferta extends Controller {
 		linea.total = this.redondear(linea.cantidad * linea.precio);
 		this.modeloOferta().setProperty("/guardado", { visible: false, texto: "" });
 		this.recalcular();
+		void this.repreciarLineasSap();
 	}
 
 	public onQuitarLinea(event: Event): void {
