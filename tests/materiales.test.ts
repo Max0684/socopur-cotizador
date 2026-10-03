@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buscarMateriales, filaDeMaterial, filtroMateriales, materialesDisponibles } from "../webapp/model/MaterialesService.ts";
+import { buscarMateriales, construirSegmentos, filaDeMaterial, filtroMateriales, filtroStock, materialesDisponibles, stockPorCentro } from "../webapp/model/MaterialesService.ts";
 
 const como = (m: unknown) => m as Parameters<typeof buscarMateriales>[0];
 
@@ -58,4 +58,45 @@ test("buscarMateriales pide /Material con filtro, orden y paginacion de 50", asy
 	assert.deepEqual(rango, [100, 50]);
 	assert.equal(filas[0].material, "M1");
 	assert.equal(filas[0].sectorOferta, "50");
+});
+
+test("filtroMateriales agrega sector y marca si vienen", () => {
+	assert.equal(filtroMateriales({ vkorg: "1103", vtweg: "10", sector: "50", marca: "SFX" }), "Vkorg eq '1103' and Vtweg eq '10' and Spart eq '50' and Marca eq 'SFX'");
+});
+
+test("construirSegmentos arma los combos en cascada con codigo y descripcion, ordenados", () => {
+	const s = construirSegmentos(
+		[{ Segmento1: "P", Descripcion: "REPUESTOS" }, { Segmento1: "G", Descripcion: "GENERAL" }],
+		[{ Segmento1: "P", Segmento2: "04", Descripcion: "ARRASTRE" }, { Segmento1: "P", Segmento2: "01", Descripcion: "MOTOR" }],
+		[{ Segmento1: "P", Segmento2: "04", Segmento3: "01", Descripcion: "CADENAS" }]
+	);
+	assert.deepEqual(s.lineas.map((l) => l.key), ["G", "P"]);
+	assert.equal(s.lineas[1].text, "P \u00b7 REPUESTOS");
+	assert.deepEqual(s.clases.P.map((c) => c.key), ["01", "04"]);
+	assert.equal(s.familias["P-04"][0].text, "01 \u00b7 CADENAS");
+});
+
+test("filtroStock arma los OR de materiales para un centro", () => {
+	assert.equal(filtroStock("1103", "10", "1101", ["A", "B'C"]), "Vkorg eq '1103' and Vtweg eq '10' and Werks eq '1101' and (Matnr eq 'A' or Matnr eq 'B''C')");
+});
+
+test("stockPorCentro devuelve el mayor stock por material y no consulta sin materiales", async () => {
+	let llamadas = 0;
+	const modelo = {
+		bindList() {
+			llamadas++;
+			return {
+				async requestContexts() {
+					return [
+						{ getObject: () => ({ Matnr: "A", StockLibre: 10 }) },
+						{ getObject: () => ({ Matnr: "A", StockLibre: "30" }) },
+						{ getObject: () => ({ Matnr: "B", StockLibre: 5 }) }
+					];
+				}
+			};
+		}
+	};
+	assert.deepEqual(await stockPorCentro(como(modelo), "1103", "10", "1101", []), {});
+	assert.equal(llamadas, 0);
+	assert.deepEqual(await stockPorCentro(como(modelo), "1103", "10", "1101", ["A", "B"]), { A: 30, B: 5 });
 });

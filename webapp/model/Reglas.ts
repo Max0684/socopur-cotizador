@@ -43,6 +43,10 @@ export function oficinaDe(texto?: string): string {
 
 /** Sector de la cabecera de la oferta segun el canal (si no, SAP rechaza: "no esta prevista la clase de pedido"). */
 export function sectorDeCabecera(canal: string, sectorDelMaterial: string): string {
+	if (canal === "15") {
+		// En TVAKZ de la org. 1103 el canal 15 (Administrativo) solo admite el sector 90 (lo calcula igual la entidad Material).
+		return "90";
+	}
 	return CANALES_SECTOR_99.includes(canal) ? "99" : sectorDelMaterial;
 }
 

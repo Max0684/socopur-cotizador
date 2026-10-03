@@ -1,6 +1,12 @@
 // GENERADO por scripts/gen-odata-types.mjs desde localService/mainService/metadata.xml. No editar a mano.
 // Servicio: YUI_COTIZ_SRV (OData V4). Decimal, Date y DateTimeOffset llegan como string en UI5.
 
+/** Claves: Segmento1 */
+export interface Linea {
+	Segmento1: string;
+	Descripcion: string;
+}
+
 /** Claves: Vbeln */
 export interface Oferta {
 	Vbeln: string;
@@ -71,6 +77,27 @@ export interface Precio {
 	Mensaje: string;
 }
 
+/** Claves: Vkorg, Vtweg, Matnr */
+export interface Material {
+	Vkorg: string;
+	Vtweg: string;
+	Matnr: string;
+	Maktx: string;
+	Meins: string;
+	Matkl: string;
+	Segmento1: string;
+	Segmento2: string;
+	Segmento3: string;
+	DescLinea: string;
+	DescClase: string;
+	DescFamilia: string;
+	Marca: string;
+	Spart: string;
+	SpartCabecera: string;
+	Mtart: string;
+	Vmsta: string;
+}
+
 /** Claves: CotizId, Posnr, Atnam, IsActiveEntity */
 export interface ItemCar {
 	CotizId: string;
@@ -101,6 +128,18 @@ export interface GrupoEstado {
 	NetoPedido: string;
 	ImpuestoPedido: string;
 	TotalPedido: string;
+}
+
+/** Claves: Vkorg, Vtweg, Matnr, Werks, Lgort */
+export interface MaterialCentro {
+	Vkorg: string;
+	Vtweg: string;
+	Matnr: string;
+	Werks: string;
+	Lgort: string;
+	NombreCentro: string;
+	Meins: string;
+	StockLibre: string;
 }
 
 /** Claves: CotizId, GrupoNo, IsActiveEntity */
@@ -144,6 +183,14 @@ export interface Modalidad {
 	Confirmado: string;
 }
 
+/** Claves: Segmento1, Segmento2, Segmento3 */
+export interface Familia {
+	Segmento1: string;
+	Segmento2: string;
+	Segmento3: string;
+	Descripcion: string;
+}
+
 /** Claves: CotizId, Posnr, CondType, IsActiveEntity */
 export interface ItemCond {
 	CotizId: string;
@@ -163,6 +210,13 @@ export interface ItemCond {
 	SiblingEntity?: ItemCond;
 	_Cotizacion?: Cotizacion;
 	_Item?: Item;
+}
+
+/** Claves: Segmento1, Segmento2 */
+export interface Clase {
+	Segmento1: string;
+	Segmento2: string;
+	Descripcion: string;
 }
 
 /** Claves: DraftUUID, DraftEntityType */
@@ -297,15 +351,20 @@ export interface OfertaPos {
 
 /** Nombre del conjunto de entidades -> tipo. */
 export interface ConjuntosCotizador {
+	Clase: Clase;
 	Cliente: Cliente;
 	Cotizacion: Cotizacion;
 	Direc: Direc;
+	Familia: Familia;
 	Grupo: Grupo;
 	GrupoEstado: GrupoEstado;
 	Item: Item;
 	ItemCar: ItemCar;
 	ItemCond: ItemCond;
 	I_DraftAdministrativeData: I_DraftAdministrativeData;
+	Linea: Linea;
+	Material: Material;
+	MaterialCentro: MaterialCentro;
 	Modalidad: Modalidad;
 	Oferta: Oferta;
 	OfertaPos: OfertaPos;

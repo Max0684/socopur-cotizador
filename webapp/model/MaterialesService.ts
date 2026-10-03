@@ -16,6 +16,8 @@ export interface FiltrosMaterial {
 	codigo?: string;
 	descripcion?: string;
 	texto?: string;
+	sector?: string;
+	marca?: string;
 }
 
 /** Fila del servicio (campos del diseno). */
@@ -77,6 +79,12 @@ export function filtroMateriales(f: FiltrosMaterial): string {
 	if (f.familia) {
 		partes.push(`Segmento3 eq '${comillas(f.familia)}'`);
 	}
+	if (f.sector) {
+		partes.push(`Spart eq '${comillas(f.sector)}'`);
+	}
+	if (f.marca) {
+		partes.push(`Marca eq '${comillas(f.marca)}'`);
+	}
 	if (f.codigo) {
 		partes.push(`contains(Matnr,'${comillas(f.codigo.toUpperCase())}')`);
 	}
@@ -116,4 +124,72 @@ export async function buscarMateriales(modelo: ODataModel, filtros: FiltrosMater
 	});
 	const contextos = await lista.requestContexts(pagina * tamano, tamano);
 	return contextos.map((c) => filaDeMaterial(c.getObject() as MaterialSap, filtros.vkorg, filtros.vtweg, sectorCab));
+}
+
+/* ---------- Combos Linea > Clase > Familia (entidades Linea, Clase y Familia) y stock por centro ---------- */
+
+export interface OpcionSegmento {
+	key: string;
+	text: string;
+}
+
+export interface SegmentosSap {
+	lineas: OpcionSegmento[];
+	/** Clases por linea. */
+	clases: Record<string, OpcionSegmento[]>;
+	/** Familias por "linea-clase" (la misma clave que usa la pantalla). */
+	familias: Record<string, OpcionSegmento[]>;
+}
+
+/** Arma las listas en cascada con el texto "codigo . descripcion", ordenadas por codigo. */
+export function construirSegmentos(
+	lineas: { Segmento1: string; Descripcion: string }[],
+	clases: { Segmento1: string; Segmento2: string; Descripcion: string }[],
+	familias: { Segmento1: string; Segmento2: string; Segmento3: string; Descripcion: string }[]
+): SegmentosSap {
+	const opcion = (key: string, descripcion: string): OpcionSegmento => ({ key, text: `${key} \u00b7 ${descripcion}` });
+	const porCodigo = (a: OpcionSegmento, b: OpcionSegmento): number => a.key.localeCompare(b.key);
+	const res: SegmentosSap = { lineas: lineas.map((l) => opcion(l.Segmento1, l.Descripcion)).sort(porCodigo), clases: {}, familias: {} };
+	clases.forEach((c) => (res.clases[c.Segmento1] ??= []).push(opcion(c.Segmento2, c.Descripcion)));
+	familias.forEach((f) => (res.familias[`${f.Segmento1}-${f.Segmento2}`] ??= []).push(opcion(f.Segmento3, f.Descripcion)));
+	Object.values(res.clases).forEach((l) => l.sort(porCodigo));
+	Object.values(res.familias).forEach((l) => l.sort(porCodigo));
+	return res;
+}
+
+/** Lee los tres catalogos (son pequenos) y arma los combos. */
+export async function cargarSegmentos(modelo: ODataModel): Promise<SegmentosSap> {
+	const leer = async <T>(ruta: string): Promise<T[]> => {
+		const contextos = await modelo.bindList(ruta).requestContexts(0, 2000);
+		return contextos.map((c) => c.getObject() as T);
+	};
+	const [lineas, clases, familias] = await Promise.all([
+		leer<{ Segmento1: string; Descripcion: string }>("/Linea"),
+		leer<{ Segmento1: string; Segmento2: string; Descripcion: string }>("/Clase"),
+		leer<{ Segmento1: string; Segmento2: string; Segmento3: string; Descripcion: string }>("/Familia")
+	]);
+	return construirSegmentos(lineas, clases, familias);
+}
+
+/** $filter de la entidad MaterialCentro para un centro y una lista de materiales. */
+export function filtroStock(vkorg: string, vtweg: string, werks: string, matnrs: string[]): string {
+	const materiales = matnrs.map((m) => `Matnr eq '${comillas(m)}'`).join(" or ");
+	return `Vkorg eq '${comillas(vkorg)}' and Vtweg eq '${comillas(vtweg)}' and Werks eq '${comillas(werks)}' and (${materiales})`;
+}
+
+/**
+ * Stock libre por material en un centro (entidad MaterialCentro). Si hay varios almacenes se toma el de mayor stock
+ * (hoy 0001, salvo el centro 1007 con 0008). No incluye comprometido ni ATP (segunda version del servicio).
+ */
+export async function stockPorCentro(modelo: ODataModel, vkorg: string, vtweg: string, werks: string, matnrs: string[]): Promise<Record<string, number>> {
+	if (matnrs.length === 0) {
+		return {};
+	}
+	const contextos = await modelo.bindList("/MaterialCentro", undefined, undefined, undefined, { $filter: filtroStock(vkorg, vtweg, werks, matnrs) }).requestContexts(0, 500);
+	const res: Record<string, number> = {};
+	contextos.forEach((c) => {
+		const f = c.getObject() as { Matnr: string; StockLibre: number | string };
+		res[f.Matnr] = Math.max(res[f.Matnr] ?? 0, Number(f.StockLibre));
+	});
+	return res;
 }

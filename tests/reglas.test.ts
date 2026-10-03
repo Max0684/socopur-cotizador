@@ -185,3 +185,8 @@ test("totalesDeOferta separa el ISC incluido sin cambiar el total", () => {
 	assert.equal(t.total, 1100);
 	assert.equal(t.hayIsc, true);
 });
+
+test("sectorDeCabecera: el canal 15 (Administrativo) solo admite sector 90", () => {
+	assert.equal(sectorDeCabecera("15", "50"), "90");
+	assert.equal(sectorDeCabecera("12", "54"), "54");
+});

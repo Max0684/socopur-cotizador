@@ -2,7 +2,8 @@ import Controller from "sap/ui/core/mvc/Controller";
 import ODataModel from "sap/ui/model/odata/v4/ODataModel";
 import { cargarDetalleOferta } from "com/socopur/cotizador/model/OfertasService";
 import type { GrupoEstado } from "com/socopur/cotizador/model/odata/Entidades";
-import { buscarMateriales, materialesDisponibles } from "com/socopur/cotizador/model/MaterialesService";
+import { buscarMateriales, cargarSegmentos, materialesDisponibles, stockPorCentro } from "com/socopur/cotizador/model/MaterialesService";
+import { consultarPrecio } from "com/socopur/cotizador/model/PreciosService";
 import { almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, gruposParaGuardar, modalidadPorDefecto, sectorDeCabecera, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
 import { crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, type OfertaParaGuardar } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
@@ -31,6 +32,9 @@ import Fragment from "sap/ui/core/Fragment";
 import { ListBase$SelectionChangeEvent } from "sap/m/ListBase";
 import { Route$PatternMatchedEvent } from "sap/ui/core/routing/Route";
 
+
+/** Clase de oferta con la que se consulta el precio al elegir un material (todas las modalidades de repuestos usan Z300). */
+const CLASE_OFERTA_PRECIO = "Z300";
 
 interface Cliente {
 	/** Numero de cliente SAP (solo en clientes leidos del servicio). */
@@ -87,6 +91,11 @@ interface Vehiculo {
 }
 
 interface Repuesto {
+	/** Fila leida de la entidad Material de SAP (no del catalogo de ejemplo). */
+	origen?: string;
+	/** Precio unitario real de SAP en soles (el de dolares va en precioUsd); se pide al elegir el material. */
+	precioPenSap?: number;
+	sinPrecio?: boolean;
 	escala?: { min: number; pct: number }[];
 	material: string;
 	denominacion: string;
@@ -166,6 +175,9 @@ interface XlsxLib {
 
 interface Linea extends LineaMock {
 	total: number;
+	/** Precios unitarios reales de SAP (solo lineas de materiales leidos de SAP). */
+	precioPenSap?: number;
+	precioUsdSap?: number;
 	/** Impuesto (IGV) real leido de SAP; sin valor mientras la oferta no se haya guardado. */
 	impuesto?: number;
 	iscPct?: number;
@@ -325,6 +337,9 @@ export default class Oferta extends Controller {
 			sap = odata ? await materialesDisponibles(odata) : false;
 		}
 		b.setProperty("/ejemplo", !sap);
+		if (sap) {
+			await this.cargarCombosSap();
+		}
 		b.setProperty("/avisoEjemplo", this.i18n().getText(this.usarOData() ? "catalogoEjemploAviso" : "catalogoEjemploAvisoLocal") as string);
 	}
 
@@ -418,6 +433,22 @@ export default class Oferta extends Controller {
 		b.setProperty(clave, ordenarPorTexto(b.getProperty(clave) as { denominacion: string }[], (x) => x.denominacion));
 	}
 
+	/** Reemplaza las listas de ejemplo (linea, clase, familia) por las de SAP (entidades Linea, Clase y Familia). */
+	private async cargarCombosSap(): Promise<void> {
+		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel;
+		try {
+			const seg = await cargarSegmentos(odata);
+			this.modeloMock().setProperty("/segmentos", {
+				lineas: { repuestos: seg.lineas.filter((l) => l.key !== "VE"), vehiculos: seg.lineas.filter((l) => l.key === "VE") },
+				clases: seg.clases,
+				familias: seg.familias
+			});
+			this.refrescarListas();
+		} catch (error) {
+			MessageToast.show(this.i18n().getText("busquedaMaterialError", [(error as Error).message]) as string);
+		}
+	}
+
 	/** Repuestos desde SAP (entidad Material): organizacion y canal del perfil, mas los filtros de la pantalla. */
 	private async buscarRepuestosEnSap(g: (campo: string) => string): Promise<void> {
 		const b = this.modeloBusqueda();
@@ -433,9 +464,32 @@ export default class Oferta extends Controller {
 				familia: g("familia"),
 				codigo: g("codigo"),
 				descripcion: g("descripcion"),
-				texto: g("texto")
+				texto: g("texto"),
+				sector: g("sector"),
+				marca: g("marca")
 			}, sectorDeCabecera);
-			b.setProperty("/repuestos", filas);
+			// Stock libre en el centro del perfil. El comprometido y el ATP no estan en el servicio todavia.
+			const vkorg = String(mock.getProperty("/perfil/busqueda/orgs/repuestos") ?? "1103");
+			const vtweg = String(mock.getProperty("/perfil/busqueda/canal") ?? "11");
+			const centro = String(this.modeloOferta().getProperty("/perfil/centro") ?? "");
+			let stock: Record<string, number> = {};
+			try {
+				stock = await stockPorCentro(odata, vkorg, vtweg, centro, filas.map((f) => f.material));
+			} catch (error) {
+				MessageToast.show(this.i18n().getText("busquedaMaterialError", [(error as Error).message]) as string);
+			}
+			const soloStock = b.getProperty("/soloStock") as boolean;
+			const conDatos = filas.map((f) => ({
+				...f,
+				disponible: stock[f.material] ?? 0,
+				comprometido: "\u2014",
+				total: stock[f.material] ?? 0,
+				precioUsd: 0,
+				condicionPct: 0,
+				promocion: null,
+				sinPrecio: true
+			}));
+			b.setProperty("/repuestos", conDatos.filter((f) => !soloStock || f.disponible > 0));
 		} catch (error) {
 			b.setProperty("/repuestos", []);
 			MessageBox.error(this.i18n().getText("busquedaMaterialError", [(error as Error).message]) as string);
@@ -474,11 +528,50 @@ export default class Oferta extends Controller {
 		b.setProperty("/elegido", elegidos.length ? elegidos[0] : null);
 	}
 
-	public onConfirmarMaterial(): void {
+	/**
+	 * Para las filas leidas de SAP pide el precio unitario real (entidad Precio) en soles y en dolares: SAP convierte la
+	 * moneda, no se usa el tipo de cambio fijo. El precio depende del cliente. Devuelve false si no se pudo (ya avisado).
+	 */
+	private async completarPreciosSap(elegidos: (Vehiculo & Repuesto & { tipo: string })[]): Promise<boolean> {
+		const delSap = elegidos.filter((m) => m.origen === "sap");
+		if (delSap.length === 0) {
+			return true;
+		}
+		const oferta = this.modeloOferta();
+		const i18n = this.i18n();
+		const kunnr = (oferta.getProperty("/cliente") as Cliente | null)?.kunnr;
+		if (!kunnr) {
+			MessageBox.warning(i18n.getText("precioSinCliente") as string);
+			return false;
+		}
+		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel;
+		const canal = canalDe(String(oferta.getProperty("/perfil/busqueda/canal") ?? "11"));
+		const centro = String(oferta.getProperty("/perfil/centro") ?? "");
+		try {
+			await Promise.all(
+				delSap.map(async (m) => {
+					const base = { kunnr, vkorg: m.orgVentas, vtweg: canal, spart: m.sectorOferta, auart: CLASE_OFERTA_PRECIO, matnr: m.material, werks: centro, cantidad: 1 };
+					const [pen, usd] = await Promise.all([consultarPrecio(odata, { ...base, waers: "PEN" }), consultarPrecio(odata, { ...base, waers: "USD" })]);
+					m.precioPenSap = pen.precioUnitario;
+					m.precioUsd = usd.precioUnitario;
+					m.sinPrecio = false;
+				})
+			);
+			return true;
+		} catch (error) {
+			MessageBox.error(i18n.getText("precioSapError", [(error as Error).message]) as string);
+			return false;
+		}
+	}
+
+	public async onConfirmarMaterial(): Promise<void> {
 		const b = this.modeloBusqueda();
 		const oferta = this.modeloOferta();
 		const elegidos = (b.getProperty("/elegidos") as (Vehiculo & Repuesto & { tipo: string })[]) ?? [];
 		if (!elegidos.length) {
+			return;
+		}
+		if (!(await this.completarPreciosSap(elegidos))) {
 			return;
 		}
 		if (elegidos[0].tipo === "vehiculos") {
@@ -528,7 +621,8 @@ export default class Oferta extends Controller {
 		const siguiente = tramos.find((t) => t.min > cantidad);
 		const escalaUsd = this.redondear(listaUsd * ((aplicado?.pct ?? 0) / 100));
 		const finalUsd = this.redondear(listaUsd - condicionUsd - escalaUsd - promoUsd);
-		const final = this.aMoneda(finalUsd);
+		const moneda = this.modeloOferta().getProperty("/perfil/moneda");
+		const final = m.origen === "sap" && m.precioPenSap !== undefined ? (moneda === "USD" ? finalUsd : m.precioPenSap) : this.aMoneda(finalUsd);
 		const escalaTxt = !tramos.length
 			? ""
 			: aplicado
@@ -602,6 +696,11 @@ export default class Oferta extends Controller {
 		] as (Vehiculo & Repuesto & { tipo: string })[];
 		const lineas = (oferta.getProperty("/lineas") as Linea[]) ?? [];
 		lineas.forEach((l) => {
+			if (l.precioPenSap !== undefined && l.precioUsdSap !== undefined) {
+				l.precio = oferta.getProperty("/perfil/moneda") === "USD" ? l.precioUsdSap : l.precioPenSap;
+				l.total = this.redondear(l.cantidad * l.precio);
+				return;
+			}
 			const m = l.bonificacion ? undefined : catalogo.find((x) => x.material === l.material);
 			if (m) {
 				l.precio = (this.filaPrecio(m, l.cantidad) as { final: number }).final;
@@ -659,7 +758,8 @@ export default class Oferta extends Controller {
 				cantidad,
 				precio: final,
 				iscPct: m.iscPct ?? 0,
-				total: Math.round(cantidad * final * 100) / 100
+				total: Math.round(cantidad * final * 100) / 100,
+				...(m.origen === "sap" ? { precioPenSap: m.precioPenSap, precioUsdSap: m.precioUsd } : {})
 			});
 			if (m.tipo === "vehiculos") {
 				this.agregarBonificaciones(lineas, uid, m);
