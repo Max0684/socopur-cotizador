@@ -46,7 +46,12 @@ export function oficinaDe(texto?: string): string {
 }
 
 /** Sector de la cabecera de la oferta segun el canal (si no, SAP rechaza: "no esta prevista la clase de pedido"). */
-export function sectorDeCabecera(canal: string, sectorDelMaterial: string): string {
+export function sectorDeCabecera(canal: string, sectorDelMaterial: string, orgVentas?: string): string {
+	// La regla del sector 99 es de la org. 1103 (repuestos). Las demas organizaciones (p. ej. 1101, vehiculos) usan el sector del material;
+	// solo el canal 15 (Administrativo) pasa a 90 en todas.
+	if (orgVentas && orgVentas !== "1103") {
+		return canal === "15" ? "90" : sectorDelMaterial;
+	}
 	if (canal === "15") {
 		// En TVAKZ de la org. 1103 el canal 15 (Administrativo) solo admite el sector 90 (lo calcula igual la entidad Material).
 		return "90";
@@ -80,7 +85,7 @@ export function gruposParaGuardar(grupos: GrupoCarrito[], perfil: PerfilVenta, a
 		return {
 			vkorg: g.lineas[0]?.orgVentas ?? "",
 			vtweg: canal,
-			spart: sectorDeCabecera(canal, g.lineas[0]?.sector ?? ""),
+			spart: sectorDeCabecera(canal, g.lineas[0]?.sector ?? "", g.lineas[0]?.orgVentas),
 			vkbur: oficinaDe(perfil.oficina),
 			claseOferta: g.claseOferta ?? "",
 			clasePedido: g.clasePedido ?? "",

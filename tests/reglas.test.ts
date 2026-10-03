@@ -205,3 +205,19 @@ test("gruposParaGuardar: una linea de repuesto no lleva variante y usa el centro
 	assert.equal("variante" in g[0].lineas[0], false);
 	assert.equal(g[0].lineas[0].centro, "1101");
 });
+
+test("sectorDeCabecera: fuera de la org 1103 (vehiculos 1101) el sector es el del material en el canal 11; el 15 sigue en 90", () => {
+	assert.equal(sectorDeCabecera("11", "16", "1101"), "16");
+	assert.equal(sectorDeCabecera("10", "10", "1101"), "10");
+	assert.equal(sectorDeCabecera("15", "16", "1101"), "90");
+	assert.equal(sectorDeCabecera("11", "50", "1103"), "99");
+});
+
+test("gruposParaGuardar: un vehiculo de la org 1101 en canal 11 sale con el sector del material, no con 99", () => {
+	const g = gruposParaGuardar(
+		[{ canal: "11 Retail", claseOferta: "Z100", clasePedido: "Z311", modalidad: "veh_retail", lineas: [{ orgVentas: "1101", sector: "16", material: "CAR200B", cantidad: 1, precio: 1 }] }],
+		{ oficina: "1101", centro: "1101" },
+		"0001"
+	);
+	assert.equal(g[0].spart, "16");
+});
