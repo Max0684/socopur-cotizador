@@ -84,5 +84,30 @@ export async function buscarClientes(modelo: ODataModel, texto: string, vkorg: s
 			break;
 		}
 	}
-	return ordenarPorTexto(Array.from(porCliente.values()), (c) => c.nombre);
+	const clientes = Array.from(porCliente.values());
+	await completarAreas(modelo, clientes);
+	return ordenarPorTexto(clientes, (c) => c.nombre);
+}
+
+/**
+ * La busqueda filtra por la organizacion de ventas elegida, asi que solo trae las areas de esa organizacion. Un cliente de repuestos
+ * (1103) tambien puede vender vehiculos (1101): se leen todas sus areas para no avisar "no esta dado de alta" por error.
+ * Si la lectura falla se dejan las areas que ya se tenian.
+ */
+async function completarAreas(modelo: ODataModel, clientes: ClienteSap[]): Promise<void> {
+	if (clientes.length === 0) {
+		return;
+	}
+	try {
+		const filtro = clientes.map((c) => `Kunnr eq '${comillas(c.kunnr)}'`).join(" or ");
+		const filas = await modelo.bindList("/Cliente", undefined, undefined, undefined, { $select: "Kunnr,Vkorg,Vtweg,Spart", $filter: filtro, $count: false }).requestContexts(0, 2000);
+		const porKunnr = new Map(clientes.map((c) => [c.kunnr, new Set(c.areas)]));
+		for (const contexto of filas) {
+			const f = contexto.getObject() as ClienteSapFila;
+			porKunnr.get(f.Kunnr)?.add(`${f.Vkorg}/${f.Vtweg}/${f.Spart}`);
+		}
+		clientes.forEach((c) => (c.areas = [...(porKunnr.get(c.kunnr) ?? c.areas)]));
+	} catch {
+		// se conservan las areas de la organizacion buscada
+	}
 }
