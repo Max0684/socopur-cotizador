@@ -231,6 +231,9 @@ interface Direccion {
 	texto: string;
 }
 
+/** El servicio devuelve unos numeros de oferta con ceros a la izquierda y otros sin ellos; se comparan sin ceros. */
+const sinCeros = (n: string): string => (n ?? "").replace(/^0+/, "");
+
 interface OfertaGuardada {
 	numero: string;
 	/** Solo cuando la oferta se guardo en SAP (?odata=1): clave de la cotizacion y del grupo para crear su pedido. */
@@ -2070,7 +2073,7 @@ export default class Oferta extends Controller {
 					$$ownRequest: true
 				})
 				.requestObject()) as { _Grupo?: { GrupoNo: string; VbelnOferta: string; VbelnPedido: string; AuartPedido: string }[] };
-			const g = (cot._Grupo ?? []).find((x) => x.VbelnOferta === numeroOferta && !x.VbelnPedido);
+			const g = (cot._Grupo ?? []).find((x) => sinCeros(x.VbelnOferta) === sinCeros(numeroOferta) && !x.VbelnPedido);
 			if (!g) {
 				return;
 			}
@@ -2106,7 +2109,7 @@ export default class Oferta extends Controller {
 					$$ownRequest: true
 				})
 				.requestObject()) as { _Grupo?: { GrupoNo: string; VbelnOferta: string; VbelnPedido: string; AuartPedido: string }[] };
-			const g = (cot._Grupo ?? []).find((x) => x.VbelnOferta === numeroOferta && x.VbelnPedido);
+			const g = (cot._Grupo ?? []).find((x) => sinCeros(x.VbelnOferta) === sinCeros(numeroOferta) && x.VbelnPedido);
 			if (!g) {
 				return;
 			}
