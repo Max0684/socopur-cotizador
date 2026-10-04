@@ -297,6 +297,8 @@ export interface Vehiculo {
 	Marca: string;
 	Spart: string;
 	SpartCabecera: string;
+	/** Fecha de ingreso del vehiculo (creacion del lote, MCHA-ERSDA). aaaa-mm-dd */
+	IngresoFecha: string;
 	Mtart: string;
 }
 
