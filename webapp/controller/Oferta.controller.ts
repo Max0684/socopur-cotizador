@@ -2159,6 +2159,16 @@ export default class Oferta extends Controller {
 		};
 	}
 
+	/** Que debe hacer el vendedor despues de crear el pedido, segun el estado real de SAP (credito bloqueado -> Creditos; si no, Caja verifica el cobro y factura). */
+	private avisarSiguientePaso(estados: (GrupoEstado | null)[]): void {
+		const i18n = this.i18n();
+		const conCreditoBloqueado = estados.some((e) => e?.EstadoCredito === "B");
+		this.modeloOferta().setProperty(
+			"/avisoPedido",
+			estados.length === 0 ? { texto: "", tipo: "None" } : { texto: i18n.getText(conCreditoBloqueado ? "pedidoAvisoCredito" : "pedidoAvisoCobro") as string, tipo: conCreditoBloqueado ? "Warning" : "Information" }
+		);
+	}
+
 	/** Total del pedido; con ISC e IGV separados de la oferta se muestran como dos lineas, si no, el impuesto va en un solo valor como lo da SAP. */
 	private textoTotalSap(real: GrupoEstado, impuestos?: { isc: number; igv: number } | null): string {
 		const neto = Number(real.NetoPedido);
@@ -2240,6 +2250,7 @@ export default class Oferta extends Controller {
 			}
 			const real = await leerEstadoPedido(odata, cotizId, g.GrupoNo);
 			const oferta = this.modeloOferta();
+			this.avisarSiguientePaso([real]);
 			const base = this.filaPedidoReal(real, g.VbelnPedido, numeroOferta, (oferta.getProperty("/grupos/0/titulo") as string) ?? "\u2014", g.AuartPedido, await this.impuestosDeOferta(odata, numeroOferta));
 			// Igual que al crear el pedido: una fila por vehiculo con su VIN (solo lectura; aqui no se asigna nada).
 			let vins: { material: string; color: string; vin: string }[] = [];
@@ -2268,6 +2279,7 @@ export default class Oferta extends Controller {
 		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel;
 		const filas: Record<string, string>[] = [];
 		const numeros: string[] = [];
+		const estadosReales: (GrupoEstado | null)[] = [];
 		vista?.setBusy(true);
 		try {
 			for (const o of guardadas) {
@@ -2275,6 +2287,7 @@ export default class Oferta extends Controller {
 				numeros.push(pedido.vbelnPedido);
 				// Estado REAL leido de SAP (vista GrupoEstado sobre VBAK); si no se puede leer, se dice que no hay informacion.
 				const real = await leerEstadoPedido(odata, o.cotizId as string, o.grupoNo as string);
+				estadosReales.push(real);
 				const base = this.filaPedidoReal(real, pedido.vbelnPedido, o.numero, o.titulo, o.clasePedido ?? "", await this.impuestosDeOferta(odata, o.numero));
 				const vins = await this.asignarVinsDelGrupo(odata, o.cotizId as string, o.grupoNo as string, elegidos);
 				if (vins.length === 0) {
@@ -2294,6 +2307,7 @@ export default class Oferta extends Controller {
 		}
 		if (numeros.length > 0) {
 			oferta.setProperty("/pedidos", filas);
+			this.avisarSiguientePaso(estadosReales);
 			oferta.setProperty("/guardado", { visible: true, texto: i18n.getText("pedidosCreados", [numeros.join(", ")]) as string });
 		}
 	}

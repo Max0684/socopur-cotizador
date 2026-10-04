@@ -507,6 +507,7 @@
 					<uxap:ObjectPageSubSection>
 						<VBox>
 							<MessageStrip text="{i18n>pedidoNota}" type="Information" showIcon="true" class="sapUiSmallMarginBottom" />
+							<MessageStrip visible="{= !!${oferta>/avisoPedido/texto} }" text="{oferta>/avisoPedido/texto}" type="{oferta>/avisoPedido/tipo}" showIcon="true" class="sapUiSmallMarginBottom" />
 							<Table items="{oferta>/pedidos}" contextualWidth="Auto">
 								<columns>
 									<Column width="8rem"><Text text="{i18n>colPedido}" /></Column>
