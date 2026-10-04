@@ -80,6 +80,9 @@ interface OfertaPosSap {
 	/** Impuesto de la posicion en SAP (VBAP-MWSBP) y tasa de IGV en porcentaje (18.00 = 18 %). */
 	Mwsbp?: string | number;
 	TasaIgv?: string | number;
+	/** ISC (ZISC) e IGV (ZIGV) de la posicion, por separado; Mwsbp es la suma de ambos. */
+	Isc?: string | number;
+	Igv?: string | number;
 }
 
 interface OfertaSap {
@@ -116,6 +119,9 @@ export interface LineaDetalle {
 	/** Impuesto (IGV) real de SAP para esta posicion. */
 	impuesto: number;
 	tasaIgv: number;
+	/** ISC e IGV por separado; sin valor si el servicio no los devuelve. */
+	isc?: number;
+	igvImporte?: number;
 }
 
 export interface DetalleOferta {
@@ -156,7 +162,9 @@ export async function cargarDetalleOferta(modelo: ODataModel, numeroOferta: stri
 			sinTalla: esRegalo,
 			origen: p.Posnr,
 			impuesto: Number(p.Mwsbp ?? 0),
-			tasaIgv: Number(p.TasaIgv ?? 0)
+			tasaIgv: Number(p.TasaIgv ?? 0),
+			isc: p.Isc === undefined || p.Isc === null ? undefined : Number(p.Isc),
+			igvImporte: p.Igv === undefined || p.Igv === null ? undefined : Number(p.Igv)
 		};
 	});
 	return {

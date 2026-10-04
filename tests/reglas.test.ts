@@ -228,3 +228,15 @@ test("unirAreas suma las areas leidas a las conocidas sin repetir (un cliente de
 	assert.deepEqual(r, ["1103/10/50", "1101/11/10"]);
 	assert.equal(faltaAreaDeVentas(r, "1101", "11"), false);
 });
+
+test("totalesDeOferta: con ISC e IGV de SAP por separado el total es neto + ISC + IGV (vehiculo exonerado de IGV)", () => {
+	const t = totalesDeOferta([{ total: 12044.86, impuesto: 1204.48, isc: 1204.48, igvImporte: 0 }]);
+	assert.equal(t.desglose, true);
+	assert.deepEqual([t.neto, t.isc, t.hayIsc, t.igv, t.igvConocido, t.total], [12044.86, 1204.48, true, 0, true, 13249.34]);
+});
+
+test("totalesDeOferta: sin desglose de SAP se mantiene el calculo anterior", () => {
+	const t = totalesDeOferta([{ total: 306.18, impuesto: 55.11 }]);
+	assert.equal(t.desglose, false);
+	assert.equal(t.total, 361.29);
+});

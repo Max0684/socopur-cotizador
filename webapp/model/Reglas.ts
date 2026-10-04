@@ -140,6 +140,9 @@ export interface LineaTotales {
 	iscPct?: number;
 	/** Impuesto real de SAP; solo las lineas leidas del documento SAP lo traen. */
 	impuesto?: number;
+	/** ISC e IGV por separado (ZISC y ZIGV del documento SAP); si todas las lineas los traen, el total es neto + ISC + IGV. */
+	isc?: number;
+	igvImporte?: number;
 }
 
 export interface TotalesOferta {
@@ -151,6 +154,8 @@ export interface TotalesOferta {
 	/** true solo si TODAS las lineas traen el impuesto de SAP; antes de guardar el IGV no se conoce. */
 	igvConocido: boolean;
 	total: number;
+	/** true cuando ISC e IGV vienen separados de SAP (no se deduce el ISC del IGV). */
+	desglose: boolean;
 }
 
 const redondear = (v: number): number => Math.round(v * 100) / 100;
@@ -163,8 +168,14 @@ const redondear = (v: number): number => Math.round(v * 100) / 100;
  */
 export function totalesDeOferta(lineas: LineaTotales[]): TotalesOferta {
 	const subtotal = lineas.reduce((acc, l) => acc + l.total, 0);
+	if (lineas.length > 0 && lineas.every((l) => l.isc !== undefined && l.igvImporte !== undefined)) {
+		// Documento SAP: el valor de las lineas ya es neto; se suma el ISC y el IGV reales (el IGV puede ser 0 si esta exonerado).
+		const iscSap = redondear(lineas.reduce((acc, l) => acc + (l.isc ?? 0), 0));
+		const igvSap = redondear(lineas.reduce((acc, l) => acc + (l.igvImporte ?? 0), 0));
+		return { subtotal, neto: redondear(subtotal), isc: iscSap, hayIsc: iscSap > 0, igv: igvSap, igvConocido: true, total: redondear(subtotal + iscSap + igvSap), desglose: true };
+	}
 	const isc = redondear(lineas.reduce((acc, l) => acc + l.total - l.total / (1 + (l.iscPct ?? 0) / 100), 0));
 	const igvConocido = lineas.length > 0 && lineas.every((l) => l.impuesto !== undefined);
 	const igv = igvConocido ? redondear(lineas.reduce((acc, l) => acc + (l.impuesto ?? 0), 0)) : 0;
-	return { subtotal, neto: redondear(subtotal - isc), isc, hayIsc: isc > 0, igv, igvConocido, total: redondear(subtotal + igv) };
+	return { subtotal, neto: redondear(subtotal - isc), isc, hayIsc: isc > 0, igv, igvConocido, total: redondear(subtotal + igv), desglose: false };
 }

@@ -199,6 +199,9 @@ interface Linea extends LineaMock {
 	precioUsdSap?: number;
 	/** Impuesto (IGV) real leido de SAP; sin valor mientras la oferta no se haya guardado. */
 	impuesto?: number;
+	/** ISC e IGV reales por separado (solo tras leer el documento SAP). */
+	isc?: number;
+	igvImporte?: number;
 	iscPct?: number;
 	unica?: boolean;
 	/** Solo vehiculos de SAP: variante, centro y VIN del vehiculo elegido. */
@@ -2125,7 +2128,7 @@ export default class Oferta extends Controller {
 	}
 
 	/** Fila de la tabla de pedidos con el estado real de SAP (credito, bloqueos, liberado y total con IGV). */
-	private filaPedidoReal(real: GrupoEstado | null, numeroPedido: string, numeroOferta: string, detalle: string, clasePedido: string): Record<string, string> {
+	private filaPedidoReal(real: GrupoEstado | null, numeroPedido: string, numeroOferta: string, detalle: string, clasePedido: string, impuestos?: { isc: number; igv: number } | null): Record<string, string> {
 		const i18n = this.i18n();
 		const bloqueos: string[] = [];
 		if (real?.BloqueoEntrega) {
@@ -2151,8 +2154,33 @@ export default class Oferta extends Controller {
 			estadoState: liberado ? "Success" : "Warning",
 			liberacion: [credito, ...bloqueos].join(" \u00b7 "),
 			liberacionState: !real ? "Warning" : liberado ? "Success" : "Warning",
-			totalSap: real && real.TotalPedido !== undefined && real.TotalPedido !== "" ? `${this.formatMonto(Number(real.NetoPedido))} + IGV ${this.formatMonto(Number(real.ImpuestoPedido))} = ${this.formatMonto(Number(real.TotalPedido))} ${real.MonedaPedido}` : "\u2014"
+			totalSap: real && real.TotalPedido !== undefined && real.TotalPedido !== "" ? this.textoTotalSap(real, impuestos) : "\u2014"
 		};
+	}
+
+	/** Total del pedido; con ISC e IGV separados de la oferta se muestran como dos lineas, si no, el impuesto va en un solo valor como lo da SAP. */
+	private textoTotalSap(real: GrupoEstado, impuestos?: { isc: number; igv: number } | null): string {
+		const neto = Number(real.NetoPedido);
+		const total = Number(real.TotalPedido);
+		const i18n = this.i18n();
+		if (impuestos && Math.abs(neto + impuestos.isc + impuestos.igv - total) < 0.01) {
+			const igv = impuestos.igv === 0 ? (i18n.getText("igvExonerado") as string) : (i18n.getText("igv") as string);
+			return `${this.formatMonto(neto)} + ${i18n.getText("isc")} ${this.formatMonto(impuestos.isc)} + ${igv} ${this.formatMonto(impuestos.igv)} = ${this.formatMonto(total)} ${real.MonedaPedido}`;
+		}
+		return `${this.formatMonto(neto)} + ${i18n.getText("igv")} ${this.formatMonto(Number(real.ImpuestoPedido))} = ${this.formatMonto(total)} ${real.MonedaPedido}`;
+	}
+
+	/** ISC e IGV reales de una oferta SAP (suma de sus posiciones); null si el servicio no los devuelve. */
+	private async impuestosDeOferta(odata: ODataModel, numeroOferta: string): Promise<{ isc: number; igv: number } | null> {
+		try {
+			const detalle = await cargarDetalleOferta(odata, numeroOferta);
+			if (detalle.lineas.length === 0 || !detalle.lineas.every((l) => l.isc !== undefined && l.igvImporte !== undefined)) {
+				return null;
+			}
+			return { isc: this.redondear(detalle.lineas.reduce((a, l) => a + (l.isc ?? 0), 0)), igv: this.redondear(detalle.lineas.reduce((a, l) => a + (l.igvImporte ?? 0), 0)) };
+		} catch {
+			return null;
+		}
 	}
 
 	/** Al abrir una oferta SAP sin pedido, deja lista la clave de cotizacion y grupo para habilitar Copiar a pedido. */
@@ -2211,7 +2239,7 @@ export default class Oferta extends Controller {
 			}
 			const real = await leerEstadoPedido(odata, cotizId, g.GrupoNo);
 			const oferta = this.modeloOferta();
-			const base = this.filaPedidoReal(real, g.VbelnPedido, numeroOferta, (oferta.getProperty("/grupos/0/titulo") as string) ?? "\u2014", g.AuartPedido);
+			const base = this.filaPedidoReal(real, g.VbelnPedido, numeroOferta, (oferta.getProperty("/grupos/0/titulo") as string) ?? "\u2014", g.AuartPedido, await this.impuestosDeOferta(odata, numeroOferta));
 			// Igual que al crear el pedido: una fila por vehiculo con su VIN (solo lectura; aqui no se asigna nada).
 			let vins: { material: string; color: string; vin: string }[] = [];
 			try {
@@ -2246,7 +2274,7 @@ export default class Oferta extends Controller {
 				numeros.push(pedido.vbelnPedido);
 				// Estado REAL leido de SAP (vista GrupoEstado sobre VBAK); si no se puede leer, se dice que no hay informacion.
 				const real = await leerEstadoPedido(odata, o.cotizId as string, o.grupoNo as string);
-				const base = this.filaPedidoReal(real, pedido.vbelnPedido, o.numero, o.titulo, o.clasePedido ?? "");
+				const base = this.filaPedidoReal(real, pedido.vbelnPedido, o.numero, o.titulo, o.clasePedido ?? "", await this.impuestosDeOferta(odata, o.numero));
 				const vins = await this.asignarVinsDelGrupo(odata, o.cotizId as string, o.grupoNo as string, elegidos);
 				if (vins.length === 0) {
 					filas.push(base);
@@ -3175,7 +3203,12 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 		oferta.setProperty("/textoGenerar", grupos.length ? this.i18n().getText("generaraOfertas", [grupos.length]) : "");
 		// IGV real de SAP (solo tras guardar); antes de guardar no se conoce y se muestra "—".
 		const totales = totalesDeOferta(grupos.flatMap((g) => g.lineas));
-		oferta.setProperty("/totales", { ...totales, igvTxt: totales.igvConocido ? this.formatMonto(totales.igv) : "\u2014" });
+		oferta.setProperty("/totales", {
+			...totales,
+			igvTxt: totales.igvConocido ? this.formatMonto(totales.igv) : "\u2014",
+			iscEtq: this.i18n().getText(totales.desglose ? "isc" : "iscIncluido") as string,
+			igvEtq: this.i18n().getText(totales.desglose && totales.igv === 0 ? "igvExonerado" : "igv") as string
+		});
 		if (oferta.getProperty("/cliente") && !oferta.getProperty("/entregaDatos/direccionId")) {
 			this.aplicarDireccionEnvio();
 		}
