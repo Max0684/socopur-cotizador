@@ -2166,8 +2166,9 @@ export default class Oferta extends Controller {
 		let items: VinAsignado[] = [];
 		try {
 			items = await leerVinsGrupo(odata, cotizId, grupoNo);
-		} catch {
-			return [];
+		} catch (error) {
+			// Antes se devolvia [] y el pedido salia sin VIN y sin explicacion; ahora la fila dice por que.
+			return [{ posnr: "", material: "", vhcle: "", vin: "", color: "", variante: "", error: this.motivoDeError(error) }];
 		}
 		const resultado: (VinAsignado & { error?: string })[] = [];
 		for (const i of items) {
