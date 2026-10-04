@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { asignarVinItem, ATNAM_VARIANTE, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, OfertaEnProcesoError, liberarVinItem, renovarCotizacion, type GrupoParaGuardar, type OfertaParaGuardar } from "../webapp/model/CotizacionesService.ts";
+import { asignarVinItem, ATNAM_VARIANTE, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, OfertaEnProcesoError, liberarVinItem, renovarCotizacion, type GrupoParaGuardar, type OfertaParaGuardar } from "../webapp/model/CotizacionesService.ts";
 import { crearModeloFalso } from "./helpers/modeloFalso.ts";
 
 function grupo(extra: Partial<GrupoParaGuardar> = {}): GrupoParaGuardar {
@@ -221,6 +221,23 @@ test("leerVinsGrupo devuelve solo los items de vehiculo (material ZVEH) del grup
 	assert.equal(r[0].vin, "");
 	assert.ok(llamadas[0].includes("GrupoNo eq '01'"));
 	assert.ok(llamadas.some((l) => l.startsWith("list /Material Vkorg eq '1101' and Vtweg eq '11' and (Matnr eq 'CAR200B' or Matnr eq 'SFX428H-150-MTK')")));
+});
+
+test("leerVinsLibres ordena por fecha de ingreso y luego Vhcle, y sin fecha del servicio ordena por Vhcle", async () => {
+	const filas = [
+		{ Vhcle: "1000000030", Vhvin: "V30", ColorTxt: "ROJO", Condicion: "CBU", AnoModelo: "2025", Variante: "X", Lgort: "0004", IngresoFecha: "2025-12-16" },
+		{ Vhcle: "1000000020", Vhvin: "V20", ColorTxt: "ROJO", Condicion: "CBU", AnoModelo: "2025", Variante: "X", Lgort: "0004", IngresoFecha: "2025-12-16" },
+		{ Vhcle: "1000000040", Vhvin: "V40", ColorTxt: "ROJO", Condicion: "CBU", AnoModelo: "2025", Variante: "X", Lgort: "0004", IngresoFecha: "2025-09-26" }
+	];
+	const { modelo, llamadas } = modeloVin({}, filas);
+	const r = await leerVinsLibres(como(modelo), { vkorg: "1101", vtweg: "11", matnr: "DU200Z0", werks: "1101" });
+	assert.deepEqual(r.map((v) => v.vin), ["V40", "V20", "V30"]);
+	assert.equal(r[0].ingreso, "2025-09-26");
+	assert.ok(llamadas[0].includes("Vkorg eq '1101' and Vtweg eq '11' and Matnr eq 'DU200Z0' and Werks eq '1101'"));
+	const sinFecha = modeloVin({}, filas.map(({ IngresoFecha: _f, ...resto }) => resto));
+	const r2 = await leerVinsLibres(como(sinFecha.modelo), { vkorg: "1101", vtweg: "11", matnr: "DU200Z0", werks: "1101" });
+	assert.deepEqual(r2.map((v) => v.vin), ["V20", "V30", "V40"]);
+	assert.equal(r2[0].ingreso, "");
 });
 
 test("liberarVinItem llama la accion liberarVin sobre el item", async () => {

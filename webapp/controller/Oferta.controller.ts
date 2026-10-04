@@ -8,7 +8,7 @@ import { buscarMateriales, cargarSegmentos, disponibilidadPorCentro, materialesD
 import { consultarPrecio } from "com/socopur/cotizador/model/PreciosService";
 import { agruparVehiculos, buscarVehiculos, filtrarVehiculos } from "com/socopur/cotizador/model/VehiculosService";
 import { almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, gruposParaGuardar, modalidadPorDefecto, sectorDeCabecera, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
-import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type VinAsignado } from "com/socopur/cotizador/model/CotizacionesService";
+import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type VinAsignado } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
 import { cargarModalidades, type ModalidadPantalla } from "com/socopur/cotizador/model/ModalidadesService";
 import { ordenarPorTexto } from "com/socopur/cotizador/model/Orden";
@@ -167,6 +167,8 @@ interface FilaVin {
 	denominacion: string;
 	detalle: string;
 	opciones: { key: string; text: string; enabled: boolean }[];
+	/** Con la clave de la posicion cuando el VIN se elige entre los de SAP (key = Vhcle). */
+	posnr?: string;
 	vin: string;
 }
 
@@ -1913,6 +1915,14 @@ export default class Oferta extends Controller {
 		// se vuelven a leer del documento SAP y ya no traen la variante, por eso se decide por la oferta guardada y no por la linea.
 		const guardadas = (oferta.getProperty("/ofertasGuardadas") as OfertaGuardada[]) ?? [];
 		const guardadasEnSap = this.usarOData() && guardadas.length > 0 && guardadas.every((o) => !!o.cotizId && !!o.grupoNo);
+		if (guardadasEnSap) {
+			// Ofertas de SAP: el vendedor elige el VIN entre los libres de SAP (el mas antiguo ya viene marcado).
+			const filasSap = await this.armarFilasVinSap(guardadas);
+			if (filasSap.length > 0) {
+				await this.abrirDialogoVin(filasSap, true);
+				return;
+			}
+		}
 		if (!vehiculos.length || guardadasEnSap) {
 			this.crearPedidos([]);
 			return;
@@ -1937,6 +1947,84 @@ export default class Oferta extends Controller {
 		});
 		this.validarVin();
 		this.dialogoVin.open();
+	}
+
+	private async abrirDialogoVin(filas: FilaVin[], sap: boolean): Promise<void> {
+		if (!this.dialogoVin) {
+			this.dialogoVin = (await Fragment.load({
+				id: this.getView()?.getId(),
+				name: "com.socopur.cotizador.view.fragment.AsignarVin",
+				controller: this
+			})) as Dialog;
+			this.getView()?.addDependent(this.dialogoVin);
+			this.dialogoVin.setModel(new JSONModel(), "asignar");
+		}
+		const horas = this.modeloMock().getProperty("/perfil/bloqueoHoras") as number;
+		(this.dialogoVin.getModel("asignar") as JSONModel).setData({
+			filas,
+			sap,
+			aviso: "",
+			avisoTipo: "Warning",
+			valido: false,
+			bloqueoNota: this.i18n().getText("vinBloqueoNota", [horas]) as string
+		});
+		this.validarVin();
+		this.dialogoVin.open();
+	}
+
+	/**
+	 * Una fila por vehiculo de las ofertas guardadas en SAP, con los VIN libres de SAP (entidad Vehiculo) del mas antiguo al mas nuevo.
+	 * El mas antiguo no usado en otra fila viene marcado. Si un vehiculo no se puede resolver (cantidad mayor a 1, error de lectura) se
+	 * devuelve vacio y el pedido sigue con la asignacion automatica de SAP.
+	 */
+	private async armarFilasVinSap(guardadas: OfertaGuardada[]): Promise<FilaVin[]> {
+		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel;
+		const i18n = this.i18n();
+		const usados = new Set<string>();
+		const filas: FilaVin[] = [];
+		const vista = this.getView();
+		vista?.setBusy(true);
+		try {
+			for (const o of guardadas) {
+				const items = await leerVinsGrupo(odata, o.cotizId as string, o.grupoNo as string);
+				for (const item of items) {
+					if ((item.cantidad ?? 1) > 1 || item.vin || !item.werks || !item.vkorg || !item.vtweg) {
+						return [];
+					}
+					const libres = await leerVinsLibres(odata, { vkorg: item.vkorg, vtweg: item.vtweg, matnr: item.material, werks: item.werks, variante: item.variante || undefined });
+					const propuesto = libres.find((v) => !usados.has(v.vhcle));
+					if (propuesto) {
+						usados.add(propuesto.vhcle);
+					}
+					const opciones = libres.map((v, idx) => ({
+						key: v.vhcle,
+						text: [
+							v.vin,
+							[v.color, v.condicion, v.anio].filter(Boolean).join(" "),
+							v.ingreso ? (i18n.getText("vinIngreso", [this.formatFecha(v.ingreso)]) as string) : "",
+							idx === 0 ? (i18n.getText("vinSugerido") as string) : ""
+						]
+							.filter(Boolean)
+							.join(" · "),
+						enabled: true
+					}));
+					const lineaPantalla = ((this.modeloOferta().getProperty("/lineas") as Linea[]) ?? []).find((l) => l.material === item.material);
+					filas.push({
+						material: item.material,
+						posnr: item.posnr,
+						denominacion: lineaPantalla?.denominacion ?? item.material,
+						detalle: [item.material, item.variante].filter(Boolean).join(" · "),
+						opciones,
+						vin: propuesto?.vhcle ?? ""
+					});
+				}
+			}
+		} catch {
+			return [];
+		} finally {
+			vista?.setBusy(false);
+		}
+		return filas;
 	}
 
 	public onCambiaVin(): void {
@@ -1969,6 +2057,14 @@ export default class Oferta extends Controller {
 	 */
 	public onCrearPedido(): void {
 		const modelo = this.dialogoVin?.getModel("asignar") as JSONModel;
+		if (modelo.getProperty("/sap")) {
+			// VIN real elegido (Vhcle por posicion): se crea el pedido y asignarVin valida ese VIN en SAP.
+			const elegidos: Record<string, string> = {};
+			(modelo.getProperty("/filas") as FilaVin[]).forEach((f) => (elegidos[f.posnr as string] = f.vin));
+			this.dialogoVin?.close();
+			void this.crearPedidosSap((this.modeloOferta().getProperty("/ofertasGuardadas") as OfertaGuardada[]) ?? [], elegidos);
+			return;
+		}
 		const mock = this.modeloMock();
 		const i18n = this.i18n();
 		const filas = modelo.getProperty("/filas") as FilaVin[];
@@ -2114,14 +2210,29 @@ export default class Oferta extends Controller {
 				return;
 			}
 			const real = await leerEstadoPedido(odata, cotizId, g.GrupoNo);
-			this.modeloOferta().setProperty("/pedidos", [this.filaPedidoReal(real, g.VbelnPedido, numeroOferta, "\u2014", g.AuartPedido)]);
+			const oferta = this.modeloOferta();
+			const base = this.filaPedidoReal(real, g.VbelnPedido, numeroOferta, (oferta.getProperty("/grupos/0/titulo") as string) ?? "\u2014", g.AuartPedido);
+			// Igual que al crear el pedido: una fila por vehiculo con su VIN (solo lectura; aqui no se asigna nada).
+			let vins: { material: string; color: string; vin: string }[] = [];
+			try {
+				vins = await leerVinsGrupo(odata, cotizId, g.GrupoNo);
+			} catch {
+				vins = [];
+			}
+			const horas = this.modeloMock().getProperty("/perfil/bloqueoHoras");
+			oferta.setProperty(
+				"/pedidos",
+				vins.length === 0
+					? [base]
+					: vins.map((v) => ({ ...base, detalle: `${v.material} \u00b7 ${v.color}`, vin: v.vin || "\u2014", bloqueo: v.vin ? (this.i18n().getText("vinBloqueadoHoras", [horas]) as string) : "\u2014" }))
+			);
 		} catch (error) {
 			MessageToast.show(this.i18n().getText("odataDetalleError", [(error as Error).message]) as string);
 		}
 	}
 
 	/** Un pedido real por cada oferta guardada (accion crearPedido). Se detiene en el primer rechazo de SAP. */
-	private async crearPedidosSap(guardadas: OfertaGuardada[]): Promise<void> {
+	private async crearPedidosSap(guardadas: OfertaGuardada[], elegidos: Record<string, string> = {}): Promise<void> {
 		const oferta = this.modeloOferta();
 		const i18n = this.i18n();
 		const vista = this.getView();
@@ -2136,7 +2247,7 @@ export default class Oferta extends Controller {
 				// Estado REAL leido de SAP (vista GrupoEstado sobre VBAK); si no se puede leer, se dice que no hay informacion.
 				const real = await leerEstadoPedido(odata, o.cotizId as string, o.grupoNo as string);
 				const base = this.filaPedidoReal(real, pedido.vbelnPedido, o.numero, o.titulo, o.clasePedido ?? "");
-				const vins = await this.asignarVinsDelGrupo(odata, o.cotizId as string, o.grupoNo as string);
+				const vins = await this.asignarVinsDelGrupo(odata, o.cotizId as string, o.grupoNo as string, elegidos);
 				if (vins.length === 0) {
 					filas.push(base);
 				}
@@ -2162,7 +2273,7 @@ export default class Oferta extends Controller {
 	 * Asigna el VIN de cada vehiculo del grupo despues de crear el pedido (asignarVin: SAP propone el mas antiguo del mismo modelo,
 	 * centro y variante). Si falla para un vehiculo, el pedido queda y ese vehiculo queda "VIN pendiente" con el motivo.
 	 */
-	private async asignarVinsDelGrupo(odata: ODataModel, cotizId: string, grupoNo: string): Promise<(VinAsignado & { error?: string })[]> {
+	private async asignarVinsDelGrupo(odata: ODataModel, cotizId: string, grupoNo: string, elegidos: Record<string, string> = {}): Promise<(VinAsignado & { error?: string })[]> {
 		let items: VinAsignado[] = [];
 		try {
 			items = await leerVinsGrupo(odata, cotizId, grupoNo);
@@ -2177,7 +2288,7 @@ export default class Oferta extends Controller {
 				continue;
 			}
 			try {
-				resultado.push(await asignarVinItem(odata, cotizId, i.posnr));
+				resultado.push(await asignarVinItem(odata, cotizId, i.posnr, elegidos[i.posnr] || undefined));
 			} catch (error) {
 				resultado.push({ ...i, error: (error as Error).message });
 			}

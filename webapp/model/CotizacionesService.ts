@@ -246,6 +246,57 @@ export interface VinAsignado {
 	vin: string;
 	color: string;
 	variante: string;
+	/** Solo en leerVinsGrupo: centro, organizacion y canal del grupo, y cantidad (para buscar los VIN libres del vehiculo). */
+	werks?: string;
+	vkorg?: string;
+	vtweg?: string;
+	cantidad?: number;
+}
+
+/** VIN libre que SAP ofrece para un vehiculo (entidad Vehiculo). */
+export interface VinLibre {
+	vhcle: string;
+	vin: string;
+	color: string;
+	condicion: string;
+	anio: string;
+	variante: string;
+	almacen: string;
+	/** aaaa-mm-dd; fecha de ingreso (creacion del lote). Vacia si el servicio aun no la expone. */
+	ingreso: string;
+}
+
+const comillasOdata = (t: string): string => t.replace(/'/g, "''");
+
+/**
+ * VIN libres de un material en un centro, del mas antiguo al mas nuevo (misma regla que asignarVin: fecha de ingreso y luego Vhcle).
+ * IngresoFecha se pide aparte: si el servicio aun no lo expone se reintenta sin ella y el orden queda por Vhcle.
+ */
+export async function leerVinsLibres(modelo: ODataModel, f: { vkorg: string; vtweg: string; matnr: string; werks: string; variante?: string }): Promise<VinLibre[]> {
+	const filtro = [`Vkorg eq '${comillasOdata(f.vkorg)}'`, `Vtweg eq '${comillasOdata(f.vtweg)}'`, `Matnr eq '${comillasOdata(f.matnr)}'`, `Werks eq '${comillasOdata(f.werks)}'`, ...(f.variante ? [`Variante eq '${comillasOdata(f.variante)}'`] : [])].join(" and ");
+	const base = "Vhcle,Vhvin,ColorTxt,Color,Condicion,AnoModelo,Variante,Lgort";
+	const leer = async (seleccion: string) =>
+		(await modelo.bindList("/Vehiculo", undefined, undefined, undefined, { $filter: filtro, $select: seleccion, $orderby: "Vhcle" }).requestContexts(0, 500)).map(
+			(c) => c.getObject() as Record<string, unknown>
+		);
+	let filas: Record<string, unknown>[];
+	try {
+		filas = await leer(`${base},IngresoFecha`);
+	} catch {
+		filas = await leer(base);
+	}
+	return filas
+		.map((o) => ({
+			vhcle: String(o.Vhcle ?? ""),
+			vin: String(o.Vhvin ?? ""),
+			color: String(o.ColorTxt || o.Color || ""),
+			condicion: String(o.Condicion ?? ""),
+			anio: String(o.AnoModelo ?? ""),
+			variante: String(o.Variante ?? ""),
+			almacen: String(o.Lgort ?? ""),
+			ingreso: String(o.IngresoFecha ?? "").slice(0, 10)
+		}))
+		.sort((a, b) => (a.ingreso || "9999").localeCompare(b.ingreso || "9999") || a.vhcle.localeCompare(b.vhcle));
 }
 
 const claveItem = (cotizId: string, posnr: string): string => `/Item(CotizId=${cotizId},Posnr='${posnr.replace(/'/g, "''")}',IsActiveEntity=true)`;
@@ -272,7 +323,7 @@ export async function leerVinsGrupo(modelo: ODataModel, cotizId: string, grupoNo
 		await modelo
 			.bindList(`${cotizacion}/_Item`, undefined, undefined, undefined, {
 				$filter: filtro,
-				$select: "Posnr,Matnr,Vhcle,Vhvin,Color,ColorTxt,Variante",
+				$select: "Posnr,Matnr,Cantidad,Werks,Vhcle,Vhvin,Color,ColorTxt,Variante",
 				$orderby: "Posnr"
 			})
 			.requestContexts(0, 200)
@@ -297,7 +348,7 @@ export async function leerVinsGrupo(modelo: ODataModel, cotizId: string, grupoNo
 			.requestContexts(0, 200)
 	).map((c) => c.getObject() as Pick<Material, "Matnr" | "Mtart">);
 	const vehiculos = new Set(materiales.filter((m) => m.Mtart === "ZVEH").map((m) => m.Matnr));
-	return items.filter((i) => vehiculos.has(String(i.Matnr))).map(vinDeItem);
+	return items.filter((i) => vehiculos.has(String(i.Matnr))).map((i) => ({ ...vinDeItem(i), werks: String(i.Werks ?? ""), vkorg: area.Vkorg, vtweg: area.Vtweg, cantidad: Number(i.Cantidad ?? 1) }));
 }
 
 /**
