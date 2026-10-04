@@ -394,6 +394,8 @@
 											<Column width="9rem" hAlign="Center" minScreenWidth="26rem" demandPopin="true"><Text text="{i18n>colCantidad}" /></Column>
 											<Column width="8rem" hAlign="End" minScreenWidth="36rem" demandPopin="true"><Text text="{i18n>colPrecio}" /></Column>
 											<Column width="7rem" hAlign="End"><Text text="{i18n>colTotalLinea}" /></Column>
+											<Column width="6rem" hAlign="End" minScreenWidth="64rem" demandPopin="true"><Text text="{i18n>colIsc}" /></Column>
+											<Column width="8rem" hAlign="End" minScreenWidth="64rem" demandPopin="true"><Text text="{i18n>colTotalConImp}" /></Column>
 											<Column width="3rem" hAlign="Center"><Text text="" /></Column>
 										</columns>
 										<items>
@@ -410,6 +412,8 @@
 													<StepInput value="{oferta>cantidad}" min="1" max="{= ${oferta>unica} ? 1 : 9999 }" width="7rem" enabled="{= ${oferta>/pedidos}.length === 0 &amp;&amp; !${oferta>bonificacion} }" change=".onCambiaCantidadLinea" />
 													<ObjectNumber number="{path: 'oferta>precio', formatter: '.formatMonto'}" />
 													<ObjectNumber number="{path: 'oferta>total', formatter: '.formatMonto'}" />
+													<ObjectNumber visible="{= ${oferta>isc} !== undefined }" number="{path: 'oferta>isc', formatter: '.formatMonto'}" />
+													<ObjectNumber visible="{= ${oferta>totalConImpuestos} !== undefined }" number="{path: 'oferta>totalConImpuestos', formatter: '.formatMonto'}" emphasized="true" />
 													<Button icon="sap-icon://delete" type="Transparent" tooltip="{i18n>quitarLinea}" visible="{= !${oferta>bonificacion} }" enabled="{= ${oferta>/pedidos}.length === 0 }" press=".onQuitarLinea" />
 												</cells>
 											</ColumnListItem>

@@ -202,6 +202,7 @@ interface Linea extends LineaMock {
 	/** ISC e IGV reales por separado (solo tras leer el documento SAP). */
 	isc?: number;
 	igvImporte?: number;
+	totalConImpuestos?: number;
 	iscPct?: number;
 	unica?: boolean;
 	/** Solo vehiculos de SAP: variante, centro y VIN del vehiculo elegido. */

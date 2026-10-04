@@ -122,6 +122,8 @@ export interface LineaDetalle {
 	/** ISC e IGV por separado; sin valor si el servicio no los devuelve. */
 	isc?: number;
 	igvImporte?: number;
+	/** Valor neto + ISC + IGV de la linea; sin valor si el servicio no trae el desglose. */
+	totalConImpuestos?: number;
 }
 
 export interface DetalleOferta {
@@ -164,7 +166,8 @@ export async function cargarDetalleOferta(modelo: ODataModel, numeroOferta: stri
 			impuesto: Number(p.Mwsbp ?? 0),
 			tasaIgv: Number(p.TasaIgv ?? 0),
 			isc: p.Isc === undefined || p.Isc === null ? undefined : Number(p.Isc),
-			igvImporte: p.Igv === undefined || p.Igv === null ? undefined : Number(p.Igv)
+			igvImporte: p.Igv === undefined || p.Igv === null ? undefined : Number(p.Igv),
+			totalConImpuestos: p.Isc === undefined || p.Isc === null || p.Igv === undefined || p.Igv === null ? undefined : Math.round((Number(p.Netwr ?? 0) + Number(p.Isc) + Number(p.Igv)) * 100) / 100
 		};
 	});
 	return {
