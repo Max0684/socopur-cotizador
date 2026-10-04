@@ -20,6 +20,11 @@ type CotizacionConLineas = Cotizacion & { _Item?: Pick<Item, "Cantidad" | "Preci
 
 const formatoImporte = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+/** El servicio devuelve el numero de oferta sin ceros a la izquierda (0095004056 llega como 95004056); SAP lo guarda con 10 digitos. */
+function numeroSap(numero: string | undefined): string {
+	return /^\d{1,9}$/.test(numero ?? "") ? (numero as string).padStart(10, "0") : (numero ?? "");
+}
+
 /** Total de la oferta = suma de cantidad x precio de lista de sus lineas (las bonificaciones traen precio 0). */
 function sumarTotal(lineas: CotizacionConLineas["_Item"]): number {
 	return (lineas ?? []).reduce((suma, l) => suma + Number(l.Cantidad ?? 0) * Number(l.PrecioLista ?? 0), 0);
@@ -44,7 +49,7 @@ export async function cargarOfertas(modelo: ODataModel, textoPedido: string): Pr
 		const conPedido = Boolean(c.NumeroPedido);
 		return {
 			cotizId: c.CotizId,
-			numero: c.NumeroOferta ?? "",
+			numero: numeroSap(c.NumeroOferta),
 			cliente: c.ClienteNombre ?? "",
 			doc: c.ClienteStcd1 || c.ClienteStcd2 || "",
 			fecha: (c.LocalCreatedAt ?? "").slice(0, 10),
