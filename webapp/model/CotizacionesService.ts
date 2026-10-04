@@ -1,6 +1,6 @@
 import type ODataModel from "sap/ui/model/odata/v4/ODataModel";
 import type Context from "sap/ui/model/odata/v4/Context";
-import type { Cotizacion, Grupo, GrupoEstado, Item, ItemCar } from "./odata/Entidades";
+import type { Cotizacion, Grupo, GrupoEstado, Item, ItemCar, Material } from "./odata/Entidades";
 
 const NS = "com.sap.gateway.srvd_a2x.yui_cotiz_srv.v0001";
 
@@ -261,19 +261,43 @@ function vinDeItem(i: Partial<Item> & { Vhvin?: string; ColorTxt?: string; Color
 	};
 }
 
-/** Items del grupo que son vehiculos de SAP (tienen variante guardada) con su VIN actual (vacio si aun no se asigno). */
+/**
+ * Items del grupo que son vehiculos de SAP (material de tipo ZVEH) con su VIN actual (vacio si aun no se asigno). El Item del servicio no
+ * trae el tipo de material: se lee de Material con la organizacion y el canal del grupo.
+ */
 export async function leerVinsGrupo(modelo: ODataModel, cotizId: string, grupoNo: string): Promise<VinAsignado[]> {
+	const cotizacion = `/Cotizacion(CotizId=${cotizId},IsActiveEntity=true)`;
 	const filtro = `GrupoNo eq '${grupoNo.replace(/'/g, "''")}'`;
-	const lista = modelo.bindList(`/Cotizacion(CotizId=${cotizId},IsActiveEntity=true)/_Item`, undefined, undefined, undefined, {
-		$filter: filtro,
-		$select: "Posnr,Matnr,Vhcle,Vhvin,Color,ColorTxt,Variante,Mtart",
-		$orderby: "Posnr"
-	});
-	const contextos = await lista.requestContexts(0, 200);
-	return contextos
-		.map((c) => c.getObject() as Item & { Mtart?: string })
-		.filter((i) => i.Mtart === "ZVEH")
-		.map(vinDeItem);
+	const items = (
+		await modelo
+			.bindList(`${cotizacion}/_Item`, undefined, undefined, undefined, {
+				$filter: filtro,
+				$select: "Posnr,Matnr,Vhcle,Vhvin,Color,ColorTxt,Variante",
+				$orderby: "Posnr"
+			})
+			.requestContexts(0, 200)
+	).map((c) => c.getObject() as Item);
+	if (items.length === 0) {
+		return [];
+	}
+	const area = (await modelo.bindList(`${cotizacion}/_Grupo`, undefined, undefined, undefined, { $filter: filtro, $select: "Vkorg,Vtweg" }).requestContexts(0, 1))[0]?.getObject() as
+		| Pick<Grupo, "Vkorg" | "Vtweg">
+		| undefined;
+	if (!area) {
+		return [];
+	}
+	const comillas = (t: string): string => t.replace(/'/g, "''");
+	const matnrs = [...new Set(items.map((i) => String(i.Matnr)))];
+	const materiales = (
+		await modelo
+			.bindList("/Material", undefined, undefined, undefined, {
+				$filter: `Vkorg eq '${comillas(area.Vkorg)}' and Vtweg eq '${comillas(area.Vtweg)}' and (${matnrs.map((m) => `Matnr eq '${comillas(m)}'`).join(" or ")})`,
+				$select: "Matnr,Mtart"
+			})
+			.requestContexts(0, 200)
+	).map((c) => c.getObject() as Pick<Material, "Matnr" | "Mtart">);
+	const vehiculos = new Set(materiales.filter((m) => m.Mtart === "ZVEH").map((m) => m.Matnr));
+	return items.filter((i) => vehiculos.has(String(i.Matnr))).map(vinDeItem);
 }
 
 /**

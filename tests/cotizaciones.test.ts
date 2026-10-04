@@ -159,7 +159,7 @@ test("guardarCotizacion: una linea sin variante no crea caracteristicas", async 
 	assert.equal(creadas.some((c) => c.ruta === "_Car"), false);
 });
 
-function modeloVin(item: Record<string, unknown>, filas: Record<string, unknown>[] = []) {
+function modeloVin(item: Record<string, unknown>, filas: Record<string, unknown>[] = [], porRuta: Record<string, Record<string, unknown>[]> = {}) {
 	const llamadas: string[] = [];
 	const parametros: Record<string, unknown> = {};
 	return {
@@ -168,7 +168,9 @@ function modeloVin(item: Record<string, unknown>, filas: Record<string, unknown>
 		modelo: {
 			bindList(ruta: string, _a?: unknown, _b?: unknown, _c?: unknown, p?: { $filter?: string }) {
 				llamadas.push(`list ${ruta} ${p?.$filter ?? ""}`);
-				return { async requestContexts() { return filas.map((o) => ({ getObject: () => o })); } };
+				const clave = Object.keys(porRuta).find((k) => ruta.endsWith(k));
+				const lista = clave ? porRuta[clave] : filas;
+				return { async requestContexts() { return lista.map((o) => ({ getObject: () => o })); } };
 			},
 			bindContext(ruta: string) {
 				return {
@@ -198,16 +200,27 @@ test("asignarVinItem propaga el rechazo de SAP", async () => {
 	await assert.rejects(() => asignarVinItem(como(modelo), "COT-1", "000010"), /No quedan unidades/);
 });
 
-test("leerVinsGrupo devuelve solo los items de vehiculo (ZVEH) del grupo", async () => {
-	const { modelo, llamadas } = modeloVin({}, [
-		{ Posnr: "000010", Matnr: "CAR200B", Vhcle: "", Vhvin: "", Color: "", ColorTxt: "", Variante: "CAR200BCKD2025AZU", Mtart: "ZVEH" },
-		{ Posnr: "000020", Matnr: "SFX428H-150-MTK", Vhcle: "", Vhvin: "", Color: "", ColorTxt: "", Variante: "", Mtart: "ZREP" }
-	]);
+test("leerVinsGrupo devuelve solo los items de vehiculo (material ZVEH) del grupo, leyendo el tipo de Material", async () => {
+	const { modelo, llamadas } = modeloVin(
+		{},
+		[
+			{ Posnr: "000010", Matnr: "CAR200B", Vhcle: "", Vhvin: "", Color: "", ColorTxt: "", Variante: "CAR200BCKD2025AZU" },
+			{ Posnr: "000020", Matnr: "SFX428H-150-MTK", Vhcle: "", Vhvin: "", Color: "", ColorTxt: "", Variante: "" }
+		],
+		{
+			"/_Grupo": [{ Vkorg: "1101", Vtweg: "11" }],
+			"/Material": [
+				{ Matnr: "CAR200B", Mtart: "ZVEH" },
+				{ Matnr: "SFX428H-150-MTK", Mtart: "ZREP" }
+			]
+		}
+	);
 	const r = await leerVinsGrupo(como(modelo), "COT-1", "01");
 	assert.equal(r.length, 1);
 	assert.equal(r[0].material, "CAR200B");
 	assert.equal(r[0].vin, "");
 	assert.ok(llamadas[0].includes("GrupoNo eq '01'"));
+	assert.ok(llamadas.some((l) => l.startsWith("list /Material Vkorg eq '1101' and Vtweg eq '11' and (Matnr eq 'CAR200B' or Matnr eq 'SFX428H-150-MTK')")));
 });
 
 test("liberarVinItem llama la accion liberarVin sobre el item", async () => {
