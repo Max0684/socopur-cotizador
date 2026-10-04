@@ -2056,6 +2056,42 @@ export default class Oferta extends Controller {
 		};
 	}
 
+	/** Al abrir una oferta SAP sin pedido, deja lista la clave de cotizacion y grupo para habilitar Copiar a pedido. */
+	private async prepararPedidoDeOfertaAbierta(cotizId: string, numeroOferta: string): Promise<void> {
+		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel | undefined;
+		if (!odata) {
+			return;
+		}
+		try {
+			const cot = (await odata
+				.bindContext(`/Cotizacion(CotizId=${cotizId},IsActiveEntity=true)`, undefined, {
+					$select: "CotizId",
+					$expand: { _Grupo: { $select: "GrupoNo,VbelnOferta,VbelnPedido,AuartPedido" } },
+					$$ownRequest: true
+				})
+				.requestObject()) as { _Grupo?: { GrupoNo: string; VbelnOferta: string; VbelnPedido: string; AuartPedido: string }[] };
+			const g = (cot._Grupo ?? []).find((x) => x.VbelnOferta === numeroOferta && !x.VbelnPedido);
+			if (!g) {
+				return;
+			}
+			const oferta = this.modeloOferta();
+			oferta.setProperty("/ofertasGuardadas", [
+				{
+					numero: numeroOferta,
+					cotizId,
+					grupoNo: g.GrupoNo,
+					titulo: (oferta.getProperty("/grupos/0/titulo") as string) ?? (oferta.getProperty("/titulo") as string),
+					lineas: (oferta.getProperty("/lineas") as Linea[]) ?? [],
+					clasePedido: g.AuartPedido,
+					total: oferta.getProperty("/totales/total") as number
+				}
+			]);
+			oferta.setProperty("/guardado", { visible: true, texto: this.i18n().getText("guardadoOk", [numeroOferta]) as string });
+		} catch (error) {
+			MessageToast.show(this.i18n().getText("odataDetalleError", [(error as Error).message]) as string);
+		}
+	}
+
 	/** Al abrir una oferta que ya tiene pedido, muestra el pedido REAL (antes salia un numero de ejemplo). */
 	private async cargarPedidoReal(cotizId: string, numeroOferta: string): Promise<void> {
 		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel | undefined;
@@ -2888,7 +2924,7 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 				oferta.setProperty("/opcionesCentro", this.centrosDe(canalInicial));
 			}
 			if (numero) {
-				const cabecera = (mock.getProperty("/ofertas") as { numero: string; doc: string; cliente?: string; cotizId?: string }[]).find(
+				const cabecera = (mock.getProperty("/ofertas") as { numero: string; doc: string; cliente?: string; cotizId?: string; estado?: string }[]).find(
 					(o) => o.numero === numero || o.cotizId === numero
 				);
 				// Oferta real aun sin numero SAP: no se muestra el UUID como si fuera el numero.
@@ -2900,8 +2936,10 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 				oferta.setProperty("/numero", esperaNumero ? "" : numero);
 				// Oferta real (lista leida del servicio) con numero SAP: el detalle se carga del documento SAP.
 				const numeroSap = cabecera?.numero || numero;
+				const sinPedido = cabecera?.estado !== this.i18n().getText("estadoPedido");
 				if (this.usarOData() && /^\d{10}$/.test(numeroSap)) {
-					void this.cargarDetalleReal(numeroSap);
+					// Con el detalle ya leido, una oferta sin pedido queda lista para Copiar a pedido (antes solo pasaba tras guardar en esta pantalla).
+					void this.cargarDetalleReal(numeroSap).then(() => (sinPedido && cabecera?.cotizId ? this.prepararPedidoDeOfertaAbierta(cabecera.cotizId, numeroSap) : undefined));
 				}
 				if (detalle) {
 					const clientes = mock.getProperty("/clientes") as Record<string, Cliente>;
