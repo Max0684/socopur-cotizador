@@ -10,6 +10,7 @@ import { agruparVehiculos, buscarVehiculos, filtrarVehiculos } from "com/socopur
 import { almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, gruposParaGuardar, modalidadPorDefecto, sectorDeCabecera, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
 import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type VinAsignado } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
+import { cargarContacto, cargarDirecciones, cargarMovimientos, type Movimiento } from "com/socopur/cotizador/model/ClienteDetalleService";
 import { cargarCreditoCliente, fechaLocalISO, resumirCredito, type EstadoCuenta, type ResumenCredito } from "com/socopur/cotizador/model/CreditoClienteService";
 import { cargarModalidades, type ModalidadPantalla } from "com/socopur/cotizador/model/ModalidadesService";
 import { ordenarPorTexto } from "com/socopur/cotizador/model/Orden";
@@ -61,6 +62,8 @@ interface Cliente {
 	estadoCuenta?: { saldo: number; vencido: number; movimientos: Record<string, string>[] };
 	/** Credito y saldo reales de SAP (solo clientes leidos del servicio). */
 	credito?: ResumenCredito;
+	/** Partidas reales (abiertas y compensadas de los ultimos 12 meses). */
+	movimientos?: Movimiento[];
 }
 
 interface LineaMock {
@@ -1046,7 +1049,7 @@ export default class Oferta extends Controller {
 					estado: s.bloqueado ? (i18n.getText("credBloqueado") as string) : s.vigente ? (i18n.getText("credVigente") as string) : (i18n.getText("credLimiteVencido") as string),
 					estadoState: s.bloqueado ? "Error" : s.vigente ? "Success" : "Warning"
 				})),
-				movimientos: []
+				movimientos: cl.movimientos ?? []
 			});
 			return;
 		}
@@ -2519,33 +2522,64 @@ export default class Oferta extends Controller {
 		oferta.setProperty("/cliente", cliente);
 		oferta.setProperty("/clienteNoEncontrado", false);
 		this.refrescarTrasCliente();
-		void this.cargarCredito(elegido.kunnr, elegido.bloqueado);
+		void this.cargarDatosCliente(elegido.kunnr, elegido.bloqueado);
 	}
 
-	/** Estado del cliente segun su credito y saldo reales (solo informativo: la liberacion la decide Creditos). */
-	private async cargarCredito(kunnr: string, bloqueado: boolean): Promise<void> {
+	/**
+	 * Credito, movimientos, direcciones y contacto reales del cliente, cada uno por su lado: si uno falla se avisa y los demas siguen.
+	 * Todo es informativo; la liberacion del pedido la decide Creditos.
+	 */
+	private async cargarDatosCliente(kunnr: string, bloqueado: boolean): Promise<void> {
 		const oferta = this.modeloOferta();
 		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel | undefined;
 		if (!odata) {
 			return;
 		}
-		try {
-			const { segmentos, saldos } = await cargarCreditoCliente(odata, kunnr, fechaLocalISO());
-			// Si entre tanto se cambio de cliente, no se pisa el estado del nuevo.
-			if ((oferta.getProperty("/cliente") as Cliente | null)?.kunnr !== kunnr) {
-				return;
-			}
+		const i18n = this.i18n();
+		const [credito, movimientos, direcciones, contacto] = await Promise.allSettled([
+			cargarCreditoCliente(odata, kunnr, fechaLocalISO()),
+			cargarMovimientos(odata, kunnr),
+			cargarDirecciones(odata, kunnr, i18n.getText("direccionFiscal") as string),
+			cargarContacto(odata, kunnr)
+		]);
+		// Si entre tanto se cambio de cliente, no se pisan los datos del nuevo.
+		if ((oferta.getProperty("/cliente") as Cliente | null)?.kunnr !== kunnr) {
+			return;
+		}
+		const fallos: string[] = [];
+		if (credito.status === "fulfilled") {
 			const moneda = String(oferta.getProperty("/perfil/moneda") || "PEN");
 			// El mapeo segmento de credito <-> organizacion de ventas no esta confirmado: no se elige segmento.
-			const resumen = resumirCredito(segmentos, saldos, moneda);
+			const resumen = resumirCredito(credito.value.segmentos, credito.value.saldos, moneda);
 			oferta.setProperty("/cliente/credito", resumen);
 			if (!bloqueado) {
 				const { texto, estado } = this.estadoDeCredito(resumen.estado);
 				oferta.setProperty("/cliente/estado", texto);
 				oferta.setProperty("/cliente/estadoState", estado);
 			}
-		} catch (error) {
-			MessageToast.show(this.i18n().getText("odataCreditoError", [(error as Error).message]) as string);
+		} else {
+			fallos.push((credito.reason as Error).message);
+		}
+		if (movimientos.status === "fulfilled") {
+			oferta.setProperty("/cliente/movimientos", movimientos.value);
+		} else {
+			fallos.push((movimientos.reason as Error).message);
+		}
+		if (direcciones.status === "fulfilled" && direcciones.value.length) {
+			oferta.setProperty("/cliente/direcciones", direcciones.value);
+			oferta.setProperty("/cliente/direccion", direcciones.value.find((d) => d.tipo === "Fiscal")?.texto ?? direcciones.value[0].texto);
+			this.aplicarDireccionEnvio();
+		} else if (direcciones.status === "rejected") {
+			fallos.push((direcciones.reason as Error).message);
+		}
+		if (contacto.status === "fulfilled") {
+			oferta.setProperty("/cliente/correo", contacto.value.correo);
+			oferta.setProperty("/cliente/telefono", contacto.value.telefono);
+		} else {
+			fallos.push((contacto.reason as Error).message);
+		}
+		if (fallos.length) {
+			MessageToast.show(i18n.getText("odataCreditoError", [fallos[0]]) as string);
 		}
 	}
 

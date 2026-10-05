@@ -51,8 +51,8 @@
 							<cells>
 								<Text text="{cli>fecha}" />
 								<ObjectIdentifier title="{cli>doc}" text="{cli>tipo}" />
-								<ObjectNumber number="{cli>monto}" unit="PEN" />
-								<ObjectStatus text="{cli>estado}" state="{= ${cli>estado} === 'Pagada' ? 'Success' : ${cli>estado} === 'Vencida' ? 'Error' : 'Warning' }" />
+								<ObjectNumber number="{cli>monto}" unit="{= ${cli>moneda} || 'PEN' }" />
+								<ObjectStatus text="{cli>estado}" state="{= ${cli>estado} === 'Pagada' || ${cli>estado} === 'Compensada' ? 'Success' : ${cli>estado} === 'Vencida' ? 'Error' : 'Warning' }" />
 							</cells>
 						</ColumnListItem>
 					</items>
