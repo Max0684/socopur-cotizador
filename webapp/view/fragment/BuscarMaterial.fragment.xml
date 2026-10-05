@@ -125,6 +125,14 @@
 					showIcon="true"
 					class="sapUiSmallMarginBottom" />
 
+				<VBox visible="{= !!${busqueda>/avisoVacio} }" class="sapUiSmallMarginBottom">
+					<MessageStrip text="{busqueda>/avisoVacio}" type="Warning" showIcon="true" />
+					<HBox class="sapUiTinyMarginTop">
+						<Button text="{i18n>vacioVerSinStock}" icon="sap-icon://show" visible="{= ${busqueda>/motivoVacio} === 'sinStock' }" press=".onVerSinStock" class="sapUiSmallMarginEnd" />
+						<Button text="{i18n>vacioQuitarSegmentos}" icon="sap-icon://clear-filter" visible="{= !!${busqueda>/linea} || !!${busqueda>/clase} || !!${busqueda>/familia} }" press=".onQuitarSegmentos" />
+					</HBox>
+				</VBox>
+
 				<Table
 					id="tablaVehiculos"
 					visible="{= ${busqueda>/tipo} === 'vehiculos' }"

@@ -122,3 +122,12 @@ test("disponibilidadPorCentro consulta MaterialAtp y no consulta sin materiales"
 	assert.deepEqual(await disponibilidadPorCentro(como(modelo), "1103", "10", "1101", ["A"]), { A: { fisico: 38228, disponible: 34594, comprometido: 3634 } });
 	assert.deepEqual(rutas, ["/MaterialAtp"]);
 });
+
+test("motivoVacio distingue 'sin coincidencias' de 'sin stock en el centro'", async () => {
+	const { motivoVacio } = await import("../webapp/model/MaterialesService.ts");
+	assert.equal(motivoVacio(0, 0, true), "sinCoincidencias");
+	assert.equal(motivoVacio(0, 0, false), "sinCoincidencias");
+	assert.equal(motivoVacio(12, 0, true), "sinStock");
+	assert.equal(motivoVacio(12, 0, false), "");
+	assert.equal(motivoVacio(12, 3, true), "");
+});

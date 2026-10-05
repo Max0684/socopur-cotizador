@@ -224,3 +224,21 @@ export async function disponibilidadPorCentro(modelo: ODataModel, vkorg: string,
 	const contextos = await modelo.bindList("/MaterialAtp", undefined, undefined, undefined, { $filter: filtroStock(vkorg, vtweg, werks, matnrs.slice(0, 50)) }).requestContexts(0, 50);
 	return disponibilidadDeFilas(contextos.map((c) => c.getObject() as Parameters<typeof disponibilidadDeFilas>[0][number]));
 }
+
+export type MotivoVacio = "" | "sinCoincidencias" | "sinStock";
+
+/**
+ * Por que una busqueda de repuestos no muestra nada, para decirlo claro al vendedor:
+ * - sinCoincidencias: ningun material cumple los filtros (en la organizacion y el canal del perfil);
+ * - sinStock: hay materiales que cumplen, pero ninguno con stock en el centro del perfil (y el filtro "solo con stock" esta activo).
+ * Con resultados visibles no hay motivo.
+ */
+export function motivoVacio(coinciden: number, visibles: number, soloStock: boolean): MotivoVacio {
+	if (visibles > 0) {
+		return "";
+	}
+	if (coinciden === 0) {
+		return "sinCoincidencias";
+	}
+	return soloStock ? "sinStock" : "";
+}

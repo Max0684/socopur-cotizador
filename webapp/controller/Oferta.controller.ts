@@ -10,6 +10,7 @@ import { agruparVehiculos, buscarVehiculos, filtrarVehiculos } from "com/socopur
 import { almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, gruposParaGuardar, modalidadPorDefecto, sectorDeCabecera, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
 import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type VinAsignado } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
+import { motivoVacio } from "com/socopur/cotizador/model/MaterialesService";
 import { listaDeSede } from "com/socopur/cotizador/model/Ciudades";
 import { ciudadPorClave } from "com/socopur/cotizador/model/Ciudades";
 import { cargarContacto, cargarDirecciones, cargarMovimientos, type Movimiento } from "com/socopur/cotizador/model/ClienteDetalleService";
@@ -418,6 +419,8 @@ export default class Oferta extends Controller {
 		const filtros = ["linea", "clase", "familia", "sector", "marca", "codigo", "descripcion", "texto", "color", "anio", "condicion"];
 		const hayFiltro = filtros.some((f) => g(f) !== "");
 		b.setProperty("/faltaFiltro", !hayFiltro);
+		b.setProperty("/avisoVacio", "");
+		b.setProperty("/motivoVacio", "");
 		b.setProperty("/buscado", hayFiltro);
 		b.setProperty("/elegido", null);
 		this.limpiarSeleccion();
@@ -590,13 +593,45 @@ export default class Oferta extends Controller {
 				promocion: null,
 				sinPrecio: true
 			}));
-			b.setProperty("/repuestos", conDatos.filter((f) => !soloStock || f.disponible > 0));
+			const visibles = conDatos.filter((f) => !soloStock || f.disponible > 0);
+			b.setProperty("/repuestos", visibles);
+			this.avisarSinResultados(motivoVacio(conDatos.length, visibles.length, soloStock), conDatos.length, centro);
 		} catch (error) {
 			b.setProperty("/repuestos", []);
 			MessageBox.error(this.i18n().getText("busquedaMaterialError", [(error as Error).message]) as string);
 		} finally {
 			b.setProperty("/cargando", false);
 		}
+	}
+
+	/** Explica por que no hay resultados (sin coincidencias o sin stock en el centro) y que se puede hacer. */
+	private avisarSinResultados(motivo: string, coinciden: number, centro: string): void {
+		const b = this.modeloBusqueda();
+		const i18n = this.i18n();
+		const oferta = this.modeloOferta();
+		const sede = String(oferta.getProperty("/perfil/sede") ?? "");
+		b.setProperty("/motivoVacio", motivo);
+		b.setProperty(
+			"/avisoVacio",
+			motivo === "sinStock"
+				? (i18n.getText("vacioSinStock", [String(coinciden), centro, sede]) as string)
+				: motivo === "sinCoincidencias"
+					? (i18n.getText("vacioSinCoincidencias", [String(oferta.getProperty("/perfil/orgVentas") ?? ""), String(oferta.getProperty("/perfil/busqueda/canal") ?? "")]) as string)
+					: ""
+		);
+	}
+
+	/** Repite la busqueda sin exigir stock. */
+	public async onVerSinStock(): Promise<void> {
+		this.modeloBusqueda().setProperty("/soloStock", false);
+		await this.onBuscar();
+	}
+
+	/** Quita linea, clase y familia (suelen venir precargadas del perfil) y repite la busqueda si queda algun otro filtro. */
+	public async onQuitarSegmentos(): Promise<void> {
+		const b = this.modeloBusqueda();
+		["linea", "clase", "familia"].forEach((c) => b.setProperty(`/${c}`, ""));
+		await this.onBuscar();
 	}
 
 	private limpiarSeleccion(): void {
