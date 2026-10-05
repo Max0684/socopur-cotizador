@@ -846,6 +846,8 @@ export default class Oferta extends Controller {
 		const org = String(mock.getProperty("/perfil/busqueda/orgs/repuestos") ?? "1103");
 		try {
 			const [centros, oficinas] = await Promise.all([leerCentros(odata, org, canal), leerOficinas(odata, org, canal)]);
+			// Diagnostico (F12 > Consola): que organizacion y canal se consultaron y cuantos centros y oficinas devolvio SAP.
+			console.info(`[Cotizador] catalogos de area: org=${org} canal=${canal} centros=${centros.codigos.length} oficinas=${oficinas.length}`);
 			if (centros.codigos.length > 0) {
 				const nombres = { ...((mock.getProperty("/opciones/centros") as Record<string, string>) ?? {}), ...centros.nombres };
 				const porArea = { ...((mock.getProperty("/opciones/centrosPorArea") as Record<string, string[]>) ?? {}), [`${org}/${canal}`]: centros.codigos };
@@ -883,6 +885,14 @@ export default class Oferta extends Controller {
 		const cenPerfil = String(oferta.getProperty("/perfil/centro") ?? "");
 		const oficinas = listaDeSede((oferta.getProperty("/opciones/oficinas") as { key: string; text: string }[]) ?? [], ciudad, "oficinas", ofiPerfil, marca);
 		const centros = listaDeSede((oferta.getProperty("/opcionesCentro") as { key: string; text: string }[]) ?? [], ciudad, "centros", cenPerfil, marca);
+		if (oficinas.fueraDeSap || centros.fueraDeSap) {
+			// Diagnostico: el centro u oficina del perfil no estan en la lista de SAP para esta organizacion y canal.
+			console.warn(
+				`[Cotizador] perfil fuera de lista: org=${String(oferta.getProperty("/perfil/orgVentas") ?? "")} canal=${String(oferta.getProperty("/perfil/canal") ?? "")} ` +
+					`centro=${cenPerfil} (en lista: ${centros.opciones.length}) oficina=${ofiPerfil} | perfil/busqueda: ${JSON.stringify(oferta.getProperty("/perfil/busqueda/orgs") ?? {})} ` +
+					`| centros SAP: ${((oferta.getProperty("/opcionesCentro") as { key: string }[]) ?? []).map((c) => c.key).join(",")}`
+			);
+		}
 		oferta.setProperty("/oficinasSede", oficinas.opciones);
 		oferta.setProperty("/opcionesCentro", centros.opciones);
 		const fuera = [oficinas.fueraDeSap ? `${this.i18n().getText("oficina")} ${ofiPerfil}` : "", centros.fueraDeSap ? `${this.i18n().getText("centro")} ${cenPerfil}` : ""].filter(Boolean);
