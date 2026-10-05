@@ -40,7 +40,7 @@
 							<Text text="{adm>vkorg}/{adm>vtweg}" />
 							<Text text="{adm>werks}" />
 							<ObjectStatus text="{= ${adm>rol} === 'A' ? ${i18n>vendAdmRolA} : ${i18n>vendAdmRolV} }" state="{= ${adm>rol} === 'A' ? 'Information' : 'None' }" />
-							<Text text="{= ${adm>pinHash} ? ${i18n>vendAdmConPin} : '—' }" />
+							<Text text="{= ${adm>conPin} ? ${i18n>vendAdmConPin} : '—' }" />
 							<Switch state="{adm>activo}" change=".onActivoCambiado" />
 						</cells>
 					</ColumnListItem>

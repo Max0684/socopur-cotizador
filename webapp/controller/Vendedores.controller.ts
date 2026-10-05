@@ -15,13 +15,15 @@ import {
 	Vendedor,
 	buscarVendedores,
 	guardarVendedor,
-	hashPin,
+	fijarPin,
 	validarVendedor
 } from "com/socopur/cotizador/model/VendedoresService";
 
+const PIN_MINIMO = 4;
+
 const VACIO: Vendedor = {
 	pernr: "", nombre: "", tipo: "repuestos", vkorg: "1103", vkbur: "", werks: "", lgort: "", vtweg: "11",
-	zterm: "C000", vsbed: "", waers: "PEN", vigenciaDias: 7, rol: "V", pinHash: "", activo: true
+	zterm: "C000", vsbed: "", waers: "PEN", vigenciaDias: 7, rol: "V", conPin: false, activo: true
 };
 
 /**
@@ -37,7 +39,7 @@ export default class Vendedores extends Controller {
 	public onInit(): void {
 		const componente = this.getOwnerComponent() as UIComponent;
 		this.router = componente.getRouter();
-		this.getView()?.setModel(new JSONModel({ permitido: false, visibles: [], edicion: { ...VACIO }, esNuevo: true, nuevoPin: "", quitarPin: false }), "adm");
+		this.getView()?.setModel(new JSONModel({ permitido: false, visibles: [], edicion: { ...VACIO }, esNuevo: true, nuevoPin: "" }), "adm");
 		this.router.getRoute("vendedores")?.attachPatternMatched(() => this.refrescar(), this);
 	}
 
@@ -101,7 +103,6 @@ export default class Vendedores extends Controller {
 		adm.setProperty("/edicion", edicion);
 		adm.setProperty("/esNuevo", esNuevo);
 		adm.setProperty("/nuevoPin", "");
-		adm.setProperty("/quitarPin", false);
 		this.dialogo.open();
 	}
 
@@ -119,14 +120,17 @@ export default class Vendedores extends Controller {
 			return;
 		}
 		const nuevoPin = String(adm.getProperty("/nuevoPin") ?? "").trim();
-		if (adm.getProperty("/quitarPin")) {
-			v.pinHash = "";
+		if (nuevoPin && nuevoPin.length < PIN_MINIMO) {
+			MessageBox.error(this.textos().getText("vendAdmErrPinCorto", [String(PIN_MINIMO)]));
+			return;
 		}
-		if (nuevoPin) {
-			v.pinHash = await hashPin(nuevoPin);
+		const guardado = await this.persistir(v, adm.getProperty("/esNuevo") as boolean);
+		if (guardado && nuevoPin) {
+			await this.persistirPin(v, nuevoPin);
 		}
-		await this.persistir(v, adm.getProperty("/esNuevo") as boolean);
-		this.dialogo?.close();
+		if (guardado) {
+			this.dialogo?.close();
+		}
 	}
 
 	/** Activar o desactivar desde la tabla. Un administrador no puede desactivarse a si mismo (se quedaria sin acceso). */
@@ -141,16 +145,30 @@ export default class Vendedores extends Controller {
 		await this.persistir({ ...fila }, false);
 	}
 
-	private async persistir(v: Vendedor, esNuevo: boolean): Promise<void> {
+	/** Fija el PIN con la accion de SAP; el PIN nunca se guarda en el front. */
+	private async persistirPin(v: Vendedor, pin: string): Promise<void> {
+		try {
+			const conPin = await fijarPin(this.odata(), v, pin);
+			this.modeloMock().setProperty("/vendedores", this.lista().map((x) => (x.pernr === v.pernr && x.vkorg === v.vkorg && x.tipo === v.tipo ? conPin : x)));
+		} catch (error) {
+			MessageBox.error((error as Error).message);
+		}
+		this.refrescar();
+	}
+
+	private async persistir(v: Vendedor, esNuevo: boolean): Promise<boolean> {
 		const odata = this.odata();
 		try {
 			const lista = await guardarVendedor(odata, this.lista(), v, esNuevo);
 			this.modeloMock().setProperty("/vendedores", lista);
 			MessageToast.show(this.textos().getText(odata ? "vendAdmGuardado" : "vendAdmGuardadoProto"));
+			this.refrescar();
+			return true;
 		} catch (error) {
 			const mensaje = (error as Error).message;
 			MessageBox.error(mensaje.startsWith("vendAdm") ? this.textos().getText(mensaje) : mensaje);
+			this.refrescar();
+			return false;
 		}
-		this.refrescar();
 	}
 }

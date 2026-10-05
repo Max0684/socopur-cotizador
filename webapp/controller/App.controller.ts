@@ -43,6 +43,12 @@ export default class App extends Controller {
 		appModel.setProperty("/layout", config.layout ?? "OneColumn");
 	}
 
+	/** Solo con ?odata=1 se usa el servicio real; sin la bandera el prototipo con datos de ejemplo. */
+	private odata(): ODataModel | undefined {
+		const usar = new URLSearchParams(window.location.search).get("odata") === "1";
+		return usar ? ((this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel | undefined) : undefined;
+	}
+
 	/** Lee los vendedores (SAP con ?odata=1, si no los del prototipo) y recupera al de esta pestana o abre el dialogo. */
 	private async identificarVendedor(mock: JSONModel): Promise<void> {
 		const prototipo = (mock.getProperty("/vendedores") as Vendedor[]) ?? [];
@@ -100,7 +106,7 @@ export default class App extends Controller {
 		const elegido = contexto?.getObject() as Vendedor | undefined;
 		const modelo = this.getView()?.getModel("vend") as JSONModel;
 		modelo.setProperty("/elegido", elegido?.pernr ?? "");
-		modelo.setProperty("/pedirPin", !!elegido?.pinHash);
+		modelo.setProperty("/pedirPin", !!elegido?.conPin);
 		modelo.setProperty("/pin", "");
 		modelo.setProperty("/estadoPin", "None");
 	}
@@ -111,7 +117,7 @@ export default class App extends Controller {
 		if (!vendedor) {
 			return;
 		}
-		if (!(await pinCorrecto(vendedor, String(modelo.getProperty("/pin") ?? "")))) {
+		if (!(await pinCorrecto(this.odata(), vendedor, String(modelo.getProperty("/pin") ?? "")))) {
 			modelo.setProperty("/estadoPin", "Error");
 			return;
 		}

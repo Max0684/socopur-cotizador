@@ -348,9 +348,9 @@
   "vigenciaDias": 7
  },
  "vendedores": [
-  {"pernr": "99000001", "nombre": "Arnaldo Rojas (TI, prueba)", "tipo": "repuestos", "vkorg": "1103", "vkbur": "1101", "werks": "1101", "lgort": "0001", "vtweg": "11", "zterm": "C000", "vsbed": "02", "waers": "PEN", "vigenciaDias": 7, "rol": "A", "pinHash": "", "activo": true},
-  {"pernr": "99000002", "nombre": "Vendedor Repuestos (ejemplo)", "tipo": "repuestos", "vkorg": "1103", "vkbur": "1101", "werks": "1101", "lgort": "0001", "vtweg": "11", "zterm": "C000", "vsbed": "02", "waers": "PEN", "vigenciaDias": 7, "rol": "V", "pinHash": "", "activo": true},
-  {"pernr": "99000003", "nombre": "Vendedor Vehiculos (ejemplo)", "tipo": "vehiculos", "vkorg": "1101", "vkbur": "1101", "werks": "1101", "lgort": "0001", "vtweg": "11", "zterm": "C000", "vsbed": "02", "waers": "PEN", "vigenciaDias": 7, "rol": "V", "pinHash": "", "activo": true}
+  {"pernr": "99000001", "nombre": "Arnaldo Rojas (TI, prueba)", "tipo": "repuestos", "vkorg": "1103", "vkbur": "1101", "werks": "1101", "lgort": "0001", "vtweg": "11", "zterm": "C000", "vsbed": "02", "waers": "PEN", "vigenciaDias": 7, "rol": "A", "conPin": false, "activo": true},
+  {"pernr": "99000002", "nombre": "Vendedor Repuestos (ejemplo)", "tipo": "repuestos", "vkorg": "1103", "vkbur": "1101", "werks": "1101", "lgort": "0001", "vtweg": "11", "zterm": "C000", "vsbed": "02", "waers": "PEN", "vigenciaDias": 7, "rol": "V", "conPin": false, "activo": true},
+  {"pernr": "99000003", "nombre": "Vendedor Vehiculos (ejemplo)", "tipo": "vehiculos", "vkorg": "1101", "vkbur": "1101", "werks": "1101", "lgort": "0001", "vtweg": "11", "zterm": "C000", "vsbed": "02", "waers": "PEN", "vigenciaDias": 7, "rol": "V", "conPin": false, "activo": true}
  ],
  "clientes": {
   "45211870": {

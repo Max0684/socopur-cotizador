@@ -1,4 +1,6 @@
 import type ODataModel from "sap/ui/model/odata/v4/ODataModel";
+
+const NS = "com.sap.gateway.srvd_a2x.yui_cotiz_srv.v0001";
 import type JSONModel from "sap/ui/model/json/JSONModel";
 
 /**
@@ -22,8 +24,10 @@ export interface Vendedor {
 	waers: string;
 	vigenciaDias: number;
 	rol: string;
-	/** SHA-256 en hexadecimal; vacio = sin PIN. */
-	pinHash: string;
+	/** Tiene PIN fijado. SAP no expone el hash: el PIN solo se comprueba con la accion verificarPin. */
+	conPin: boolean;
+	/** Solo prototipo (sin SAP): SHA-256 del PIN en hexadecimal. */
+	pinHash?: string;
 	activo: boolean;
 }
 
@@ -42,7 +46,7 @@ interface VendedorSap {
 	Waers?: string;
 	VigenciaDias?: number;
 	Rol?: string;
-	PinHash?: string;
+	ConPin?: boolean | string;
 	Activo?: string;
 }
 
@@ -84,7 +88,7 @@ export async function cargarVendedores(modelo: ODataModel | undefined, prototipo
 			waers: v.Waers ?? "PEN",
 			vigenciaDias: v.VigenciaDias ?? 7,
 			rol: v.Rol ?? "V",
-			pinHash: v.PinHash ?? "",
+			conPin: v.ConPin === true || v.ConPin === "X",
 			activo: v.Activo === "X"
 		};
 	});
@@ -100,12 +104,33 @@ export function buscarVendedores(lista: Vendedor[], texto: string): Vendedor[] {
 	return lista.filter((v) => limpiar(v.nombre).includes(t) || v.pernr.includes(normalizarPernr(texto)) || v.pernr.endsWith(t));
 }
 
-/** Comprueba el PIN: sin PIN guardado se acepta; con PIN, debe coincidir el hash. */
-export async function pinCorrecto(vendedor: Vendedor, pin: string): Promise<boolean> {
-	if (!vendedor.pinHash) {
+/** Comprueba el PIN. Con SAP lo hace la accion verificarPin (hash SHA256(pernr+vkorg+pin) en el servidor); sin SAP, contra el hash del prototipo. */
+export async function pinCorrecto(modelo: ODataModel | undefined, vendedor: Vendedor, pin: string): Promise<boolean> {
+	if (!vendedor.conPin) {
 		return true;
 	}
-	return (await hashPin(pin)) === vendedor.pinHash;
+	if (modelo) {
+		try {
+			const operacion = modelo.bindContext(`${rutaVendedor(vendedor)}/${NS}.verificarPin(...)`);
+			operacion.setParameter("Pin", pin);
+			await operacion.execute("$auto", true);
+			return true;
+		} catch {
+			return false;
+		}
+	}
+	return (await hashPin(pin)) === (vendedor.pinHash ?? "");
+}
+
+/** Fija o cambia el PIN (minimo 4 caracteres, lo valida SAP). Devuelve el vendedor ya con conPin. */
+export async function fijarPin(modelo: ODataModel | undefined, vendedor: Vendedor, pin: string): Promise<Vendedor> {
+	if (modelo) {
+		const operacion = modelo.bindContext(`${rutaVendedor(vendedor)}/${NS}.fijarPin(...)`);
+		operacion.setParameter("Pin", pin);
+		await operacion.execute("$auto", true);
+		return { ...vendedor, conPin: true };
+	}
+	return { ...vendedor, conPin: true, pinHash: await hashPin(pin) };
 }
 
 /**
@@ -176,13 +201,12 @@ export function aFilaSap(v: Vendedor): VendedorSap {
 		Waers: v.waers,
 		VigenciaDias: v.vigenciaDias,
 		Rol: v.rol,
-		PinHash: v.pinHash,
 		Activo: v.activo ? "X" : ""
 	};
 }
 
 /** Clave de la fila en el servicio: PERNR + organizacion + tipo de venta. */
-function rutaVendedor(v: Pick<Vendedor, "pernr" | "vkorg" | "tipo">): string {
+export function rutaVendedor(v: Pick<Vendedor, "pernr" | "vkorg" | "tipo">): string {
 	return `/Vendedor(Pernr='${v.pernr}',Vkorg='${v.vkorg}',TipoVenta='${TIPO_SAP[v.tipo] ?? "R"}')`;
 }
 

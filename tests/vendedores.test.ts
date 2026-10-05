@@ -4,7 +4,7 @@ import { buscarVendedores, hashPin, normalizarPernr, pinCorrecto, type Vendedor 
 
 const v = (pernr: string, nombre: string, pinHash = ""): Vendedor => ({
 	pernr, nombre, tipo: "repuestos", vkorg: "1103", vkbur: "1101", werks: "1101", lgort: "0001", vtweg: "11",
-	zterm: "C000", vsbed: "02", waers: "PEN", vigenciaDias: 7, rol: "V", pinHash, activo: true
+	zterm: "C000", vsbed: "02", waers: "PEN", vigenciaDias: 7, rol: "V", conPin: pinHash !== "", pinHash, activo: true
 });
 
 test("normalizarPernr completa a 8 digitos y deja intacto lo que no es numerico", () => {
@@ -22,9 +22,9 @@ test("buscarVendedores busca por nombre sin tildes ni mayusculas y por PERNR", (
 });
 
 test("pinCorrecto: sin PIN guardado entra; con PIN compara el hash", async () => {
-	assert.equal(await pinCorrecto(v("1", "A"), ""), true);
+	assert.equal(await pinCorrecto(undefined, v("1", "A"), ""), true);
 	const conPin = v("2", "B", await hashPin("1234"));
-	assert.equal(await pinCorrecto(conPin, "1234"), true);
-	assert.equal(await pinCorrecto(conPin, "9999"), false);
-	assert.equal(await pinCorrecto(conPin, ""), false);
+	assert.equal(await pinCorrecto(undefined, conPin, "1234"), true);
+	assert.equal(await pinCorrecto(undefined, conPin, "9999"), false);
+	assert.equal(await pinCorrecto(undefined, conPin, ""), false);
 });

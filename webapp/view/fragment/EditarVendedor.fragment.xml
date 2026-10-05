@@ -47,8 +47,6 @@
 				</Select>
 				<Label text="{i18n>vendAdmNuevoPin}" />
 				<Input type="Password" value="{adm>/nuevoPin}" maxLength="12" placeholder="{i18n>vendAdmPinVacio}" />
-				<Label text="" />
-				<CheckBox text="{i18n>vendAdmQuitarPin}" selected="{adm>/quitarPin}" visible="{= !${adm>/esNuevo} }" />
 			</form:SimpleForm>
 		</content>
 		<beginButton>
