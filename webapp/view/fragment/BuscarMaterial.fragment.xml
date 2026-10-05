@@ -113,7 +113,7 @@
 					</HBox>
 					<HBox alignItems="Center" wrap="Wrap">
 						<CheckBox text="{i18n>soloConStock}" selected="{busqueda>/soloStock}" />
-						<Button text="{i18n>buscar}" type="Emphasized" icon="sap-icon://search" class="sapUiSmallMarginBegin" press=".onBuscar" />
+						<Button text="{i18n>buscar}" type="Emphasized" icon="sap-icon://search" class="sapUiSmallMarginBegin" enabled="{= !${busqueda>/cargando} }" press=".onBuscar" />
 						<Button text="{i18n>limpiar}" type="Transparent" press=".onLimpiar" />
 					</HBox>
 				</Panel>
@@ -126,6 +126,7 @@
 					class="sapUiSmallMarginBottom" />
 
 				<MessageStrip text="{i18n>buscarSinCliente}" type="Warning" showIcon="true" visible="{= !${oferta>/cliente} }" class="sapUiSmallMarginBottom" />
+				<MessageStrip text="{busqueda>/progreso}" type="Information" showIcon="false" visible="{busqueda>/cargando}" class="sapUiSmallMarginBottom" />
 				<MessageStrip text="{i18n>busquedaParcial}" type="Information" showIcon="true" visible="{busqueda>/parcial}" class="sapUiSmallMarginBottom" />
 				<VBox visible="{= !!${busqueda>/avisoVacio} }" class="sapUiSmallMarginBottom">
 					<MessageStrip text="{busqueda>/avisoVacio}" type="Warning" showIcon="true" />
@@ -137,6 +138,8 @@
 
 				<Table
 					id="tablaVehiculos"
+					busy="{busqueda>/cargando}"
+					busyIndicatorDelay="0"
 					visible="{= ${busqueda>/tipo} === 'vehiculos' }"
 					items="{busqueda>/vehiculos}"
 					mode="SingleSelectLeft"
@@ -185,6 +188,8 @@
 
 				<Table
 					id="tablaRepuestos"
+					busy="{busqueda>/cargando}"
+					busyIndicatorDelay="0"
 					visible="{= ${busqueda>/tipo} === 'repuestos' }"
 					items="{busqueda>/repuestos}"
 					mode="MultiSelect"

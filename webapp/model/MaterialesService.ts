@@ -270,11 +270,13 @@ export interface ResultadoBusquedaStock {
 /** Paginas de 50 materiales que se revisan como maximo buscando stock (20 = 1000 materiales). */
 export const MAX_PAGINAS_STOCK = 20;
 export const FILAS_POR_PAGINA = 50;
+/** Paginas que se piden a la vez: menos viajes seguidos a SAP sin traer cientos de materiales de mas. */
+export const PAGINAS_EN_PARALELO = 3;
 
 /**
- * Busca repuestos con el filtro de stock del servidor: recorre los materiales por paginas, mira el stock libre de cada pagina y se queda
- * con los que tienen stock hasta juntar una pagina de resultados o agotar los materiales (o el tope de paginas). Sin `soloStock` trae
- * la primera pagina, con su stock. El ATP solo se pide para los que se van a mostrar.
+ * Busca repuestos con el filtro de stock del servidor: recorre los materiales por lotes de paginas (en paralelo), mira el stock libre
+ * de cada pagina y se queda con los que tienen stock hasta juntar una pagina de resultados o agotar los materiales (o el tope de
+ * paginas). Sin `soloStock` trae la primera pagina, con su stock. El ATP solo se pide, una vez, para las filas que se van a mostrar.
  */
 export async function buscarRepuestosConStock(
 	modelo: ODataModel,
@@ -283,7 +285,9 @@ export async function buscarRepuestosConStock(
 	soloStock: boolean,
 	sectorCab?: (canal: string, sector: string) => string,
 	/** Medicion opcional: nombre de la fase y milisegundos (solo para diagnosticar lentitud). */
-	medir?: (fase: string, ms: number) => void
+	medir?: (fase: string, ms: number) => void,
+	/** Avance para mostrar al vendedor: materiales revisados y cuantos tienen stock hasta ahora. */
+	progreso?: (revisados: number, conStock: number) => void
 ): Promise<ResultadoBusquedaStock> {
 	const cronometrar = async <T>(fase: string, tarea: () => Promise<T>): Promise<T> => {
 		const t0 = Date.now();
@@ -293,32 +297,48 @@ export async function buscarRepuestosConStock(
 			medir?.(fase, Date.now() - t0);
 		}
 	};
-	const filas: FilaConStock[] = [];
+	const lote = soloStock ? PAGINAS_EN_PARALELO : 1;
+	const candidatas: FilaRepuestoSap[] = [];
+	const libreTotal: Record<string, number> = {};
 	let coinciden = 0;
 	let parcial = false;
-	for (let pagina = 0; pagina < MAX_PAGINAS_STOCK; pagina++) {
-		const materiales = await cronometrar(`Material p${pagina}`, () => buscarMateriales(modelo, filtros, sectorCab, pagina, FILAS_POR_PAGINA));
-		if (materiales.length === 0) {
-			break;
-		}
-		coinciden += materiales.length;
-		const libre = await cronometrar(`Stock p${pagina}`, () => stockPorCentro(modelo, filtros.vkorg, filtros.vtweg, werks, materiales.map((m) => m.material)));
-		const aMostrar = soloStock ? materiales.filter((m) => (libre[m.material] ?? 0) > 0) : materiales;
-		let atp: Record<string, Disponibilidad> = {};
-		if (aMostrar.length > 0) {
-			try {
-				atp = await cronometrar(`ATP p${pagina} (${aMostrar.length})`, () => disponibilidadPorCentro(modelo, filtros.vkorg, filtros.vtweg, werks, aMostrar.map((m) => m.material)));
-			} catch {
-				// Sin ATP se muestra el stock libre; no se pierde el resultado.
+	let agotado = false;
+	for (let desde = 0; desde < MAX_PAGINAS_STOCK && !agotado && candidatas.length < FILAS_POR_PAGINA; desde += lote) {
+		const paginas = Array.from({ length: Math.min(lote, MAX_PAGINAS_STOCK - desde) }, (_, k) => desde + k);
+		// Cada pagina pide sus materiales y luego su stock; las paginas del lote van a la vez.
+		const resultados = await Promise.all(
+			paginas.map(async (pagina) => {
+				const materiales = await cronometrar(`Material p${pagina}`, () => buscarMateriales(modelo, filtros, sectorCab, pagina, FILAS_POR_PAGINA));
+				const libre = materiales.length
+					? await cronometrar(`Stock p${pagina}`, () => stockPorCentro(modelo, filtros.vkorg, filtros.vtweg, werks, materiales.map((m) => m.material)))
+					: {};
+				return { materiales, libre };
+			})
+		);
+		for (const { materiales, libre } of resultados) {
+			coinciden += materiales.length;
+			Object.assign(libreTotal, libre);
+			candidatas.push(...(soloStock ? materiales.filter((m) => (libre[m.material] ?? 0) > 0) : materiales));
+			if (materiales.length < FILAS_POR_PAGINA) {
+				agotado = true;
 			}
 		}
-		filas.push(...combinarStock(aMostrar, libre, atp));
-		if (!soloStock || filas.length >= FILAS_POR_PAGINA || materiales.length < FILAS_POR_PAGINA) {
+		progreso?.(coinciden, candidatas.length);
+		if (!soloStock) {
 			break;
 		}
-		if (pagina === MAX_PAGINAS_STOCK - 1) {
+		if (desde + lote >= MAX_PAGINAS_STOCK && !agotado && candidatas.length < FILAS_POR_PAGINA) {
 			parcial = true;
 		}
 	}
-	return { filas, coinciden, parcial };
+	const aMostrar = candidatas.slice(0, FILAS_POR_PAGINA);
+	let atp: Record<string, Disponibilidad> = {};
+	if (aMostrar.length > 0) {
+		try {
+			atp = await cronometrar(`ATP (${aMostrar.length})`, () => disponibilidadPorCentro(modelo, filtros.vkorg, filtros.vtweg, werks, aMostrar.map((m) => m.material)));
+		} catch {
+			// Sin ATP se muestra el stock libre; no se pierde el resultado.
+		}
+	}
+	return { filas: combinarStock(aMostrar, libreTotal, atp), coinciden, parcial };
 }

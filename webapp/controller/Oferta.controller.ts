@@ -561,6 +561,7 @@ export default class Oferta extends Controller {
 		const mock = this.modeloMock();
 		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel;
 		b.setProperty("/cargando", true);
+		b.setProperty("/progreso", this.i18n().getText("buscandoInicio") as string);
 		try {
 			const vkorg = String(mock.getProperty("/perfil/busqueda/orgs/repuestos") ?? "1103");
 			const vtweg = String(mock.getProperty("/perfil/busqueda/canal") ?? "11");
@@ -574,7 +575,8 @@ export default class Oferta extends Controller {
 				centro,
 				soloStock,
 				sectorDeCabecera,
-				(fase, ms) => fases.push(`${fase}: ${ms} ms`)
+				(fase, ms) => fases.push(`${fase}: ${ms} ms`),
+				(revisados, conStock) => b.setProperty("/progreso", this.i18n().getText("buscandoProgreso", [centro, String(revisados), String(conStock)]) as string)
 			);
 			// Diagnostico de lentitud (consola del navegador, F12): tiempo por fase y total hasta tener la lista.
 			console.info(`[Cotizador] busqueda de repuestos: ${Date.now() - t0} ms | ${fases.join(" | ")}`);
