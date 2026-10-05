@@ -422,6 +422,7 @@ export default class Oferta extends Controller {
 		b.setProperty("/avisoVacio", "");
 		b.setProperty("/motivoVacio", "");
 		b.setProperty("/parcial", false);
+		this.busquedaPrecios++;
 		b.setProperty("/buscado", hayFiltro);
 		b.setProperty("/elegido", null);
 		this.limpiarSeleccion();
@@ -575,6 +576,7 @@ export default class Oferta extends Controller {
 			const conDatos = resultado.filas.map((f) => ({ ...f, precioUsd: 0, condicionPct: 0, promocion: null, sinPrecio: true }));
 			b.setProperty("/repuestos", conDatos);
 			b.setProperty("/parcial", resultado.parcial);
+			void this.cargarPreciosVisibles(conDatos.length);
 			this.avisarSinResultados(motivoVacio(resultado.coinciden, conDatos.length, soloStock), resultado.coinciden, centro);
 		} catch (error) {
 			b.setProperty("/repuestos", []);
@@ -582,6 +584,44 @@ export default class Oferta extends Controller {
 		} finally {
 			b.setProperty("/cargando", false);
 		}
+	}
+
+	/** Cuantos precios se calculan de una vez en la lista (cada uno es una consulta a SAP; el resto sale "al elegir"). */
+	private static readonly PRECIOS_EN_LISTA = 20;
+	private busquedaPrecios = 0;
+
+	/**
+	 * Con cliente elegido, calcula el precio de las primeras filas de la lista (en la moneda de la oferta) para verlo sin tener que
+	 * seleccionar. El precio es el que SAP calcula para ESE cliente; al seleccionar el material se vuelve a pedir y es el que cuenta.
+	 * Si el vendedor lanza otra busqueda mientras tanto, los precios que llegan tarde se descartan.
+	 */
+	private async cargarPreciosVisibles(total: number): Promise<void> {
+		const oferta = this.modeloOferta();
+		const kunnr = (oferta.getProperty("/cliente") as Cliente | null)?.kunnr;
+		if (!kunnr || total === 0 || !this.usarOData()) {
+			return;
+		}
+		const turno = ++this.busquedaPrecios;
+		const b = this.modeloBusqueda();
+		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel;
+		const canal = canalDe(String(oferta.getProperty("/perfil/busqueda/canal") ?? "11"));
+		const centro = String(oferta.getProperty("/perfil/centro") ?? "");
+		const moneda = oferta.getProperty("/perfil/moneda") === "USD" ? "USD" : "PEN";
+		const simbolo = moneda === "USD" ? "US$" : "S/";
+		const filas = ((b.getProperty("/repuestos") as { material: string; orgVentas: string; sectorOferta: string }[]) ?? []).slice(0, Oferta.PRECIOS_EN_LISTA);
+		await Promise.all(
+			filas.map(async (f, i) => {
+				try {
+					const precio = await consultarPrecio(odata, { kunnr, vkorg: f.orgVentas, vtweg: canal, spart: f.sectorOferta, auart: CLASE_OFERTA_PRECIO, matnr: f.material, werks: centro, cantidad: 1, waers: moneda });
+					if (turno === this.busquedaPrecios) {
+						b.setProperty(`/repuestos/${i}/precioPenTxt`, `${simbolo} ${this.formatMonto(precio.precioUnitario)}`);
+						b.setProperty(`/repuestos/${i}/precioListaSap`, true);
+					}
+				} catch {
+					// Sin precio en la lista: sigue "al elegir" y el aviso aparece al seleccionar el material.
+				}
+			})
+		);
 	}
 
 	/** Explica por que no hay resultados (sin coincidencias o sin stock en el centro) y que se puede hacer. */

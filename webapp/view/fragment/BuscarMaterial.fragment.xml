@@ -222,7 +222,8 @@
 								<VBox alignItems="End">
 									<ObjectNumber visible="{= !${busqueda>sinPrecio} }" number="{path: 'busqueda>precioUsd', formatter: '.formatMonto'}" unit="USD" textAlign="End" />
 									<Text visible="{= !${busqueda>sinPrecio} }" text="{path: 'busqueda>precioUsd', formatter: '.formatPen'}" textAlign="End" />
-									<Text visible="{busqueda>sinPrecio}" text="{i18n>precioAlElegir}" textAlign="End" />
+									<Text visible="{= ${busqueda>sinPrecio} &amp;&amp; !${busqueda>precioListaSap} }" text="{i18n>precioAlElegir}" textAlign="End" />
+									<ObjectNumber visible="{= !!${busqueda>precioListaSap} }" number="{busqueda>precioPenTxt}" state="Success" textAlign="End" />
 								</VBox>
 								<Button icon="sap-icon://inventory" type="Transparent" tooltip="{i18n>verStock}" press=".onVerStockFila" />
 							</cells>
