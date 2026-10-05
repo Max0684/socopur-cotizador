@@ -208,7 +208,13 @@
 						<Column width="7rem" hAlign="End" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colComprometido}" /></Column>
 						<Column width="6rem" hAlign="End" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colStockTotal}" /></Column>
 						<Column width="3rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colUm}" /></Column>
-						<Column width="9rem" hAlign="End"><Text text="{i18n>colPrecioLista}" /></Column>
+						<Column width="7rem" hAlign="End" visible="{busqueda>/hayPrecioLista}" minScreenWidth="60rem" demandPopin="true">
+							<VBox alignItems="End"><Text text="{i18n>colMayorista}" tooltip="{i18n>colMayoristaTip}" /><ObjectStatus text="{i18n>canal10}" inverted="false" state="None" /></VBox>
+						</Column>
+						<Column width="7rem" hAlign="End" visible="{busqueda>/hayPrecioLista}" minScreenWidth="60rem" demandPopin="true">
+							<VBox alignItems="End"><Text text="{i18n>colRetail}" tooltip="{i18n>colRetailTip}" /><ObjectStatus text="{i18n>canal11}" inverted="false" state="None" /></VBox>
+						</Column>
+						<Column width="9rem" hAlign="End"><Text text="{i18n>colPrecioCliente}" tooltip="{i18n>colPrecioClienteTip}" /></Column>
 						<Column width="3rem" hAlign="Center"><Text text="" /></Column>
 					</columns>
 					<items>
@@ -224,6 +230,8 @@
 								<Text text="{busqueda>comprometido}" />
 								<Text text="{busqueda>total}" />
 								<Text text="{busqueda>um}" />
+								<ObjectNumber number="{= ${busqueda>precioMay} || '—' }" emphasized="{= ${busqueda>/canalPerfil} === '10' }" state="{= ${busqueda>/canalPerfil} === '10' ? 'Information' : 'None' }" textAlign="End" />
+								<ObjectNumber number="{= ${busqueda>precioRet} || '—' }" emphasized="{= ${busqueda>/canalPerfil} === '11' }" state="{= ${busqueda>/canalPerfil} === '11' ? 'Information' : 'None' }" textAlign="End" />
 								<VBox alignItems="End">
 									<ObjectNumber visible="{= !${busqueda>sinPrecio} }" number="{path: 'busqueda>precioUsd', formatter: '.formatMonto'}" unit="USD" textAlign="End" />
 									<Text visible="{= !${busqueda>sinPrecio} }" text="{path: 'busqueda>precioUsd', formatter: '.formatPen'}" textAlign="End" />

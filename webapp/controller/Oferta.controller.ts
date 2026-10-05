@@ -11,6 +11,7 @@ import { almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, grup
 import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type VinAsignado } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
 import { buscarRepuestosConStock, motivoVacio } from "com/socopur/cotizador/model/MaterialesService";
+import { cargarPreciosLista, precioListaDisponible, textoPrecioLista } from "com/socopur/cotizador/model/PrecioListaService";
 import { listaDeSede } from "com/socopur/cotizador/model/Ciudades";
 import { ciudadPorClave, principalDe, sociedadDeCentro } from "com/socopur/cotizador/model/Ciudades";
 import { cargarContacto, cargarDirecciones, cargarMovimientos, type Movimiento } from "com/socopur/cotizador/model/ClienteDetalleService";
@@ -423,6 +424,7 @@ export default class Oferta extends Controller {
 		b.setProperty("/motivoVacio", "");
 		b.setProperty("/parcial", false);
 		this.busquedaPrecios++;
+		this.busquedaLista++;
 		b.setProperty("/buscado", hayFiltro);
 		b.setProperty("/elegido", null);
 		this.limpiarSeleccion();
@@ -587,12 +589,48 @@ export default class Oferta extends Controller {
 			b.setProperty("/repuestos", conDatos);
 			b.setProperty("/parcial", resultado.parcial);
 			void this.cargarPreciosVisibles(conDatos.length);
+			void this.cargarListaPrecios(vkorg, conDatos.map((f) => f.material));
 			this.avisarSinResultados(motivoVacio(resultado.coinciden, conDatos.length, soloStock), resultado.coinciden, centro);
 		} catch (error) {
 			b.setProperty("/repuestos", []);
 			MessageBox.error(this.i18n().getText("busquedaMaterialError", [(error as Error).message]) as string);
 		} finally {
 			b.setProperty("/cargando", false);
+		}
+	}
+
+	private listaDisponible?: boolean;
+	private busquedaLista = 0;
+
+	/**
+	 * Precios de lista MAYORISTA (canal 10) y RETAIL (canal 11) de las filas de la busqueda, en una sola consulta y sin depender del cliente.
+	 * Son referenciales: el precio de la linea lo calcula SAP para el cliente al seleccionar el material. Mientras la entidad no este
+	 * publicada en SAP, las columnas no se muestran.
+	 */
+	private async cargarListaPrecios(vkorg: string, matnrs: string[]): Promise<void> {
+		const b = this.modeloBusqueda();
+		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel;
+		b.setProperty("/canalPerfil", canalDe(String(this.modeloOferta().getProperty("/perfil/busqueda/canal") ?? "")));
+		if (this.listaDisponible === undefined) {
+			this.listaDisponible = await precioListaDisponible(odata);
+		}
+		b.setProperty("/hayPrecioLista", this.listaDisponible);
+		if (!this.listaDisponible || matnrs.length === 0) {
+			return;
+		}
+		const turno = ++this.busquedaLista;
+		try {
+			const precios = await cargarPreciosLista(odata, vkorg, matnrs);
+			if (turno !== this.busquedaLista) {
+				return;
+			}
+			((b.getProperty("/repuestos") as { material: string }[]) ?? []).forEach((f, i) => {
+				b.setProperty(`/repuestos/${i}/precioMay`, textoPrecioLista(precios[f.material]?.mayorista));
+				b.setProperty(`/repuestos/${i}/precioRet`, textoPrecioLista(precios[f.material]?.retail));
+			});
+		} catch (error) {
+			// Los precios de lista son informativos: si fallan, las columnas quedan con raya y la busqueda sigue.
+			console.warn(`[Cotizador] precios de lista: ${(error as Error).message}`);
 		}
 	}
 
@@ -3515,6 +3553,14 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 			faltaFiltro: false,
 			resumen: "",
 			buscado: false,
+			// Valores iniciales de los indicadores: sin ellos, una franja con propiedad sin definir se mostraria antes de buscar.
+			cargando: false,
+			progreso: "",
+			parcial: false,
+			avisoVacio: "",
+			motivoVacio: "",
+			hayPrecioLista: this.listaDisponible === true,
+			canalPerfil: canalDe(canal ?? ""),
 			vehiculos: [],
 			repuestos: [],
 			elegido: null
