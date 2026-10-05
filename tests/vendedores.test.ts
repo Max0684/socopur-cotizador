@@ -28,3 +28,10 @@ test("pinCorrecto: sin PIN guardado entra; con PIN compara el hash", async () =>
 	assert.equal(await pinCorrecto(undefined, conPin, "9999"), false);
 	assert.equal(await pinCorrecto(undefined, conPin, ""), false);
 });
+
+test("filtroEmpleado: solo digitos = PERNR exacto de 8; texto = nombre contiene en mayusculas y con comillas escapadas", async () => {
+	const { filtroEmpleado } = await import("../webapp/model/VendedoresService.ts");
+	assert.equal(filtroEmpleado("406"), "Pernr eq '00000406'");
+	assert.equal(filtroEmpleado("99000354"), "Pernr eq '99000354'");
+	assert.equal(filtroEmpleado("  ana o'neil "), "contains(Nombre,'ANA O''NEIL')");
+});

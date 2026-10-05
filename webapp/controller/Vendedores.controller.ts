@@ -8,12 +8,15 @@ import Dialog from "sap/m/Dialog";
 import MessageBox from "sap/m/MessageBox";
 import MessageToast from "sap/m/MessageToast";
 import SearchField from "sap/m/SearchField";
+import List from "sap/m/List";
 import ListItemBase from "sap/m/ListItemBase";
 import Switch from "sap/m/Switch";
 import Event from "sap/ui/base/Event";
 import {
 	Vendedor,
+	buscarEmpleados,
 	buscarVendedores,
+	type Empleado,
 	guardarVendedor,
 	fijarPin,
 	validarVendedor
@@ -39,7 +42,7 @@ export default class Vendedores extends Controller {
 	public onInit(): void {
 		const componente = this.getOwnerComponent() as UIComponent;
 		this.router = componente.getRouter();
-		this.getView()?.setModel(new JSONModel({ permitido: false, visibles: [], edicion: { ...VACIO }, esNuevo: true, nuevoPin: "" }), "adm");
+		this.getView()?.setModel(new JSONModel({ permitido: false, visibles: [], edicion: { ...VACIO }, esNuevo: true, nuevoPin: "", conBusqueda: false, empleados: [], busquedaEmpleado: "" }), "adm");
 		this.router.getRoute("vendedores")?.attachPatternMatched(() => this.refrescar(), this);
 	}
 
@@ -103,7 +106,42 @@ export default class Vendedores extends Controller {
 		adm.setProperty("/edicion", edicion);
 		adm.setProperty("/esNuevo", esNuevo);
 		adm.setProperty("/nuevoPin", "");
+		// Con SAP el PERNR se elige de la lista de empleados de HCM (no se teclea); sin SAP (prototipo) se puede escribir.
+		adm.setProperty("/conBusqueda", this.odata() !== undefined);
+		adm.setProperty("/empleados", []);
+		adm.setProperty("/busquedaEmpleado", "");
 		this.dialogo.open();
+	}
+
+	/** Busca empleados de HCM mientras se escribe (nombre o PERNR). */
+	public async onBuscarEmpleado(event: Event): Promise<void> {
+		const odata = this.odata();
+		if (!odata) {
+			return;
+		}
+		const texto = (event.getSource() as SearchField).getValue();
+		const adm = this.modeloAdm();
+		try {
+			const lista = await buscarEmpleados(odata, texto);
+			// Si mientras tanto el texto cambio, esta respuesta ya no sirve.
+			if ((event.getSource() as SearchField).getValue() === texto) {
+				adm.setProperty("/empleados", lista);
+			}
+		} catch (error) {
+			MessageBox.error((error as Error).message);
+		}
+	}
+
+	/** Al elegir al empleado se completan PERNR y nombre; el resto del perfil lo define el administrador. */
+	public onEmpleadoElegido(event: Event): void {
+		const lista = event.getSource() as List;
+		const empleado = lista.getSelectedItem()?.getBindingContext("adm")?.getObject() as Empleado | undefined;
+		if (!empleado) {
+			return;
+		}
+		const adm = this.modeloAdm();
+		adm.setProperty("/edicion/pernr", empleado.pernr);
+		adm.setProperty("/edicion/nombre", empleado.nombre);
 	}
 
 	public onCerrarEdicion(): void {

@@ -255,3 +255,46 @@ export async function guardarVendedor(modelo: ODataModel | undefined, lista: Ven
 	}
 	return esNuevo ? [...lista, v] : lista.map((x) => (mismo(x) ? v : x));
 }
+
+/** Fila de la entidad Empleado (PA0001 vigente y activo en PA0000). Dato personal: solo para el alta del administrador. */
+interface EmpleadoSap {
+	Pernr: string;
+	Nombre?: string;
+	Bukrs?: string;
+	Werks?: string;
+	Btrtl?: string;
+}
+
+export interface Empleado {
+	pernr: string;
+	nombre: string;
+	sociedad: string;
+}
+
+/** Minimo de caracteres para buscar por nombre (evita traer cientos de empleados con una letra). */
+export const MINIMO_BUSQUEDA = 3;
+
+/** Filtro OData: solo digitos = PERNR exacto (completado a 8); si no, el nombre CONTIENE el texto (los nombres de HCM van en mayusculas). */
+export function filtroEmpleado(texto: string): string {
+	const t = texto.trim();
+	if (/^\d+$/.test(t)) {
+		return `Pernr eq '${normalizarPernr(t)}'`;
+	}
+	return `contains(Nombre,'${t.toUpperCase().replace(/'/g, "''")}')`;
+}
+
+/** Busca empleados activos de HCM por nombre o PERNR (maximo 20). Vacio si el texto es muy corto. */
+export async function buscarEmpleados(modelo: ODataModel, texto: string, maximo = 20): Promise<Empleado[]> {
+	const t = texto.trim();
+	if (t.length < MINIMO_BUSQUEDA && !/^\d+$/.test(t)) {
+		return [];
+	}
+	if (!t) {
+		return [];
+	}
+	const filas = await modelo.bindList("/Empleado", undefined, undefined, undefined, { $filter: filtroEmpleado(t), $orderby: "Nombre" }).requestContexts(0, maximo);
+	return filas.map((c) => {
+		const e = c.getObject() as EmpleadoSap;
+		return { pernr: normalizarPernr(e.Pernr), nombre: e.Nombre ?? e.Pernr, sociedad: e.Bukrs ?? "" };
+	});
+}
