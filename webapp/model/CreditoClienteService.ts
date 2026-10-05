@@ -14,10 +14,12 @@ interface CreditoSap {
 	CreditLimit?: number | string;
 	/** Fecha de vencimiento del limite (AAAA-MM-DD). */
 	LimitValidDate?: string;
+	/** SAP lo calcula (LimitValidDate >= hoy); si falta, se calcula aqui con la fecha local. */
+	Vigente?: boolean | string;
 	Xblocked?: boolean | string;
 	BlockReason?: string;
 	RiskClass?: string;
-	WaersLimite?: string;
+	CheckRule?: string;
 }
 
 /** Fila de ClienteSaldo: saldo por sociedad y moneda. */
@@ -90,10 +92,11 @@ export function aSegmento(f: CreditoSap, hoy: string): SegmentoCredito {
 	return {
 		segmento: f.CreditSgmnt,
 		limite: numero(f.CreditLimit),
-		moneda: f.WaersLimite ?? "PEN",
+		// El segmento no trae moneda propia: se asume la de la sociedad (soles).
+		moneda: "PEN",
 		vigenteHasta: hasta,
 		// Sin fecha se considera vigente (no hay dato para decir lo contrario); con fecha, vigente hasta ese dia inclusive.
-		vigente: hasta === "" || hasta >= hoy,
+		vigente: f.Vigente === undefined ? hasta === "" || hasta >= hoy : esVerdadero(f.Vigente),
 		bloqueado: esVerdadero(f.Xblocked),
 		motivoBloqueo: f.BlockReason ?? "",
 		claseRiesgo: f.RiskClass ?? ""
@@ -143,6 +146,12 @@ export function resumirCredito(segmentos: SegmentoCredito[], saldos: SaldoClient
 		disponible: elegido ? Math.max(0, elegido.limite - saldoTotal) : null,
 		estado
 	};
+}
+
+/** Fecha de hoy en hora local (AAAA-MM-DD): en Peru, de noche, toISOString() ya devolveria el dia siguiente. */
+export function fechaLocalISO(d: Date = new Date()): string {
+	const dos = (n: number): string => String(n).padStart(2, "0");
+	return `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}`;
 }
 
 const comillas = (texto: string): string => texto.replace(/'/g, "''");

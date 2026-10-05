@@ -9,7 +9,9 @@ interface ClienteSapFila {
 	Vtweg: string;
 	Spart: string;
 	Kdgrp?: string;
+	KdgrpTexto?: string;
 	Zterm?: string;
+	ZtermTexto?: string;
 	Vsbed?: string;
 	Aufsd?: string;
 	Name1?: string;
@@ -30,7 +32,11 @@ export interface ClienteSap {
 	doc: string;
 	tipoDoc: string;
 	grupo: string;
+	/** Texto del grupo de clientes (T151T), p. ej. RETAIL. */
+	grupoTexto: string;
 	zterm: string;
+	/** Texto de la condicion de pago (TVZBT), p. ej. Contado. */
+	ztermTexto: string;
 	direccion: string;
 	/** Bloqueo central (SPERR), marca de borrado (LOEVM) o bloqueo de pedidos del area de ventas (AUFSD). */
 	bloqueado: boolean;
@@ -53,7 +59,7 @@ export async function buscarClientes(modelo: ODataModel, texto: string, vkorg: s
 	const filtro =
 		`Vkorg eq '${comillas(vkorg)}' and (Stcd1 eq '${t}' or Stcd2 eq '${t}' or Kunnr eq '${t.padStart(10, "0")}' or contains(Name1,'${t.toUpperCase()}'))`;
 	const binding = modelo.bindList("/Cliente", undefined, undefined, undefined, {
-		$select: "Kunnr,Vkorg,Vtweg,Spart,Kdgrp,Zterm,Aufsd,Name1,Name2,Stcd1,Stcd2,Stras,Ort01,Sperr,Loevm",
+		$select: "Kunnr,Vkorg,Vtweg,Spart,Kdgrp,KdgrpTexto,Zterm,ZtermTexto,Aufsd,Name1,Name2,Stcd1,Stcd2,Stras,Ort01,Sperr,Loevm",
 		$filter: filtro,
 		$orderby: "Name1",
 		$count: false
@@ -76,7 +82,9 @@ export async function buscarClientes(modelo: ODataModel, texto: string, vkorg: s
 			doc,
 			tipoDoc: doc.length === 11 ? "RUC" : doc.length === 8 ? "DNI" : "",
 			grupo: f.Kdgrp ?? "",
+			grupoTexto: f.KdgrpTexto ?? "",
 			zterm: f.Zterm ?? "",
+			ztermTexto: f.ZtermTexto ?? "",
 			direccion: [f.Stras, f.Ort01].filter(Boolean).join(", "),
 			bloqueado: Boolean(f.Sperr) || Boolean(f.Loevm) || Boolean(f.Aufsd),
 			areas: [area]

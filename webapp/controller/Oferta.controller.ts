@@ -10,6 +10,7 @@ import { agruparVehiculos, buscarVehiculos, filtrarVehiculos } from "com/socopur
 import { almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, gruposParaGuardar, modalidadPorDefecto, sectorDeCabecera, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
 import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type VinAsignado } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
+import { cargarCreditoCliente, fechaLocalISO, resumirCredito, type EstadoCuenta, type ResumenCredito } from "com/socopur/cotizador/model/CreditoClienteService";
 import { cargarModalidades, type ModalidadPantalla } from "com/socopur/cotizador/model/ModalidadesService";
 import { ordenarPorTexto } from "com/socopur/cotizador/model/Orden";
 import UIComponent from "sap/ui/core/UIComponent";
@@ -58,6 +59,8 @@ interface Cliente {
 	areas?: string[];
 	direcciones?: Direccion[];
 	estadoCuenta?: { saldo: number; vencido: number; movimientos: Record<string, string>[] };
+	/** Credito y saldo reales de SAP (solo clientes leidos del servicio). */
+	credito?: ResumenCredito;
 }
 
 interface LineaMock {
@@ -1024,9 +1027,31 @@ export default class Oferta extends Controller {
 		if (!cl) {
 			return;
 		}
+		const m = (n: number): string => `S/ ${this.formatMonto(n)}`;
+		if (cl.credito) {
+			// Datos reales: sin segmento elegido (mapeo por confirmar) se muestran todos los segmentos con su vigencia.
+			const r = cl.credito;
+			const i18n = this.i18n();
+			await this.abrirCliente("EstadoCuenta", {
+				real: true,
+				linea: r.segmentoElegido ? m(r.segmentoElegido.limite) : (i18n.getText("cuentaVariosSegmentos") as string),
+				saldo: m(r.saldoTotal),
+				disponible: r.disponible === null ? "\u2014" : m(r.disponible),
+				vencido: m(r.vencidoTotal),
+				vencidoEstado: r.vencidoTotal > 0 ? "Error" : "Success",
+				segmentos: r.segmentos.map((s) => ({
+					segmento: s.segmento,
+					limite: this.formatMonto(s.limite),
+					vigencia: s.vigenteHasta.startsWith("9") ? (i18n.getText("credSinVencimiento") as string) : s.vigenteHasta,
+					estado: s.bloqueado ? (i18n.getText("credBloqueado") as string) : s.vigente ? (i18n.getText("credVigente") as string) : (i18n.getText("credLimiteVencido") as string),
+					estadoState: s.bloqueado ? "Error" : s.vigente ? "Success" : "Warning"
+				})),
+				movimientos: []
+			});
+			return;
+		}
 		const ec = cl.estadoCuenta ?? { saldo: 0, vencido: 0, movimientos: [] };
 		const linea = cl.lineaCredito ?? 0;
-		const m = (n: number): string => `S/ ${this.formatMonto(n)}`;
 		await this.abrirCliente("EstadoCuenta", {
 			linea: m(linea),
 			saldo: m(ec.saldo),
@@ -2483,8 +2508,8 @@ export default class Oferta extends Controller {
 			nombre: elegido.nombre,
 			estado: elegido.bloqueado ? "Bloqueado" : "",
 			estadoState: elegido.bloqueado ? "Error" : "None",
-			condicion: "",
-			grupo: elegido.grupo,
+			condicion: elegido.ztermTexto,
+			grupo: elegido.grupoTexto || elegido.grupo,
 			telefono: "",
 			correo: "",
 			direccion: elegido.direccion,
@@ -2494,6 +2519,50 @@ export default class Oferta extends Controller {
 		oferta.setProperty("/cliente", cliente);
 		oferta.setProperty("/clienteNoEncontrado", false);
 		this.refrescarTrasCliente();
+		void this.cargarCredito(elegido.kunnr, elegido.bloqueado);
+	}
+
+	/** Estado del cliente segun su credito y saldo reales (solo informativo: la liberacion la decide Creditos). */
+	private async cargarCredito(kunnr: string, bloqueado: boolean): Promise<void> {
+		const oferta = this.modeloOferta();
+		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel | undefined;
+		if (!odata) {
+			return;
+		}
+		try {
+			const { segmentos, saldos } = await cargarCreditoCliente(odata, kunnr, fechaLocalISO());
+			// Si entre tanto se cambio de cliente, no se pisa el estado del nuevo.
+			if ((oferta.getProperty("/cliente") as Cliente | null)?.kunnr !== kunnr) {
+				return;
+			}
+			const moneda = String(oferta.getProperty("/perfil/moneda") || "PEN");
+			// El mapeo segmento de credito <-> organizacion de ventas no esta confirmado: no se elige segmento.
+			const resumen = resumirCredito(segmentos, saldos, moneda);
+			oferta.setProperty("/cliente/credito", resumen);
+			if (!bloqueado) {
+				const { texto, estado } = this.estadoDeCredito(resumen.estado);
+				oferta.setProperty("/cliente/estado", texto);
+				oferta.setProperty("/cliente/estadoState", estado);
+			}
+		} catch (error) {
+			MessageToast.show(this.i18n().getText("odataCreditoError", [(error as Error).message]) as string);
+		}
+	}
+
+	private estadoDeCredito(estado: EstadoCuenta): { texto: string; estado: string } {
+		const i18n = this.i18n();
+		switch (estado) {
+			case "AlDia":
+				return { texto: i18n.getText("credAlDia") as string, estado: "Success" };
+			case "Vencido":
+				return { texto: i18n.getText("credVencido") as string, estado: "Error" };
+			case "Bloqueado":
+				return { texto: i18n.getText("credBloqueado") as string, estado: "Error" };
+			case "LimiteVencido":
+				return { texto: i18n.getText("credLimiteVencido") as string, estado: "Warning" };
+			default:
+				return { texto: i18n.getText("credSinDatos") as string, estado: "None" };
+		}
 	}
 
 	private refrescarTrasCliente(): void {

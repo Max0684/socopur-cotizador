@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { aSaldo, aSegmento, normalizarFecha, resumirCredito } from "../webapp/model/CreditoClienteService.ts";
+import { aSaldo, aSegmento, fechaLocalISO, normalizarFecha, resumirCredito } from "../webapp/model/CreditoClienteService.ts";
 
 const HOY = "2026-10-05";
 
@@ -70,4 +70,9 @@ test("resumirCredito: bloqueo del segmento elegido manda sobre todo; disponible 
 	const r = resumirCredito(seg, saldos, "PEN", "1101");
 	assert.equal(r.estado, "Bloqueado");
 	assert.equal(r.disponible, 0);
+});
+
+test("fechaLocalISO usa la fecha local, no UTC", () => {
+	assert.equal(fechaLocalISO(new Date(2026, 9, 5, 23, 30)), "2026-10-05");
+	assert.equal(fechaLocalISO(new Date(2026, 0, 3, 0, 5)), "2026-01-03");
 });

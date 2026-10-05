@@ -16,7 +16,29 @@
 					<ObjectStatus title="{i18n>cuentaDisponible}" text="{cli>/disponible}" state="Success" class="sapUiMediumMarginEnd" />
 					<ObjectStatus title="{i18n>cuentaVencido}" text="{cli>/vencido}" state="{cli>/vencidoEstado}" />
 				</HBox>
-				<MessageStrip text="{i18n>cuentaSimulada}" type="Information" showIcon="true" class="sapUiSmallMarginBottom" />
+				<MessageStrip text="{i18n>cuentaSimulada}" type="Information" showIcon="true" class="sapUiSmallMarginBottom" visible="{= !${cli>/real} }" />
+				<MessageStrip text="{i18n>cuentaReal}" type="Information" showIcon="true" class="sapUiSmallMarginBottom" visible="{= !!${cli>/real} }" />
+				<Table items="{cli>/segmentos}" visible="{= !!${cli>/real} }" class="sapUiSmallMarginBottom">
+					<headerToolbar>
+						<Toolbar><Title text="{i18n>credSegmentos}" level="H4" /></Toolbar>
+					</headerToolbar>
+					<columns>
+						<Column width="6rem"><Text text="{i18n>credSegmento}" /></Column>
+						<Column hAlign="End"><Text text="{i18n>credLimite}" /></Column>
+						<Column><Text text="{i18n>credVigenciaHasta}" /></Column>
+						<Column><Text text="{i18n>colEstado}" /></Column>
+					</columns>
+					<items>
+						<ColumnListItem>
+							<cells>
+								<Text text="{cli>segmento}" />
+								<ObjectNumber number="{cli>limite}" unit="PEN" />
+								<Text text="{cli>vigencia}" />
+								<ObjectStatus text="{cli>estado}" state="{cli>estadoState}" />
+							</cells>
+						</ColumnListItem>
+					</items>
+				</Table>
 				<Table items="{cli>/movimientos}" noDataText="{i18n>cuentaSinMovimientos}">
 					<columns>
 						<Column width="7rem"><Text text="{i18n>colFecha}" /></Column>
