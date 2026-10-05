@@ -105,6 +105,15 @@
 					]
 				},
 				{
+					"name": "vendedores",
+					"pattern": "vendedores",
+					"layout": "MidColumnFullScreen",
+					"target": [
+						"lista",
+						"vendedores"
+					]
+				},
+				{
 					"name": "oferta",
 					"pattern": "oferta/{numero}",
 					"layout": "MidColumnFullScreen",
@@ -121,6 +130,10 @@
 				},
 				"oferta": {
 					"name": "Oferta",
+					"controlAggregation": "midColumnPages"
+				},
+				"vendedores": {
+					"name": "Vendedores",
 					"controlAggregation": "midColumnPages"
 				}
 			}

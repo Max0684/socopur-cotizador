@@ -23,7 +23,6 @@ import {
  */
 export default class App extends Controller {
 	private dialogoVendedor?: Dialog;
-	private vendedores: Vendedor[] = [];
 
 	public onInit(): void {
 		this.getView()?.addStyleClass("sapUiSizeCompact");
@@ -49,18 +48,25 @@ export default class App extends Controller {
 		const prototipo = (mock.getProperty("/vendedores") as Vendedor[]) ?? [];
 		const usarOData = new URLSearchParams(window.location.search).get("odata") === "1";
 		const odata = usarOData ? ((this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel | undefined) : undefined;
+		let lista = prototipo;
 		try {
-			this.vendedores = await cargarVendedores(odata, prototipo);
+			lista = await cargarVendedores(odata, prototipo);
 		} catch {
 			// La entidad Vendedor puede no estar publicada todavia: se sigue con los del prototipo.
-			this.vendedores = prototipo;
 		}
-		const recordado = this.vendedores.find((v) => v.pernr === vendedorRecordado());
+		// La lista vive en el modelo para que la pantalla de administracion y este dialogo vean lo mismo.
+		mock.setProperty("/vendedores", lista);
+		const recordado = this.activos().find((v) => v.pernr === vendedorRecordado());
 		if (recordado) {
 			aplicarPerfil(mock, recordado);
 			return;
 		}
 		await this.abrirDialogoVendedor();
+	}
+
+	private activos(): Vendedor[] {
+		const mock = (this.getOwnerComponent() as UIComponent).getModel("mock") as JSONModel;
+		return ((mock.getProperty("/vendedores") as Vendedor[]) ?? []).filter((v) => v.activo);
 	}
 
 	private async abrirDialogoVendedor(): Promise<void> {
@@ -73,7 +79,7 @@ export default class App extends Controller {
 			this.getView()?.addDependent(this.dialogoVendedor);
 		}
 		const modelo = this.getView()?.getModel("vend") as JSONModel;
-		modelo.setData({ visibles: this.vendedores, elegido: "", pedirPin: false, pin: "", estadoPin: "None" });
+		modelo.setData({ visibles: this.activos(), elegido: "", pedirPin: false, pin: "", estadoPin: "None" });
 		this.dialogoVendedor.open();
 	}
 
@@ -85,7 +91,7 @@ export default class App extends Controller {
 	public onVendedorBuscar(event: Event): void {
 		const texto = (event.getSource() as SearchField).getValue();
 		const modelo = this.getView()?.getModel("vend") as JSONModel;
-		modelo.setProperty("/visibles", buscarVendedores(this.vendedores, texto));
+		modelo.setProperty("/visibles", buscarVendedores(this.activos(), texto));
 	}
 
 	public onVendedorElegido(event: Event): void {
@@ -101,7 +107,7 @@ export default class App extends Controller {
 
 	public async onVendedorEntrar(): Promise<void> {
 		const modelo = this.getView()?.getModel("vend") as JSONModel;
-		const vendedor = this.vendedores.find((v) => v.pernr === modelo.getProperty("/elegido"));
+		const vendedor = this.activos().find((v) => v.pernr === modelo.getProperty("/elegido"));
 		if (!vendedor) {
 			return;
 		}

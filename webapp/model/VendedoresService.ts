@@ -61,12 +61,12 @@ export function normalizarPernr(texto: string): string {
 	return /^\d+$/.test(t) ? t.padStart(8, "0") : t;
 }
 
-/** Lee los vendedores ACTIVOS de SAP. Sin modelo OData (modo prototipo) devuelve los del mock. */
+/** Lee los vendedores de SAP (todos; el dialogo de identificacion muestra solo los activos). Sin modelo OData (prototipo) devuelve los del mock. */
 export async function cargarVendedores(modelo: ODataModel | undefined, prototipo: Vendedor[]): Promise<Vendedor[]> {
 	if (!modelo) {
 		return prototipo;
 	}
-	const binding = modelo.bindList("/Vendedor", undefined, undefined, undefined, { $filter: "Activo eq 'X'", $orderby: "Nombre" });
+	const binding = modelo.bindList("/Vendedor", undefined, undefined, undefined, { $orderby: "Nombre" });
 	const contextos = await binding.requestContexts(0, 500);
 	return contextos.map((c) => {
 		const v = c.getObject() as VendedorSap;
@@ -156,4 +156,77 @@ export function vendedorRecordado(): string {
 	} catch {
 		return "";
 	}
+}
+
+const TIPO_SAP: Record<string, string> = { repuestos: "R", vehiculos: "V" };
+
+/** Fila de la entidad Vendedor a partir de la forma de pantalla. */
+export function aFilaSap(v: Vendedor): VendedorSap {
+	return {
+		Pernr: v.pernr,
+		Nombre: v.nombre,
+		TipoVenta: TIPO_SAP[v.tipo] ?? "R",
+		Vkorg: v.vkorg,
+		Vkbur: v.vkbur,
+		Werks: v.werks,
+		Lgort: v.lgort,
+		Vtweg: v.vtweg,
+		Zterm: v.zterm,
+		Vsbed: v.vsbed,
+		Waers: v.waers,
+		VigenciaDias: v.vigenciaDias,
+		Rol: v.rol,
+		PinHash: v.pinHash,
+		Activo: v.activo ? "X" : ""
+	};
+}
+
+/** Clave de la fila en el servicio: PERNR + organizacion + tipo de venta. */
+function rutaVendedor(v: Pick<Vendedor, "pernr" | "vkorg" | "tipo">): string {
+	return `/Vendedor(Pernr='${v.pernr}',Vkorg='${v.vkorg}',TipoVenta='${TIPO_SAP[v.tipo] ?? "R"}')`;
+}
+
+/** Errores de captura que impiden guardar; vacio = valido. Son claves de i18n. */
+export function validarVendedor(v: Vendedor): string[] {
+	const errores: string[] = [];
+	if (!/^\d{8}$/.test(v.pernr)) {
+		errores.push("vendAdmErrPernr");
+	}
+	if (!v.nombre.trim()) {
+		errores.push("vendAdmErrNombre");
+	}
+	if (!v.vkorg || !v.werks || !v.vtweg) {
+		errores.push("vendAdmErrOrg");
+	}
+	if (!(v.vigenciaDias > 0)) {
+		errores.push("vendAdmErrVigencia");
+	}
+	return errores;
+}
+
+/**
+ * Crea o actualiza un vendedor en SAP (con modelo OData) y devuelve la lista actualizada. Sin modelo (prototipo)
+ * solo cambia la lista que recibe, sin persistir. Nunca se borra: se desactiva para conservar el historial.
+ */
+export async function guardarVendedor(modelo: ODataModel | undefined, lista: Vendedor[], v: Vendedor, esNuevo: boolean): Promise<Vendedor[]> {
+	const mismo = (x: Vendedor): boolean => x.pernr === v.pernr && x.vkorg === v.vkorg && x.tipo === v.tipo;
+	if (esNuevo && lista.some(mismo)) {
+		throw new Error("vendAdmErrDuplicado");
+	}
+	if (modelo) {
+		if (esNuevo) {
+			const contexto = modelo.bindList("/Vendedor").create(aFilaSap(v), true);
+			await contexto.created();
+		} else {
+			const contexto = modelo.bindContext(rutaVendedor(v)).getBoundContext();
+			const fila = aFilaSap(v) as unknown as Record<string, unknown>;
+			for (const campo of Object.keys(fila)) {
+				if (campo !== "Pernr" && campo !== "Vkorg" && campo !== "TipoVenta") {
+					contexto.setProperty(campo, fila[campo]);
+				}
+			}
+			await modelo.submitBatch("$auto");
+		}
+	}
+	return esNuevo ? [...lista, v] : lista.map((x) => (mismo(x) ? v : x));
 }

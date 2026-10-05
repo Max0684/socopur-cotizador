@@ -1,0 +1,61 @@
+<core:FragmentDefinition
+	xmlns="sap.m"
+	xmlns:core="sap.ui.core"
+	xmlns:form="sap.ui.layout.form">
+	<Dialog
+		id="dlgEditarVendedor"
+		title="{= ${adm>/esNuevo} ? ${i18n>vendAdmNuevo} : ${i18n>vendAdmEditar} }"
+		contentWidth="38rem"
+		draggable="true"
+		resizable="true">
+		<content>
+			<form:SimpleForm editable="true" layout="ResponsiveGridLayout" labelSpanM="4" labelSpanL="4" columnsM="1" columnsL="1">
+				<Label text="{i18n>vendAdmPernr}" required="true" />
+				<Input value="{adm>/edicion/pernr}" maxLength="8" enabled="{adm>/esNuevo}" />
+				<Label text="{i18n>vendAdmNombre}" required="true" />
+				<Input value="{adm>/edicion/nombre}" maxLength="40" />
+				<Label text="{i18n>vendAdmTipo}" required="true" />
+				<Select selectedKey="{adm>/edicion/tipo}" enabled="{adm>/esNuevo}">
+					<core:Item key="repuestos" text="{i18n>tipoRepuestos}" />
+					<core:Item key="vehiculos" text="{i18n>tipoVehiculos}" />
+				</Select>
+				<Label text="{i18n>vendAdmOrgVentas}" required="true" />
+				<Input value="{adm>/edicion/vkorg}" maxLength="4" enabled="{adm>/esNuevo}" />
+				<Label text="{i18n>vendAdmCanal}" required="true" />
+				<Input value="{adm>/edicion/vtweg}" maxLength="2" />
+				<Label text="{i18n>vendAdmOficina}" />
+				<Input value="{adm>/edicion/vkbur}" maxLength="4" />
+				<Label text="{i18n>vendAdmCentro}" required="true" />
+				<Input value="{adm>/edicion/werks}" maxLength="4" />
+				<Label text="{i18n>vendAdmAlmacen}" />
+				<Input value="{adm>/edicion/lgort}" maxLength="4" />
+				<Label text="{i18n>vendAdmFormaPago}" />
+				<Input value="{adm>/edicion/zterm}" maxLength="4" />
+				<Label text="{i18n>vendAdmExpedicion}" />
+				<Input value="{adm>/edicion/vsbed}" maxLength="2" />
+				<Label text="{i18n>vendAdmMoneda}" />
+				<Select selectedKey="{adm>/edicion/waers}">
+					<core:Item key="PEN" text="PEN" />
+					<core:Item key="USD" text="USD" />
+				</Select>
+				<Label text="{i18n>vendAdmVigencia}" />
+				<StepInput value="{adm>/edicion/vigenciaDias}" min="1" max="90" width="8rem" />
+				<Label text="{i18n>vendAdmRol}" />
+				<Select selectedKey="{adm>/edicion/rol}">
+					<core:Item key="V" text="{i18n>vendAdmRolV}" />
+					<core:Item key="A" text="{i18n>vendAdmRolA}" />
+				</Select>
+				<Label text="{i18n>vendAdmNuevoPin}" />
+				<Input type="Password" value="{adm>/nuevoPin}" maxLength="12" placeholder="{i18n>vendAdmPinVacio}" />
+				<Label text="" />
+				<CheckBox text="{i18n>vendAdmQuitarPin}" selected="{adm>/quitarPin}" visible="{= !${adm>/esNuevo} }" />
+			</form:SimpleForm>
+		</content>
+		<beginButton>
+			<Button text="{i18n>guardar}" type="Emphasized" press=".onGuardarVendedor" />
+		</beginButton>
+		<endButton>
+			<Button text="{i18n>cerrar}" press=".onCerrarEdicion" />
+		</endButton>
+	</Dialog>
+</core:FragmentDefinition>

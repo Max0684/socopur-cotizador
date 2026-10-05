@@ -21,6 +21,13 @@
 				</f:content>
 				<f:actions>
 					<Button
+						id="admVendedoresBtn"
+						tooltip="{i18n>vendAdmAdministrar}"
+						type="Transparent"
+						icon="sap-icon://action-settings"
+						visible="{= ${mock>/perfil/rol} === 'A' }"
+						press=".onAdministrarVendedores" />
+					<Button
 						id="vendedorBtn"
 						text="{mock>/perfil/vendedor}"
 						tooltip="{i18n>vendIdCambiar}"

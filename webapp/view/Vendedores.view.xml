@@ -1,0 +1,51 @@
+<mvc:View
+	controllerName="com.socopur.cotizador.controller.Vendedores"
+	height="100%"
+	xmlns="sap.m"
+	xmlns:mvc="sap.ui.core.mvc"
+	xmlns:core="sap.ui.core">
+	<Page id="vendedoresPage" title="{i18n>vendAdmTitulo}" showNavButton="true" navButtonPress=".onVolver">
+		<content>
+			<MessageStrip text="{i18n>vendAdmSinPermiso}" type="Warning" showIcon="true" class="sapUiSmallMargin" visible="{= !${adm>/permitido} }" />
+			<Table
+				id="tablaVendedores"
+				visible="{adm>/permitido}"
+				items="{adm>/visibles}"
+				growing="true"
+				growingThreshold="50"
+				noDataText="{i18n>vendIdNinguno}">
+				<headerToolbar>
+					<OverflowToolbar>
+						<SearchField width="20rem" placeholder="{i18n>vendIdBuscar}" liveChange=".onBuscar" search=".onBuscar" />
+						<ToolbarSpacer />
+						<Button text="{i18n>vendAdmNuevo}" icon="sap-icon://add" type="Emphasized" press=".onNuevo" />
+					</OverflowToolbar>
+				</headerToolbar>
+				<columns>
+					<Column><Text text="{i18n>vendAdmPernr}" /></Column>
+					<Column><Text text="{i18n>vendAdmNombre}" /></Column>
+					<Column><Text text="{i18n>vendAdmTipo}" /></Column>
+					<Column><Text text="{i18n>vendAdmOrg}" /></Column>
+					<Column><Text text="{i18n>vendAdmCentro}" /></Column>
+					<Column><Text text="{i18n>vendAdmRol}" /></Column>
+					<Column><Text text="{i18n>vendAdmPin}" /></Column>
+					<Column hAlign="End"><Text text="{i18n>vendAdmActivo}" /></Column>
+				</columns>
+				<items>
+					<ColumnListItem type="Active" press=".onEditar">
+						<cells>
+							<Text text="{adm>pernr}" />
+							<Text text="{adm>nombre}" />
+							<Text text="{adm>tipo}" />
+							<Text text="{adm>vkorg}/{adm>vtweg}" />
+							<Text text="{adm>werks}" />
+							<ObjectStatus text="{= ${adm>rol} === 'A' ? ${i18n>vendAdmRolA} : ${i18n>vendAdmRolV} }" state="{= ${adm>rol} === 'A' ? 'Information' : 'None' }" />
+							<Text text="{= ${adm>pinHash} ? ${i18n>vendAdmConPin} : '—' }" />
+							<Switch state="{adm>activo}" change=".onActivoCambiado" />
+						</cells>
+					</ColumnListItem>
+				</items>
+			</Table>
+		</content>
+	</Page>
+</mvc:View>

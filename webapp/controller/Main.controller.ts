@@ -37,6 +37,10 @@ export default class Main extends Controller {
 		});
 	}
 
+	public onAdministrarVendedores(): void {
+		this.router.navTo("vendedores");
+	}
+
 	/** El usuario SAP es compartido: el boton del vendedor reabre la identificacion que vive en el controlador de la App. */
 	public onCambiarVendedor(): void {
 		const raiz = (this.getOwnerComponent() as UIComponent).getRootControl() as View;
