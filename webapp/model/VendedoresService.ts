@@ -44,7 +44,8 @@ interface VendedorSap {
 	Zterm?: string;
 	Vsbed?: string;
 	Waers?: string;
-	VigenciaDias?: number;
+	/** NUMC3 en SAP: llega y se envia como texto de 3 digitos ("007"). */
+	VigenciaDias?: string | number;
 	Rol?: string;
 	ConPin?: boolean | string;
 	Activo?: string;
@@ -86,7 +87,7 @@ export async function cargarVendedores(modelo: ODataModel | undefined, prototipo
 			zterm: v.Zterm ?? "",
 			vsbed: v.Vsbed ?? "",
 			waers: v.Waers ?? "PEN",
-			vigenciaDias: v.VigenciaDias ?? 7,
+			vigenciaDias: Number(v.VigenciaDias) || 7,
 			rol: v.Rol ?? "V",
 			conPin: v.ConPin === true || v.ConPin === "X",
 			activo: v.Activo === "X"
@@ -199,7 +200,7 @@ export function aFilaSap(v: Vendedor): VendedorSap {
 		Zterm: v.zterm,
 		Vsbed: v.vsbed,
 		Waers: v.waers,
-		VigenciaDias: v.vigenciaDias,
+		VigenciaDias: String(v.vigenciaDias).padStart(3, "0"),
 		Rol: v.rol,
 		Activo: v.activo ? "X" : ""
 	};
