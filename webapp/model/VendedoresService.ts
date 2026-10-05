@@ -298,3 +298,26 @@ export async function buscarEmpleados(modelo: ODataModel, texto: string, maximo 
 		return { pernr: normalizarPernr(e.Pernr), nombre: e.Nombre ?? e.Pernr, sociedad: e.Bukrs ?? "" };
 	});
 }
+
+export interface OpcionVendedor {
+	key: string;
+	text: string;
+}
+
+/**
+ * Organizaciones de venta de Socopur por tipo de venta (3 sociedades: Socopur 1100, Promogesa 1200, Socopur Selva 1300).
+ * Vehiculos 1101/1201/1301 y repuestos 1103/1203/1303; el taller (11x2) no entra al Cotizador.
+ */
+export function organizacionesDe(tipo: string): OpcionVendedor[] {
+	const vehiculos = [
+		{ key: "1101", text: "1101 Veh\u00edculos Socopur" },
+		{ key: "1201", text: "1201 Veh\u00edculos Promogesa" },
+		{ key: "1301", text: "1301 Veh\u00edculos Socopur Selva" }
+	];
+	const repuestos = [
+		{ key: "1103", text: "1103 Repuestos Socopur" },
+		{ key: "1203", text: "1203 Repuestos Promogesa" },
+		{ key: "1303", text: "1303 Repuestos Socopur Selva" }
+	];
+	return tipo === "vehiculos" ? vehiculos : repuestos;
+}

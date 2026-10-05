@@ -6,10 +6,10 @@
 	xmlns:core="sap.ui.core">
 	<Page id="vendedoresPage" title="{i18n>vendAdmTitulo}" showNavButton="true" navButtonPress=".onVolver">
 		<content>
-			<MessageStrip text="{i18n>vendAdmSinPermiso}" type="Warning" showIcon="true" class="sapUiSmallMargin" visible="{= !${adm>/permitido} }" />
+			<MessageStrip text="{i18n>vendAdmSinPermiso}" type="Warning" showIcon="true" class="sapUiSmallMargin" visible="{= ${mock>/perfil/rol} !== 'A' }" />
 			<Table
 				id="tablaVendedores"
-				visible="{adm>/permitido}"
+				visible="{= ${mock>/perfil/rol} === 'A' }"
 				items="{adm>/visibles}"
 				growing="true"
 				growingThreshold="50"

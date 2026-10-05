@@ -12,9 +12,11 @@ import List from "sap/m/List";
 import ListItemBase from "sap/m/ListItemBase";
 import Switch from "sap/m/Switch";
 import Event from "sap/ui/base/Event";
+import { leerCentros, leerOficinas, type OpcionCatalogo } from "com/socopur/cotizador/model/CatalogosService";
 import {
 	Vendedor,
 	buscarEmpleados,
+	organizacionesDe,
 	buscarVendedores,
 	type Empleado,
 	guardarVendedor,
@@ -42,8 +44,15 @@ export default class Vendedores extends Controller {
 	public onInit(): void {
 		const componente = this.getOwnerComponent() as UIComponent;
 		this.router = componente.getRouter();
-		this.getView()?.setModel(new JSONModel({ permitido: false, visibles: [], edicion: { ...VACIO }, esNuevo: true, nuevoPin: "", conBusqueda: false, empleados: [], busquedaEmpleado: "" }), "adm");
+		this.getView()?.setModel(new JSONModel({ visibles: [], edicion: { ...VACIO }, esNuevo: true, nuevoPin: "", conBusqueda: false, empleados: [], busquedaEmpleado: "", opcOrg: [], opcOficina: [], opcCentro: [] }), "adm");
 		this.router.getRoute("vendedores")?.attachPatternMatched(() => this.refrescar(), this);
+		// Al entrar por enlace o recargar, el vendedor se identifica DESPUES de abrirse la pantalla: se refresca cuando llega la lista.
+		this.modeloMock().attachPropertyChange((evento) => {
+			const ruta = String(evento.getParameter("path") ?? "");
+			if (ruta.startsWith("/vendedores") || ruta.startsWith("/perfil")) {
+				this.refrescar();
+			}
+		});
 	}
 
 	private modeloAdm(): JSONModel {
@@ -70,7 +79,6 @@ export default class Vendedores extends Controller {
 
 	private refrescar(): void {
 		const adm = this.modeloAdm();
-		adm.setProperty("/permitido", this.modeloMock().getProperty("/perfil/rol") === "A");
 		adm.setProperty("/visibles", buscarVendedores(this.lista(), this.filtro));
 	}
 
@@ -110,7 +118,59 @@ export default class Vendedores extends Controller {
 		adm.setProperty("/conBusqueda", this.odata() !== undefined);
 		adm.setProperty("/empleados", []);
 		adm.setProperty("/busquedaEmpleado", "");
+		adm.setProperty("/opcOrg", organizacionesDe(edicion.tipo));
 		this.dialogo.open();
+		await this.cargarOpcionesArea();
+	}
+
+	/**
+	 * Oficinas y centros validos para la organizacion y el canal elegidos (con SAP, de TVKWZ/TVBUR; sin SAP, los del prototipo).
+	 * Si el valor guardado ya no esta en la lista nueva se deja vacio para que el administrador elija uno valido.
+	 */
+	private async cargarOpcionesArea(): Promise<void> {
+		const adm = this.modeloAdm();
+		const v = adm.getProperty("/edicion") as Vendedor;
+		let oficinas: OpcionCatalogo[];
+		let centros: OpcionCatalogo[];
+		const odata = this.odata();
+		if (odata && v.vkorg && v.vtweg) {
+			try {
+				const [c, o] = await Promise.all([leerCentros(odata, v.vkorg, v.vtweg), leerOficinas(odata, v.vkorg, v.vtweg)]);
+				oficinas = o;
+				centros = c.codigos.map((k) => ({ key: k, text: `${k} ${c.nombres[k] ?? ""}`.trim() }));
+			} catch (error) {
+				MessageBox.error((error as Error).message);
+				return;
+			}
+		} else {
+			// En el prototipo los centros son un mapa codigo -> nombre.
+			const opciones = this.modeloMock().getProperty("/opciones") as { oficinas?: OpcionCatalogo[]; centros?: Record<string, string> };
+			oficinas = opciones.oficinas ?? [];
+			centros = Object.entries(opciones.centros ?? {}).map(([key, nombre]) => ({ key, text: `${key} ${nombre}` }));
+		}
+		adm.setProperty("/opcOficina", oficinas);
+		adm.setProperty("/opcCentro", centros);
+		if (v.vkbur && !oficinas.some((x) => x.key === v.vkbur)) {
+			adm.setProperty("/edicion/vkbur", "");
+		}
+		if (v.werks && !centros.some((x) => x.key === v.werks)) {
+			adm.setProperty("/edicion/werks", "");
+		}
+	}
+
+	/** Al cambiar el tipo de venta se recalculan las organizaciones posibles y se elige la primera. */
+	public async onCambiaTipo(): Promise<void> {
+		const adm = this.modeloAdm();
+		const tipo = String(adm.getProperty("/edicion/tipo"));
+		const orgs = organizacionesDe(tipo);
+		adm.setProperty("/opcOrg", orgs);
+		adm.setProperty("/edicion/vkorg", orgs[0].key);
+		await this.cargarOpcionesArea();
+	}
+
+	/** Al cambiar organizacion o canal cambian las oficinas y centros validos. */
+	public async onCambiaArea(): Promise<void> {
+		await this.cargarOpcionesArea();
 	}
 
 	/** Busca empleados de HCM mientras se escribe (nombre o PERNR). */

@@ -22,24 +22,36 @@
 				<Label text="{i18n>vendAdmNombre}" required="true" />
 				<Input value="{adm>/edicion/nombre}" maxLength="40" />
 				<Label text="{i18n>vendAdmTipo}" required="true" />
-				<Select selectedKey="{adm>/edicion/tipo}" enabled="{adm>/esNuevo}">
+				<Select selectedKey="{adm>/edicion/tipo}" enabled="{adm>/esNuevo}" change=".onCambiaTipo">
 					<core:Item key="repuestos" text="{i18n>tipoRepuestos}" />
 					<core:Item key="vehiculos" text="{i18n>tipoVehiculos}" />
 				</Select>
 				<Label text="{i18n>vendAdmOrgVentas}" required="true" />
-				<Input value="{adm>/edicion/vkorg}" maxLength="4" enabled="{adm>/esNuevo}" />
+				<Select selectedKey="{adm>/edicion/vkorg}" enabled="{adm>/esNuevo}" items="{adm>/opcOrg}" change=".onCambiaArea">
+					<core:Item key="{adm>key}" text="{adm>text}" />
+				</Select>
 				<Label text="{i18n>vendAdmCanal}" required="true" />
-				<Input value="{adm>/edicion/vtweg}" maxLength="2" />
+				<Select selectedKey="{adm>/edicion/vtweg}" items="{mock>/opciones/canales}" change=".onCambiaArea">
+					<core:Item key="{mock>key}" text="{mock>text}" />
+				</Select>
 				<Label text="{i18n>vendAdmOficina}" />
-				<Input value="{adm>/edicion/vkbur}" maxLength="4" />
+				<Select selectedKey="{adm>/edicion/vkbur}" forceSelection="false" items="{adm>/opcOficina}">
+					<core:Item key="{adm>key}" text="{adm>text}" />
+				</Select>
 				<Label text="{i18n>vendAdmCentro}" required="true" />
-				<Input value="{adm>/edicion/werks}" maxLength="4" />
+				<Select selectedKey="{adm>/edicion/werks}" forceSelection="false" items="{adm>/opcCentro}">
+					<core:Item key="{adm>key}" text="{adm>text}" />
+				</Select>
 				<Label text="{i18n>vendAdmAlmacen}" />
 				<Input value="{adm>/edicion/lgort}" maxLength="4" />
 				<Label text="{i18n>vendAdmFormaPago}" />
-				<Input value="{adm>/edicion/zterm}" maxLength="4" />
+				<Select selectedKey="{adm>/edicion/zterm}" forceSelection="false" items="{mock>/formasPago}">
+					<core:Item key="{mock>key}" text="{mock>text}" />
+				</Select>
 				<Label text="{i18n>vendAdmExpedicion}" />
-				<Input value="{adm>/edicion/vsbed}" maxLength="2" />
+				<Select selectedKey="{adm>/edicion/vsbed}" forceSelection="false" items="{mock>/opciones/expediciones}">
+					<core:Item key="{mock>key}" text="{mock>text}" />
+				</Select>
 				<Label text="{i18n>vendAdmMoneda}" />
 				<Select selectedKey="{adm>/edicion/waers}">
 					<core:Item key="PEN" text="PEN" />
