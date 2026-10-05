@@ -41,3 +41,22 @@ test("textoSede muestra ciudad y region", () => {
 	assert.equal(textoSede("1201"), "Iquitos · Selva");
 	assert.equal(textoSede("3001"), "");
 });
+
+test("listaDeSede: solo la ciudad del vendedor y siempre con el valor del perfil dentro", async () => {
+	const { listaDeSede } = await import("../webapp/model/Ciudades.ts");
+	const sap = [
+		{ key: "1001", text: "1001 LIMA - ATE" },
+		{ key: "1101", text: "1101 PUCALLPA - CENTENARIO" },
+		{ key: "1301", text: "1301 TARAPOTO - ILO" }
+	];
+	const a = listaDeSede(sap, "PUCALLPA", "centros", "1101", "no habilitado");
+	assert.deepEqual(a.opciones.map((o) => o.key), ["1101"]);
+	assert.equal(a.fueraDeSap, false);
+	// El centro del perfil no esta habilitado en SAP para la org/canal: se muestra igual, marcado, y se avisa.
+	const b = listaDeSede(sap, "PUCALLPA", "centros", "1104", "no habilitado");
+	assert.deepEqual(b.opciones.map((o) => o.key), ["1104", "1101"]);
+	assert.equal(b.opciones[0].text, "1104 (no habilitado)");
+	assert.equal(b.fueraDeSap, true);
+	// Sin ciudad conocida (p. ej. un perfil antiguo) no se filtra.
+	assert.equal(listaDeSede(sap, "", "centros", "1001", "x").opciones.length, 3);
+});

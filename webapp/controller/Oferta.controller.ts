@@ -10,6 +10,8 @@ import { agruparVehiculos, buscarVehiculos, filtrarVehiculos } from "com/socopur
 import { almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, gruposParaGuardar, modalidadPorDefecto, sectorDeCabecera, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
 import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type VinAsignado } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
+import { listaDeSede } from "com/socopur/cotizador/model/Ciudades";
+import { ciudadPorClave } from "com/socopur/cotizador/model/Ciudades";
 import { cargarContacto, cargarDirecciones, cargarMovimientos, type Movimiento } from "com/socopur/cotizador/model/ClienteDetalleService";
 import { cargarCreditoCliente, fechaLocalISO, resumirCredito, type EstadoCuenta, type ResumenCredito } from "com/socopur/cotizador/model/CreditoClienteService";
 import { cargarModalidades, type ModalidadPantalla } from "com/socopur/cotizador/model/ModalidadesService";
@@ -797,6 +799,30 @@ export default class Oferta extends Controller {
 		return claves.map((k) => ({ key: k, text: nombres[k] ? `${k} \u00b7 ${nombres[k]}` : k }));
 	}
 
+	/**
+	 * Listas de oficina y centro de la OFERTA: solo las de la sede (ciudad) del vendedor y siempre con el valor de su perfil dentro,
+	 * para que el desplegable no muestre otro por no encontrarlo. Avisa si el centro u oficina del perfil no estan habilitados en SAP
+	 * para la organizacion y el canal.
+	 */
+	private refrescarListasSede(): void {
+		const oferta = this.modeloOferta();
+		const ciudad = String(oferta.getProperty("/perfil/ciudad") ?? "");
+		const marca = this.i18n().getText("noHabilitado") as string;
+		const ofiPerfil = String(oferta.getProperty("/perfil/oficina") ?? "");
+		const cenPerfil = String(oferta.getProperty("/perfil/centro") ?? "");
+		const oficinas = listaDeSede((oferta.getProperty("/opciones/oficinas") as { key: string; text: string }[]) ?? [], ciudad, "oficinas", ofiPerfil, marca);
+		const centros = listaDeSede((oferta.getProperty("/opcionesCentro") as { key: string; text: string }[]) ?? [], ciudad, "centros", cenPerfil, marca);
+		oferta.setProperty("/oficinasSede", oficinas.opciones);
+		oferta.setProperty("/opcionesCentro", centros.opciones);
+		const fuera = [oficinas.fueraDeSap ? `${this.i18n().getText("oficina")} ${ofiPerfil}` : "", centros.fueraDeSap ? `${this.i18n().getText("centro")} ${cenPerfil}` : ""].filter(Boolean);
+		oferta.setProperty(
+			"/avisoPerfil",
+			fuera.length
+				? (this.i18n().getText("avisoPerfilFuera", [fuera.join(" / "), String(oferta.getProperty("/perfil/orgVentas") ?? ""), String(oferta.getProperty("/perfil/canal") ?? "")]) as string)
+				: ""
+		);
+	}
+
 	/** El canal elegido define el canal de la busqueda de materiales, la modalidad propuesta y los centros que se ofrecen. */
 	public async onCambiaCanal(): Promise<void> {
 		const oferta = this.modeloOferta();
@@ -814,8 +840,11 @@ export default class Oferta extends Controller {
 		const centros = this.centrosDe(canal);
 		oferta.setProperty("/opcionesCentro", centros);
 		if (!centros.some((c) => c.key === oferta.getProperty("/perfil/centro"))) {
-			oferta.setProperty("/perfil/centro", centros.find((c) => c.key === "1101")?.key ?? centros[0]?.key ?? "");
+			// Si el centro ya no es valido para el canal, se propone el principal de la sede del vendedor (no uno de otra ciudad).
+			const principal = ciudadPorClave(String(oferta.getProperty("/perfil/ciudad") ?? ""))?.centroPrincipal;
+			oferta.setProperty("/perfil/centro", centros.find((c) => c.key === principal)?.key ?? centros[0]?.key ?? "");
 		}
+		this.refrescarListasSede();
 		oferta.setProperty("/guardado", { visible: false, texto: "" });
 		this.recalcular();
 	}
@@ -3184,6 +3213,7 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 				await this.sincronizarCatalogosArea(canalInicial);
 				oferta.setProperty("/opcionesCentro", this.centrosDe(canalInicial));
 			}
+			this.refrescarListasSede();
 			if (numero) {
 				const cabecera = (mock.getProperty("/ofertas") as { numero: string; doc: string; cliente?: string; cotizId?: string; estado?: string }[]).find(
 					(o) => o.numero === numero || o.cotizId === numero
@@ -3274,8 +3304,11 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 			modalidades: mock.getProperty("/modalidades") ?? [],
 			modalidadesGrupo: {},
 			formasPago: mock.getProperty("/formasPago") ?? [],
-			perfil: mock.getProperty("/perfil") ?? {},
-			opciones: mock.getProperty("/opciones") ?? {},
+			// Copias: cambiar canal, centro u oficina en una oferta no debe modificar el perfil del vendedor ni el catalogo compartido.
+			perfil: JSON.parse(JSON.stringify(mock.getProperty("/perfil") ?? {})) as Record<string, unknown>,
+			opciones: { ...((mock.getProperty("/opciones") as Record<string, unknown>) ?? {}) },
+			oficinasSede: [],
+			avisoPerfil: "",
 			opcionesCentro: this.centrosDe(String(mock.getProperty("/perfil/canal") ?? "11")),
 			materialElegido: null,
 			elegidosLista: [],

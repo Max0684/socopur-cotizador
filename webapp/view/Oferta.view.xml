@@ -175,6 +175,7 @@
 					<uxap:ObjectPageSubSection>
 						
 						<Panel headerText="{i18n>datosPanel}" expandable="true" expanded="false">
+							<MessageStrip text="{oferta>/avisoPerfil}" type="Warning" showIcon="true" visible="{= !!${oferta>/avisoPerfil} }" class="sapUiSmallMarginBottom" />
 							<form:SimpleForm
 								editable="true"
 								layout="ColumnLayout"
@@ -185,10 +186,12 @@
 								<Input value="{oferta>/perfil/vendedor}" editable="false" />
 								<Label text="{i18n>sede}" visible="{= !!${oferta>/perfil/sede} }" />
 								<Input value="{oferta>/perfil/sede}" editable="false" visible="{= !!${oferta>/perfil/sede} }" />
+								<Label text="{i18n>orgVentas}" visible="{= !!${oferta>/perfil/orgVentas} }" />
+								<Input value="{oferta>/perfil/orgVentas}" editable="false" visible="{= !!${oferta>/perfil/orgVentas} }" />
 								<Label text="{i18n>canal}" />
 								<Select selectedKey="{oferta>/perfil/canal}" change=".onCambiaCanal" items="{oferta>/opciones/canales}"><core:Item key="{oferta>key}" text="{oferta>text}" /></Select>
 								<Label text="{i18n>oficina}" />
-								<Select selectedKey="{oferta>/perfil/oficina}" items="{oferta>/opciones/oficinas}"><core:Item key="{oferta>key}" text="{oferta>text}" /></Select>
+								<Select selectedKey="{oferta>/perfil/oficina}" items="{oferta>/oficinasSede}"><core:Item key="{oferta>key}" text="{oferta>text}" /></Select>
 								<Label text="{i18n>centro}" />
 								<Select selectedKey="{oferta>/perfil/centro}" items="{oferta>/opcionesCentro}"><core:Item key="{oferta>key}" text="{oferta>text}" /></Select>
 								<Label text="{i18n>moneda}" />

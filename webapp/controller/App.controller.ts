@@ -7,7 +7,7 @@ import Dialog from "sap/m/Dialog";
 import List from "sap/m/List";
 import SearchField from "sap/m/SearchField";
 import Event from "sap/ui/base/Event";
-import { textoSede } from "com/socopur/cotizador/model/Ciudades";
+import { ciudadDeCentro, textoSede } from "com/socopur/cotizador/model/Ciudades";
 import { Router$RouteMatchedEvent } from "sap/ui/core/routing/Router";
 import {
 	Vendedor,
@@ -76,6 +76,8 @@ export default class App extends Controller {
 	private entrarComo(mock: JSONModel, vendedor: Vendedor): void {
 		aplicarPerfil(mock, vendedor);
 		mock.setProperty("/perfil/sede", textoSede(vendedor.werks));
+		mock.setProperty("/perfil/ciudad", ciudadDeCentro(vendedor.werks)?.clave ?? "");
+		mock.setProperty("/perfil/orgVentas", vendedor.vkorg);
 	}
 
 	private activos(): Vendedor[] {

@@ -101,3 +101,27 @@ export function textoSede(werks: string): string {
 	const c = ciudadDeCentro(werks);
 	return c ? `${c.nombre} · ${c.region}` : "";
 }
+
+export interface OpcionClave {
+	key: string;
+	text: string;
+}
+
+/**
+ * Listas de centros u oficinas de la sede del vendedor. Deja solo los de su ciudad y, si el valor del perfil no esta en la lista, lo agrega
+ * (marcado) para que el desplegable muestre SIEMPRE el valor del perfil y no otro. `fueraDeSap` dice si ese valor no es valido para la
+ * organizacion y el canal (no esta en la lista de SAP), para avisar al vendedor.
+ */
+export function listaDeSede(
+	base: OpcionClave[],
+	ciudadClave: string,
+	tipo: "centros" | "oficinas",
+	valorPerfil: string,
+	marca: string
+): { opciones: OpcionClave[]; fueraDeSap: boolean } {
+	const ciudad = ciudadPorClave(ciudadClave);
+	const delSap = ciudad ? base.filter((o) => ciudad[tipo].includes(o.key)) : [...base];
+	const fueraDeSap = !!valorPerfil && !base.some((o) => o.key === valorPerfil);
+	const opciones = valorPerfil && !delSap.some((o) => o.key === valorPerfil) ? [{ key: valorPerfil, text: `${valorPerfil} (${marca})` }, ...delSap] : delSap;
+	return { opciones, fueraDeSap };
+}
