@@ -7,7 +7,7 @@ import { leerCentros, leerOficinas } from "com/socopur/cotizador/model/Catalogos
 import { buscarMateriales, cargarSegmentos, disponibilidadPorCentro, materialesDisponibles, type Disponibilidad } from "com/socopur/cotizador/model/MaterialesService";
 import { consultarPrecio } from "com/socopur/cotizador/model/PreciosService";
 import { agruparVehiculos, buscarVehiculos, filtrarVehiculos } from "com/socopur/cotizador/model/VehiculosService";
-import { almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, gruposParaGuardar, modalidadPorDefecto, sectorDeCabecera, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
+import { almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, gruposParaGuardar, igvExonerado, modalidadPorDefecto, sectorDeCabecera, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
 import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type VinAsignado } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
 import { buscarRepuestosConStock, motivoVacio } from "com/socopur/cotizador/model/MaterialesService";
@@ -207,6 +207,8 @@ interface Linea extends LineaMock {
 	/** Precios unitarios reales de SAP (solo lineas de materiales leidos de SAP). */
 	precioPenSap?: number;
 	precioUsdSap?: number;
+	/** true si al cambiar canal o cliente SAP no pudo dar el precio de esta linea: el precio mostrado es el anterior y no vale. */
+	sinPrecioVigente?: boolean;
 	/** Impuesto (IGV) real leido de SAP; sin valor mientras la oferta no se haya guardado. */
 	impuesto?: number;
 	/** ISC e IGV reales por separado (solo tras leer el documento SAP). */
@@ -977,6 +979,8 @@ export default class Oferta extends Controller {
 		this.refrescarListasSede();
 		oferta.setProperty("/guardado", { visible: false, texto: "" });
 		this.recalcular();
+		// El precio de SAP depende del canal: las lineas ya agregadas se vuelven a preciar con el canal nuevo.
+		void this.repreciarLineasSap();
 	}
 
 	/** 01 Envio / 02 Recojo: define como se entrega (la modalidad tambien lo propone al cambiarla). */
@@ -1011,12 +1015,17 @@ export default class Oferta extends Controller {
 					l.precioUsdSap = usd.precioUnitario;
 					l.precio = oferta.getProperty("/perfil/moneda") === "USD" ? usd.precioUnitario : pen.precioUnitario;
 					l.total = this.redondear(l.cantidad * l.precio);
+					l.sinPrecioVigente = false;
 				})
 			);
 			oferta.setProperty("/lineas", lineas);
 			this.recalcular();
 		} catch (error) {
-			MessageToast.show(this.i18n().getText("precioSapError", [(error as Error).message]) as string);
+			// El precio que queda en pantalla es el anterior (de otro canal o cliente): se marca para no guardar con un precio que no vale.
+			delSap.forEach((l) => (l.sinPrecioVigente = true));
+			oferta.setProperty("/lineas", lineas);
+			this.recalcular();
+			MessageBox.warning(this.i18n().getText("repreciarError", [(error as Error).message]) as string);
 		}
 	}
 
@@ -2370,7 +2379,7 @@ export default class Oferta extends Controller {
 		const total = Number(real.TotalPedido);
 		const i18n = this.i18n();
 		if (impuestos && Math.abs(neto + impuestos.isc + impuestos.igv - total) < 0.01) {
-			const igv = impuestos.igv === 0 ? (i18n.getText("igvExonerado") as string) : (i18n.getText("igv") as string);
+			const igv = impuestos.igv === 0 && neto > 0 ? (i18n.getText("igvExonerado") as string) : (i18n.getText("igv") as string);
 			return `${this.formatMonto(neto)} + ${i18n.getText("isc")} ${this.formatMonto(impuestos.isc)} + ${igv} ${this.formatMonto(impuestos.igv)} = ${this.formatMonto(total)} ${real.MonedaPedido}`;
 		}
 		return `${this.formatMonto(neto)} + ${i18n.getText("igv")} ${this.formatMonto(Number(real.ImpuestoPedido))} = ${this.formatMonto(total)} ${real.MonedaPedido}`;
@@ -2772,6 +2781,8 @@ export default class Oferta extends Controller {
 		oferta.setProperty("/entregaDatos/direccionId", "");
 		this.aplicarDireccionEnvio();
 		this.recalcular();
+		// El precio de SAP depende del cliente: las lineas ya agregadas se vuelven a preciar con el cliente nuevo.
+		void this.repreciarLineasSap();
 	}
 
 	public onBuscarCliente(): void {
@@ -3001,6 +3012,11 @@ export default class Oferta extends Controller {
 			MessageBox.error(i18n.getText("guardarSinLineas") as string);
 			return;
 		}
+		const sinPrecio = ((oferta.getProperty("/lineas") as Linea[]) ?? []).filter((l) => l.sinPrecioVigente);
+		if (sinPrecio.length) {
+			MessageBox.error(i18n.getText("guardarSinPrecio", [sinPrecio.map((l) => l.material).join(", ")]) as string);
+			return;
+		}
 		const perfil = oferta.getProperty("/perfil") as Record<string, string>;
 		const datos: OfertaParaGuardar = {
 			kunnr: cliente.kunnr,
@@ -3008,7 +3024,7 @@ export default class Oferta extends Controller {
 			// La forma de pago elegida en la pantalla viaja a SAP; antes el pedido heredaba la del maestro del cliente.
 			zterm: perfil.formaPago || "",
 			comentario: (oferta.getProperty("/entregaDatos/comentario") as string) ?? "",
-			grupos: gruposParaGuardar(grupos, perfil, (centro) => almacenDeCentro(centro, this.modeloMock().getProperty("/opciones/almacenPorCentro") ?? {}))
+			grupos: gruposParaGuardar(grupos, perfil, (centro) => almacenDeCentro(centro, this.modeloMock().getProperty("/opciones/almacenPorCentro") ?? {}, perfil.almacen, perfil.centro))
 		};
 		// Un centro que no esta asignado a la organizacion/canal hace que SAP rechace la oferta (visto con el 1103 en 1103/10).
 		const centrosPorArea = (this.modeloMock().getProperty("/opciones/centrosPorArea") as Record<string, string[]>) ?? {};
@@ -3497,7 +3513,7 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 			...totales,
 			igvTxt: totales.igvConocido ? this.formatMonto(totales.igv) : "\u2014",
 			iscEtq: this.i18n().getText(totales.desglose ? "isc" : "iscIncluido") as string,
-			igvEtq: this.i18n().getText(totales.desglose && totales.igv === 0 ? "igvExonerado" : "igv") as string
+			igvEtq: this.i18n().getText(igvExonerado(totales) ? "igvExonerado" : "igv") as string
 		});
 		if (oferta.getProperty("/cliente") && !oferta.getProperty("/entregaDatos/direccionId")) {
 			this.aplicarDireccionEnvio();

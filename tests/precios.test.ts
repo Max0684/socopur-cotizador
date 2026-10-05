@@ -63,3 +63,10 @@ test("filtroPrecio agrega Varcond solo si es un vehiculo", () => {
 	assert.ok(!filtroPrecio(base).includes("Varcond"));
 	assert.ok(filtroPrecio({ ...base, varcond: "DU200Z0CBU2025ANA" }).endsWith("and Varcond eq 'DU200Z0CBU2025ANA'"));
 });
+
+test("consultarPrecio: un precio unitario de 0 es 'sin precio vigente' y lanza error (caso 1203/11 con el Z300 borrado)", async () => {
+	const { modelo } = crearModeloFalso({
+		precios: [{ Moneda: "PEN", PrecioLista: "0.00", PrecioUnitario: "0.00", Neto: "0.00", Impuestos: "0.00", Respuesta: 0, Mensaje: "" }]
+	});
+	await assert.rejects(() => consultarPrecio(como(modelo), consulta), /precio vigente/);
+});

@@ -11,6 +11,7 @@ import {
 	modalidadPorDefecto,
 	oficinaDe,
 	sectorDeCabecera,
+	igvExonerado,
 	totalesDeOferta,
 	type GrupoCarrito
 } from "../webapp/model/Reglas.ts";
@@ -250,4 +251,18 @@ test("totalesDeOferta: sin desglose de SAP se mantiene el calculo anterior", () 
 	const t = totalesDeOferta([{ total: 306.18, impuesto: 55.11 }]);
 	assert.equal(t.desglose, false);
 	assert.equal(t.total, 361.29);
+});
+
+test("almacenDeCentro: el almacen del perfil manda solo en el centro del perfil; en otro, la regla practica", () => {
+	assert.equal(almacenDeCentro("2001", {}), "0001");
+	assert.equal(almacenDeCentro("2001", {}, "0004", "2001"), "0004");
+	assert.equal(almacenDeCentro("1101", {}, "0004", "2001"), "0001");
+	assert.equal(almacenDeCentro("1007", { "1007": "0008" }, "", "2001"), "0008");
+});
+
+test("igvExonerado: solo con base mayor que cero; un documento en cero no es una exoneracion (caso 3300008230: IGV 18 % sobre base 0)", () => {
+	assert.equal(igvExonerado({ desglose: true, igv: 0, subtotal: 0 }), false);
+	assert.equal(igvExonerado({ desglose: true, igv: 0, subtotal: 100 }), true);
+	assert.equal(igvExonerado({ desglose: true, igv: 18, subtotal: 100 }), false);
+	assert.equal(igvExonerado({ desglose: false, igv: 0, subtotal: 100 }), false);
 });

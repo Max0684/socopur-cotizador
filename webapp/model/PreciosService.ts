@@ -68,6 +68,11 @@ export async function consultarPrecio(modelo: ODataModel, consulta: ConsultaPrec
 	if (Number(fila.Respuesta) !== 0) {
 		throw new Error(fila.Mensaje || "SAP no pudo calcular el precio");
 	}
+	// Un precio unitario de cero es "sin precio": SAP no encontro condicion de precio vigente (p. ej. el Z300 del canal esta borrado) y
+	// el documento saldria con valor 0. Se trata como error para no generar ofertas y pedidos en cero.
+	if (!(Number(fila.PrecioUnitario) > 0)) {
+		throw new Error("SAP no encontró un precio vigente para este material en este canal");
+	}
 	return {
 		moneda: fila.Moneda,
 		precioLista: Number(fila.PrecioLista),

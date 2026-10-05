@@ -127,7 +127,11 @@ export function centroValidoParaArea(centrosPorArea: Record<string, string[]>, o
 }
 
 /** Almacen de las lineas: el 0001 es el normal; el centro 1007 (aduanero) usa el 0008. Leido en MARD. */
-export function almacenDeCentro(centro: string, almacenPorCentro: Record<string, string>): string {
+export function almacenDeCentro(centro: string, almacenPorCentro: Record<string, string>, almacenDelPerfil = "", centroDelPerfil = ""): string {
+	// El almacen que el administrador fijo en el perfil del vendedor manda en el centro del perfil; en otro centro rige la regla practica.
+	if (almacenDelPerfil && centro === centroDelPerfil) {
+		return almacenDelPerfil;
+	}
 	return almacenPorCentro[centro] ?? "0001";
 }
 
@@ -172,6 +176,14 @@ const redondear = (v: number): number => Math.round(v * 100) / 100;
  * total = suma de las lineas + IGV, como Total = Netwr + ImpuestoTotal en el servicio.
  * El precio de lista de vehiculos ya incluye el ISC: se separa neto e ISC solo para informar.
  */
+/**
+ * "IGV 0 % (exonerado)" solo se puede decir cuando HAY una base y el IGV es cero. Con base cero (documento sin precio) el IGV es 0 aunque
+ * SAP haya aplicado el 18 %: ahi no hay exoneracion, solo falta el precio.
+ */
+export function igvExonerado(t: { desglose: boolean; igv: number; subtotal: number }): boolean {
+	return t.desglose && t.igv === 0 && t.subtotal > 0;
+}
+
 export function totalesDeOferta(lineas: LineaTotales[]): TotalesOferta {
 	const subtotal = lineas.reduce((acc, l) => acc + l.total, 0);
 	if (lineas.length > 0 && lineas.every((l) => l.isc !== undefined && l.igvImporte !== undefined)) {

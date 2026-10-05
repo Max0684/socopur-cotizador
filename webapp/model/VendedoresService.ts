@@ -158,6 +158,7 @@ export function aplicarPerfil(mock: JSONModel, v: Vendedor): void {
 	mock.setProperty("/perfil/rol", v.rol);
 	poner("/perfil/oficina", v.vkbur);
 	poner("/perfil/centro", v.werks);
+	poner("/perfil/almacen", v.lgort);
 	poner("/perfil/canal", v.vtweg);
 	poner("/perfil/formaPago", v.zterm);
 	poner("/perfil/expedicion", v.vsbed);
