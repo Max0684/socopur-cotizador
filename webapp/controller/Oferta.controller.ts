@@ -2537,10 +2537,9 @@ export default class Oferta extends Controller {
 		const oferta = this.modeloOferta();
 		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel;
 		try {
-			// Se busca en las organizaciones del perfil (repuestos y vehiculos): un cliente de motos puede estar solo en la 1101.
-			const mock = this.modeloMock();
-			const orgs = ["repuestos", "vehiculos"].map((t) => String(mock.getProperty(`/perfil/busqueda/orgs/${t}`) ?? "")).filter(Boolean);
-			const encontrados = await buscarClientes(odata, texto, orgs.length ? orgs : ["1103"]);
+			// El cliente se busca en TODAS las organizaciones: es de toda la empresa. Si no esta dado de alta en la organizacion y el canal
+			// de la oferta, la pantalla lo avisa y permite ampliar el area de ventas.
+			const encontrados = await buscarClientes(odata, texto);
 			if (encontrados.length === 0) {
 				oferta.setProperty("/cliente", null);
 				oferta.setProperty("/clienteNoEncontrado", true);

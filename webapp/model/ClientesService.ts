@@ -52,7 +52,7 @@ const comillas = (texto: string): string => texto.replace(/'/g, "''");
  * La vista trae una fila por area de ventas; aqui se agrupan por cliente.
  * STCD1 se usa como documento y, si esta vacio, STCD2 (RUC en STCD1 en Socopur; el DNI iria en STCD2 por confirmar).
  */
-export async function buscarClientes(modelo: ODataModel, texto: string, vkorg: string | string[], maximo = 20): Promise<ClienteSap[]> {
+export async function buscarClientes(modelo: ODataModel, texto: string, vkorg: string | string[] = [], maximo = 20): Promise<ClienteSap[]> {
 	const filtro = filtroClientes(texto, vkorg);
 	if (!filtro) {
 		return [];

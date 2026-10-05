@@ -6,7 +6,9 @@ test("filtroClientes: texto vacio no genera filtro", () => {
 	assert.equal(filtroClientes("   ", "1103"), "");
 });
 
-test("filtroClientes: una organizacion, o varias con 'or'", () => {
+test("filtroClientes: sin organizacion busca en todas; con una o varias, solo en ellas", () => {
+	assert.ok(!filtroClientes("jyas").includes("Vkorg"));
+	assert.ok(filtroClientes("jyas").startsWith("(Stcd1 eq 'jyas'"));
 	assert.ok(filtroClientes("jyas", "1103").startsWith("Vkorg eq '1103' and ("));
 	const f = filtroClientes("jyas", ["1103", "1101", "1103"]);
 	assert.ok(f.startsWith("(Vkorg eq '1103' or Vkorg eq '1101') and ("));
