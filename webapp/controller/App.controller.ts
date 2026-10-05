@@ -7,6 +7,7 @@ import Dialog from "sap/m/Dialog";
 import List from "sap/m/List";
 import SearchField from "sap/m/SearchField";
 import Event from "sap/ui/base/Event";
+import { textoSede } from "com/socopur/cotizador/model/Ciudades";
 import { Router$RouteMatchedEvent } from "sap/ui/core/routing/Router";
 import {
 	Vendedor,
@@ -65,10 +66,16 @@ export default class App extends Controller {
 		mock.setProperty("/vendedores", lista);
 		const recordado = this.activos().find((v) => claveVendedor(v) === vendedorRecordado());
 		if (recordado) {
-			aplicarPerfil(mock, recordado);
+			this.entrarComo(mock, recordado);
 			return;
 		}
 		await this.abrirDialogoVendedor();
+	}
+
+	/** Carga el perfil del vendedor y su sede (ciudad y region, deducidas de su centro). */
+	private entrarComo(mock: JSONModel, vendedor: Vendedor): void {
+		aplicarPerfil(mock, vendedor);
+		mock.setProperty("/perfil/sede", textoSede(vendedor.werks));
 	}
 
 	private activos(): Vendedor[] {
@@ -123,7 +130,7 @@ export default class App extends Controller {
 			return;
 		}
 		const mock = (this.getOwnerComponent() as UIComponent).getModel("mock") as JSONModel;
-		aplicarPerfil(mock, vendedor);
+		this.entrarComo(mock, vendedor);
 		recordarVendedor(claveVendedor(vendedor));
 		this.dialogoVendedor?.close();
 	}

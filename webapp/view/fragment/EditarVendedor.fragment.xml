@@ -26,6 +26,10 @@
 					<core:Item key="repuestos" text="{i18n>tipoRepuestos}" />
 					<core:Item key="vehiculos" text="{i18n>tipoVehiculos}" />
 				</Select>
+				<Label text="{i18n>vendAdmCiudad}" required="true" />
+				<Select selectedKey="{adm>/ciudad}" forceSelection="false" items="{adm>/opcCiudad}" change=".onCambiaCiudad">
+					<core:Item key="{adm>key}" text="{adm>text}" />
+				</Select>
 				<Label text="{i18n>vendAdmOrgVentas}" required="true" />
 				<Select selectedKey="{adm>/edicion/vkorg}" enabled="{adm>/esNuevo}" items="{adm>/opcOrg}" change=".onCambiaArea">
 					<core:Item key="{adm>key}" text="{adm>text}" />

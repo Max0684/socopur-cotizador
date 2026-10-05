@@ -12,6 +12,7 @@ import List from "sap/m/List";
 import ListItemBase from "sap/m/ListItemBase";
 import Switch from "sap/m/Switch";
 import Event from "sap/ui/base/Event";
+import { CIUDADES, ciudadDeCentro, ciudadPorClave, oficinaDeCentro } from "com/socopur/cotizador/model/Ciudades";
 import { ALMACEN_POR_DEFECTO, leerAlmacenes, leerCentros, leerOficinas, type OpcionCatalogo } from "com/socopur/cotizador/model/CatalogosService";
 import {
 	Vendedor,
@@ -44,7 +45,7 @@ export default class Vendedores extends Controller {
 	public onInit(): void {
 		const componente = this.getOwnerComponent() as UIComponent;
 		this.router = componente.getRouter();
-		this.getView()?.setModel(new JSONModel({ visibles: [], edicion: { ...VACIO }, esNuevo: true, nuevoPin: "", conBusqueda: false, empleados: [], busquedaEmpleado: "", opcOrg: [], opcOficina: [], opcCentro: [], opcAlmacen: [] }), "adm");
+		this.getView()?.setModel(new JSONModel({ visibles: [], edicion: { ...VACIO }, esNuevo: true, nuevoPin: "", conBusqueda: false, empleados: [], busquedaEmpleado: "", opcCiudad: CIUDADES.map((c) => ({ key: c.clave, text: `${c.nombre} (${c.region})` })), ciudad: "", opcOrg: [], opcOficina: [], opcCentro: [], opcAlmacen: [] }), "adm");
 		this.router.getRoute("vendedores")?.attachPatternMatched(() => this.refrescar(), this);
 		// Al entrar por enlace o recargar, el vendedor se identifica DESPUES de abrirse la pantalla: se refresca cuando llega la lista.
 		this.modeloMock().attachPropertyChange((evento) => {
@@ -119,6 +120,8 @@ export default class Vendedores extends Controller {
 		adm.setProperty("/empleados", []);
 		adm.setProperty("/busquedaEmpleado", "");
 		adm.setProperty("/opcOrg", organizacionesDe(edicion.tipo));
+		// La ciudad no se guarda: se deduce del centro (un centro pertenece a una sola ciudad).
+		adm.setProperty("/ciudad", ciudadDeCentro(edicion.werks)?.clave ?? "");
 		this.dialogo.open();
 		await this.cargarOpcionesArea();
 	}
@@ -147,6 +150,12 @@ export default class Vendedores extends Controller {
 			const opciones = this.modeloMock().getProperty("/opciones") as { oficinas?: OpcionCatalogo[]; centros?: Record<string, string> };
 			oficinas = opciones.oficinas ?? [];
 			centros = Object.entries(opciones.centros ?? {}).map(([key, nombre]) => ({ key, text: `${key} ${nombre}` }));
+		}
+		// Con ciudad elegida, solo se ofrecen los centros y oficinas de esa ciudad (nunca se mezclan sedes).
+		const ciudad = ciudadPorClave(String(adm.getProperty("/ciudad") ?? ""));
+		if (ciudad) {
+			oficinas = oficinas.filter((x) => ciudad.oficinas.includes(x.key));
+			centros = centros.filter((x) => ciudad.centros.includes(x.key));
 		}
 		adm.setProperty("/opcOficina", oficinas);
 		adm.setProperty("/opcCentro", centros);
@@ -184,8 +193,26 @@ export default class Vendedores extends Controller {
 		}
 	}
 
-	/** Al cambiar el centro cambian los almacenes. */
+	/** Al elegir la ciudad se proponen su centro y oficina principales; el administrador puede cambiarlos dentro de la ciudad. */
+	public async onCambiaCiudad(): Promise<void> {
+		const adm = this.modeloAdm();
+		const ciudad = ciudadPorClave(String(adm.getProperty("/ciudad") ?? ""));
+		if (ciudad) {
+			adm.setProperty("/edicion/werks", ciudad.centroPrincipal);
+			adm.setProperty("/edicion/vkbur", ciudad.oficinaPrincipal);
+			adm.setProperty("/edicion/lgort", "");
+		}
+		await this.cargarOpcionesArea();
+	}
+
+	/** Al cambiar el centro cambian los almacenes y se ajusta la oficina de su ciudad (los centros sin oficina propia usan la principal). */
 	public async onCambiaCentro(): Promise<void> {
+		const adm = this.modeloAdm();
+		const werks = String(adm.getProperty("/edicion/werks") ?? "");
+		const oficina = oficinaDeCentro(werks);
+		if (oficina) {
+			adm.setProperty("/edicion/vkbur", oficina);
+		}
 		await this.cargarAlmacenes();
 	}
 

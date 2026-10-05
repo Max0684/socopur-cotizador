@@ -310,19 +310,9 @@ export interface OpcionVendedor {
 }
 
 /**
- * Organizaciones de venta de Socopur por tipo de venta (3 sociedades: Socopur 1100, Promogesa 1200, Socopur Selva 1300).
- * Vehiculos 1101/1201/1301 y repuestos 1103/1203/1303; el taller (11x2) no entra al Cotizador.
+ * Organizaciones de venta por tipo de venta. Solo la sociedad 1100 (Socopur): vehiculos 1101 y repuestos 1103.
+ * Las sociedades 1200 y 1300 (centros 2xxx y 3xxx) no se usan en el Cotizador.
  */
 export function organizacionesDe(tipo: string): OpcionVendedor[] {
-	const vehiculos = [
-		{ key: "1101", text: "1101 Veh\u00edculos Socopur" },
-		{ key: "1201", text: "1201 Veh\u00edculos Promogesa" },
-		{ key: "1301", text: "1301 Veh\u00edculos Socopur Selva" }
-	];
-	const repuestos = [
-		{ key: "1103", text: "1103 Repuestos Socopur" },
-		{ key: "1203", text: "1203 Repuestos Promogesa" },
-		{ key: "1303", text: "1303 Repuestos Socopur Selva" }
-	];
-	return tipo === "vehiculos" ? vehiculos : repuestos;
+	return tipo === "vehiculos" ? [{ key: "1101", text: "1101 Veh\u00edculos Socopur" }] : [{ key: "1103", text: "1103 Repuestos Socopur" }];
 }

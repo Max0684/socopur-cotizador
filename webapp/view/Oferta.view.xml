@@ -183,6 +183,8 @@
 								columnsXL="3">
 								<Label text="{i18n>vendedor}" />
 								<Input value="{oferta>/perfil/vendedor}" editable="false" />
+								<Label text="{i18n>sede}" visible="{= !!${oferta>/perfil/sede} }" />
+								<Input value="{oferta>/perfil/sede}" editable="false" visible="{= !!${oferta>/perfil/sede} }" />
 								<Label text="{i18n>canal}" />
 								<Select selectedKey="{oferta>/perfil/canal}" change=".onCambiaCanal" items="{oferta>/opciones/canales}"><core:Item key="{oferta>key}" text="{oferta>text}" /></Select>
 								<Label text="{i18n>oficina}" />
