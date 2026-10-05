@@ -2537,8 +2537,10 @@ export default class Oferta extends Controller {
 		const oferta = this.modeloOferta();
 		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel;
 		try {
-			// Organizacion de busqueda por defecto (repuestos 1103) hasta que existan los valores por defecto del perfil.
-			const encontrados = await buscarClientes(odata, texto, "1103");
+			// Se busca en las organizaciones del perfil (repuestos y vehiculos): un cliente de motos puede estar solo en la 1101.
+			const mock = this.modeloMock();
+			const orgs = ["repuestos", "vehiculos"].map((t) => String(mock.getProperty(`/perfil/busqueda/orgs/${t}`) ?? "")).filter(Boolean);
+			const encontrados = await buscarClientes(odata, texto, orgs.length ? orgs : ["1103"]);
 			if (encontrados.length === 0) {
 				oferta.setProperty("/cliente", null);
 				oferta.setProperty("/clienteNoEncontrado", true);

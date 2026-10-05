@@ -1,4 +1,5 @@
 import type ODataModel from "sap/ui/model/odata/v4/ODataModel";
+import { filtroClientes } from "./FiltrosCliente";
 import { ordenarPorTexto } from "./Orden";
 import { unirAreas } from "./Reglas";
 
@@ -51,13 +52,11 @@ const comillas = (texto: string): string => texto.replace(/'/g, "''");
  * La vista trae una fila por area de ventas; aqui se agrupan por cliente.
  * STCD1 se usa como documento y, si esta vacio, STCD2 (RUC en STCD1 en Socopur; el DNI iria en STCD2 por confirmar).
  */
-export async function buscarClientes(modelo: ODataModel, texto: string, vkorg: string, maximo = 20): Promise<ClienteSap[]> {
-	const t = comillas(texto.trim());
-	if (!t) {
+export async function buscarClientes(modelo: ODataModel, texto: string, vkorg: string | string[], maximo = 20): Promise<ClienteSap[]> {
+	const filtro = filtroClientes(texto, vkorg);
+	if (!filtro) {
 		return [];
 	}
-	const filtro =
-		`Vkorg eq '${comillas(vkorg)}' and (Stcd1 eq '${t}' or Stcd2 eq '${t}' or Kunnr eq '${t.padStart(10, "0")}' or contains(Name1,'${t.toUpperCase()}'))`;
 	const binding = modelo.bindList("/Cliente", undefined, undefined, undefined, {
 		$select: "Kunnr,Vkorg,Vtweg,Spart,Kdgrp,KdgrpTexto,Zterm,ZtermTexto,Aufsd,Name1,Name2,Stcd1,Stcd2,Stras,Ort01,Sperr,Loevm",
 		$filter: filtro,
