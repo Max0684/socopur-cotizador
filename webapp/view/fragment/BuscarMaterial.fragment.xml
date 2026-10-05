@@ -230,8 +230,8 @@
 								<Text text="{busqueda>comprometido}" />
 								<Text text="{busqueda>total}" />
 								<Text text="{busqueda>um}" />
-								<ObjectNumber number="{= ${busqueda>precioMay} || '—' }" emphasized="{= ${busqueda>/canalPerfil} === '10' }" state="{= ${busqueda>/canalPerfil} === '10' ? 'Information' : 'None' }" textAlign="End" />
-								<ObjectNumber number="{= ${busqueda>precioRet} || '—' }" emphasized="{= ${busqueda>/canalPerfil} === '11' }" state="{= ${busqueda>/canalPerfil} === '11' ? 'Information' : 'None' }" textAlign="End" />
+								<ObjectNumber tooltip="{= ${busqueda>precioMay} === '—' || !${busqueda>precioMay} ? ${i18n>sinPrecioListaTip} : '' }" number="{= ${busqueda>precioMay} || '—' }" emphasized="{= ${busqueda>/canalPerfil} === '10' }" state="{= ${busqueda>/canalPerfil} === '10' ? 'Information' : 'None' }" textAlign="End" />
+								<ObjectNumber tooltip="{= ${busqueda>precioRet} === '—' || !${busqueda>precioRet} ? ${i18n>sinPrecioListaTip} : '' }" number="{= ${busqueda>precioRet} || '—' }" emphasized="{= ${busqueda>/canalPerfil} === '11' }" state="{= ${busqueda>/canalPerfil} === '11' ? 'Information' : 'None' }" textAlign="End" />
 								<VBox alignItems="End">
 									<ObjectNumber visible="{= !${busqueda>sinPrecio} }" number="{path: 'busqueda>precioUsd', formatter: '.formatMonto'}" unit="USD" textAlign="End" />
 									<Text visible="{= !${busqueda>sinPrecio} }" text="{path: 'busqueda>precioUsd', formatter: '.formatPen'}" textAlign="End" />
