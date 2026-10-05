@@ -51,6 +51,11 @@ interface VendedorSap {
 	Activo?: string;
 }
 
+/** Clave unica de la fila: un mismo PERNR puede tener varias (organizacion y tipo de venta distintos), asi que no basta el PERNR. */
+export function claveVendedor(v: Pick<Vendedor, "pernr" | "vkorg" | "tipo">): string {
+	return `${v.pernr}|${v.vkorg}|${v.tipo}`;
+}
+
 const CLAVE_SESION = "cotizador.vendedor";
 
 /** SHA-256 en hexadecimal del PIN (el PIN nunca se guarda ni se envia en claro). */

@@ -12,6 +12,7 @@ import {
 	Vendedor,
 	aplicarPerfil,
 	buscarVendedores,
+	claveVendedor,
 	cargarVendedores,
 	pinCorrecto,
 	recordarVendedor,
@@ -62,7 +63,7 @@ export default class App extends Controller {
 		}
 		// La lista vive en el modelo para que la pantalla de administracion y este dialogo vean lo mismo.
 		mock.setProperty("/vendedores", lista);
-		const recordado = this.activos().find((v) => v.pernr === vendedorRecordado());
+		const recordado = this.activos().find((v) => claveVendedor(v) === vendedorRecordado());
 		if (recordado) {
 			aplicarPerfil(mock, recordado);
 			return;
@@ -85,7 +86,7 @@ export default class App extends Controller {
 			this.getView()?.addDependent(this.dialogoVendedor);
 		}
 		const modelo = this.getView()?.getModel("vend") as JSONModel;
-		modelo.setData({ visibles: this.activos(), elegido: "", pedirPin: false, pin: "", estadoPin: "None" });
+		modelo.setData({ visibles: this.activos().map((v) => ({ ...v, clave: claveVendedor(v) })), elegido: "", pedirPin: false, pin: "", estadoPin: "None" });
 		this.dialogoVendedor.open();
 	}
 
@@ -97,15 +98,15 @@ export default class App extends Controller {
 	public onVendedorBuscar(event: Event): void {
 		const texto = (event.getSource() as SearchField).getValue();
 		const modelo = this.getView()?.getModel("vend") as JSONModel;
-		modelo.setProperty("/visibles", buscarVendedores(this.activos(), texto));
+		modelo.setProperty("/visibles", buscarVendedores(this.activos(), texto).map((v) => ({ ...v, clave: claveVendedor(v) })));
 	}
 
 	public onVendedorElegido(event: Event): void {
 		const lista = event.getSource() as List;
 		const contexto = lista.getSelectedItem()?.getBindingContext("vend");
-		const elegido = contexto?.getObject() as Vendedor | undefined;
+		const elegido = contexto?.getObject() as (Vendedor & { clave: string }) | undefined;
 		const modelo = this.getView()?.getModel("vend") as JSONModel;
-		modelo.setProperty("/elegido", elegido?.pernr ?? "");
+		modelo.setProperty("/elegido", elegido?.clave ?? "");
 		modelo.setProperty("/pedirPin", !!elegido?.conPin);
 		modelo.setProperty("/pin", "");
 		modelo.setProperty("/estadoPin", "None");
@@ -113,7 +114,7 @@ export default class App extends Controller {
 
 	public async onVendedorEntrar(): Promise<void> {
 		const modelo = this.getView()?.getModel("vend") as JSONModel;
-		const vendedor = this.activos().find((v) => v.pernr === modelo.getProperty("/elegido"));
+		const vendedor = this.activos().find((v) => claveVendedor(v) === modelo.getProperty("/elegido"));
 		if (!vendedor) {
 			return;
 		}
@@ -123,7 +124,7 @@ export default class App extends Controller {
 		}
 		const mock = (this.getOwnerComponent() as UIComponent).getModel("mock") as JSONModel;
 		aplicarPerfil(mock, vendedor);
-		recordarVendedor(vendedor.pernr);
+		recordarVendedor(claveVendedor(vendedor));
 		this.dialogoVendedor?.close();
 	}
 

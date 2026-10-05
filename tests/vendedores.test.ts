@@ -35,3 +35,11 @@ test("filtroEmpleado: solo digitos = PERNR exacto de 8; texto = nombre contiene 
 	assert.equal(filtroEmpleado("99000354"), "Pernr eq '99000354'");
 	assert.equal(filtroEmpleado("  ana o'neil "), "contains(Nombre,'ANA O''NEIL')");
 });
+
+test("claveVendedor distingue las filas de un mismo PERNR por organizacion y tipo de venta", async () => {
+	const { claveVendedor } = await import("../webapp/model/VendedoresService.ts");
+	const a = claveVendedor({ pernr: "99000298", vkorg: "1103", tipo: "repuestos" });
+	const b = claveVendedor({ pernr: "99000298", vkorg: "1303", tipo: "repuestos" });
+	assert.notEqual(a, b);
+	assert.equal(a, "99000298|1103|repuestos");
+});
