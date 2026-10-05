@@ -39,11 +39,13 @@
 					<core:Item key="{adm>key}" text="{adm>text}" />
 				</Select>
 				<Label text="{i18n>vendAdmCentro}" required="true" />
-				<Select selectedKey="{adm>/edicion/werks}" forceSelection="false" items="{adm>/opcCentro}">
+				<Select selectedKey="{adm>/edicion/werks}" forceSelection="false" items="{adm>/opcCentro}" change=".onCambiaCentro">
 					<core:Item key="{adm>key}" text="{adm>text}" />
 				</Select>
 				<Label text="{i18n>vendAdmAlmacen}" />
-				<Input value="{adm>/edicion/lgort}" maxLength="4" />
+				<Select selectedKey="{adm>/edicion/lgort}" forceSelection="false" items="{adm>/opcAlmacen}">
+					<core:Item key="{adm>key}" text="{adm>text}" />
+				</Select>
 				<Label text="{i18n>vendAdmFormaPago}" />
 				<Select selectedKey="{adm>/edicion/zterm}" forceSelection="false" items="{mock>/formasPago}">
 					<core:Item key="{mock>key}" text="{mock>text}" />

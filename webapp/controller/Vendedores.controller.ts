@@ -12,7 +12,7 @@ import List from "sap/m/List";
 import ListItemBase from "sap/m/ListItemBase";
 import Switch from "sap/m/Switch";
 import Event from "sap/ui/base/Event";
-import { leerCentros, leerOficinas, type OpcionCatalogo } from "com/socopur/cotizador/model/CatalogosService";
+import { ALMACEN_POR_DEFECTO, leerAlmacenes, leerCentros, leerOficinas, type OpcionCatalogo } from "com/socopur/cotizador/model/CatalogosService";
 import {
 	Vendedor,
 	buscarEmpleados,
@@ -44,7 +44,7 @@ export default class Vendedores extends Controller {
 	public onInit(): void {
 		const componente = this.getOwnerComponent() as UIComponent;
 		this.router = componente.getRouter();
-		this.getView()?.setModel(new JSONModel({ visibles: [], edicion: { ...VACIO }, esNuevo: true, nuevoPin: "", conBusqueda: false, empleados: [], busquedaEmpleado: "", opcOrg: [], opcOficina: [], opcCentro: [] }), "adm");
+		this.getView()?.setModel(new JSONModel({ visibles: [], edicion: { ...VACIO }, esNuevo: true, nuevoPin: "", conBusqueda: false, empleados: [], busquedaEmpleado: "", opcOrg: [], opcOficina: [], opcCentro: [], opcAlmacen: [] }), "adm");
 		this.router.getRoute("vendedores")?.attachPatternMatched(() => this.refrescar(), this);
 		// Al entrar por enlace o recargar, el vendedor se identifica DESPUES de abrirse la pantalla: se refresca cuando llega la lista.
 		this.modeloMock().attachPropertyChange((evento) => {
@@ -156,6 +156,37 @@ export default class Vendedores extends Controller {
 		if (v.werks && !centros.some((x) => x.key === v.werks)) {
 			adm.setProperty("/edicion/werks", "");
 		}
+		await this.cargarAlmacenes();
+	}
+
+	/**
+	 * Almacenes de venta del centro elegido. Si el almacen actual no esta entre ellos se propone el 0001 (el principal) cuando existe;
+	 * sin SAP (prototipo) solo se ofrece el 0001.
+	 */
+	private async cargarAlmacenes(): Promise<void> {
+		const adm = this.modeloAdm();
+		const v = adm.getProperty("/edicion") as Vendedor;
+		const odata = this.odata();
+		let almacenes: OpcionCatalogo[] = [{ key: ALMACEN_POR_DEFECTO, text: `${ALMACEN_POR_DEFECTO} Principal` }];
+		if (odata && v.werks) {
+			try {
+				almacenes = await leerAlmacenes(odata, v.werks);
+			} catch (error) {
+				MessageBox.error((error as Error).message);
+				return;
+			}
+		} else if (odata) {
+			almacenes = [];
+		}
+		adm.setProperty("/opcAlmacen", almacenes);
+		if (!almacenes.some((x) => x.key === v.lgort)) {
+			adm.setProperty("/edicion/lgort", almacenes.find((x) => x.key === ALMACEN_POR_DEFECTO)?.key ?? "");
+		}
+	}
+
+	/** Al cambiar el centro cambian los almacenes. */
+	public async onCambiaCentro(): Promise<void> {
+		await this.cargarAlmacenes();
 	}
 
 	/** Al cambiar el tipo de venta se recalculan las organizaciones posibles y se elige la primera. */

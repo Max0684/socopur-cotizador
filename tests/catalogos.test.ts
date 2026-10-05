@@ -45,3 +45,17 @@ test("leerCentros y leerOficinas filtran por organizacion y canal", async () => 
 	assert.deepEqual(pedidos.map((p) => p.ruta), ["/Centro", "/Oficina"]);
 	assert.ok(pedidos.every((p) => p.filtro === "Vkorg eq '1103' and Vtweg eq '10'"));
 });
+
+test("opcionesDeAlmacenes deja solo los de venta, con nombre y en orden (centro 1101: 0019, 0088, 0100 y 0200 fuera)", async () => {
+	const { opcionesDeAlmacenes } = await import("../webapp/model/CatalogosService.ts");
+	const r = opcionesDeAlmacenes([
+		{ Lgort: "0004", NombreAlmacen: "TDA", EsVenta: true },
+		{ Lgort: "0088", NombreAlmacen: "Lager 0088 (WM)", EsVenta: false },
+		{ Lgort: "0001", NombreAlmacen: "CENTENARIO / PCP", EsVenta: "X" },
+		{ Lgort: "0019", NombreAlmacen: "TRANSF", EsVenta: "" }
+	]);
+	assert.deepEqual(r, [
+		{ key: "0001", text: "0001 CENTENARIO / PCP" },
+		{ key: "0004", text: "0004 TDA" }
+	]);
+});

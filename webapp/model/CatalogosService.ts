@@ -45,3 +45,21 @@ export async function leerCentros(modelo: ODataModel, vkorg: string, vtweg: stri
 export async function leerOficinas(modelo: ODataModel, vkorg: string, vtweg: string): Promise<OpcionCatalogo[]> {
 	return opcionesDeOficinas(await leer<{ Vkbur: string; NombreOficina: string }>(modelo, "/Oficina", vkorg, vtweg));
 }
+
+/** Almacen por defecto: el principal de todos los centros y el mas usado en pedidos y ofertas (no hay regla en SAP que lo determine). */
+export const ALMACEN_POR_DEFECTO = "0001";
+
+/** Almacenes de venta como opciones de lista: "0001 CENTENARIO / PCP". Solo EsVenta (excluye los tecnicos); el orden es por codigo. */
+export function opcionesDeAlmacenes(filas: { Lgort: string; NombreAlmacen?: string; EsVenta?: boolean | string }[]): OpcionCatalogo[] {
+	return filas
+		.filter((f) => f.EsVenta === true || f.EsVenta === "X")
+		.map((f) => ({ key: f.Lgort, text: `${f.Lgort} ${f.NombreAlmacen ?? ""}`.trim() }))
+		.sort((a, b) => a.key.localeCompare(b.key));
+}
+
+/** Almacenes de venta del centro (entidad Almacen de T001L). Un almacen no es una regla: el vendedor puede cambiarlo en cada linea. */
+export async function leerAlmacenes(modelo: ODataModel, werks: string): Promise<OpcionCatalogo[]> {
+	const lista = modelo.bindList("/Almacen", undefined, undefined, undefined, { $filter: `Werks eq '${comillas(werks)}'`, $orderby: "Lgort" });
+	const contextos = await lista.requestContexts(0, 100);
+	return opcionesDeAlmacenes(contextos.map((c) => c.getObject() as { Lgort: string; NombreAlmacen?: string; EsVenta?: boolean | string }));
+}
