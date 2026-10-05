@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { aSaldo, aSegmento, fechaLocalISO, normalizarFecha, resumirCredito } from "../webapp/model/CreditoClienteService.ts";
+import { aSaldo, aSegmento, fechaLocalISO, normalizarFecha, resumirCredito, simboloMoneda, textoPorMoneda } from "../webapp/model/CreditoClienteService.ts";
 
 const HOY = "2026-10-05";
 
@@ -75,4 +75,38 @@ test("resumirCredito: bloqueo del segmento elegido manda sobre todo; disponible 
 test("fechaLocalISO usa la fecha local, no UTC", () => {
 	assert.equal(fechaLocalISO(new Date(2026, 9, 5, 23, 30)), "2026-10-05");
 	assert.equal(fechaLocalISO(new Date(2026, 0, 3, 0, 5)), "2026-01-03");
+});
+
+test("cliente con deuda en soles y en dolares (0100005387): el vencido en dolares tambien cuenta y se muestra por moneda", () => {
+	const saldos = [
+		aSaldo({ Kunnr: "0100005387", Bukrs: "1200", Waers: "PEN", SaldoAbierto: "5114.88", Vencido: "5114.88" }),
+		aSaldo({ Kunnr: "0100005387", Bukrs: "1200", Waers: "USD", SaldoAbierto: "393.33", Vencido: "393.33" })
+	];
+	const r = resumirCredito([], saldos, "PEN");
+	assert.equal(r.estado, "Vencido");
+	assert.equal(r.saldoTotal, 5114.88);
+	assert.equal(r.hayVencido, true);
+	const f = (n: number): string => n.toFixed(2);
+	assert.equal(textoPorMoneda(saldos, "saldo", f), "S/ 5114.88 · US$ 393.33");
+	assert.equal(textoPorMoneda(saldos, "vencido", f), "S/ 5114.88 · US$ 393.33");
+});
+
+test("una deuda vencida solo en dolares con la oferta en soles no deja el estado 'al dia'", () => {
+	const saldos = [aSaldo({ Kunnr: "1", Bukrs: "1100", Waers: "USD", SaldoAbierto: 50, Vencido: 50 })];
+	const r = resumirCredito([aSegmento({ Kunnr: "1", CreditSgmnt: "1101", CreditLimit: 1000, LimitValidDate: "99991231" }, HOY)], saldos, "PEN", "1101");
+	assert.equal(r.vencidoTotal, 0);
+	assert.equal(r.estado, "Vencido");
+});
+
+test("textoPorMoneda: suma entre sociedades, omite monedas en cero y muestra cero si no hay nada", () => {
+	const f = (n: number): string => n.toFixed(2);
+	const saldos = [
+		aSaldo({ Kunnr: "1", Bukrs: "1100", Waers: "PEN", SaldoAbierto: 100, Vencido: 0 }),
+		aSaldo({ Kunnr: "1", Bukrs: "1200", Waers: "PEN", SaldoAbierto: 50, Vencido: 0 }),
+		aSaldo({ Kunnr: "1", Bukrs: "1200", Waers: "USD", SaldoAbierto: 0, Vencido: 0 })
+	];
+	assert.equal(textoPorMoneda(saldos, "saldo", f), "S/ 150.00");
+	assert.equal(textoPorMoneda(saldos, "vencido", f), "S/ 0.00");
+	assert.equal(textoPorMoneda([], "saldo", f, "USD"), "US$ 0.00");
+	assert.equal(simboloMoneda("EUR"), "EUR");
 });

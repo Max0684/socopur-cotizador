@@ -63,6 +63,8 @@ export interface ResumenCredito {
 	segmentoElegido: SegmentoCredito | null;
 	saldoTotal: number;
 	vencidoTotal: number;
+	/** true si hay saldo vencido en CUALQUIER moneda (la deuda en dolares tambien cuenta aunque la oferta sea en soles). */
+	hayVencido: boolean;
 	/** Limite menos saldo del segmento elegido (nunca negativo); null si no hay segmento elegido. */
 	disponible: number | null;
 	estado: EstadoCuenta;
@@ -127,12 +129,13 @@ export function resumirCredito(segmentos: SegmentoCredito[], saldos: SaldoClient
 	const enMoneda = saldos.filter((s) => s.moneda === moneda);
 	const saldoTotal = enMoneda.reduce((a, s) => a + s.saldo, 0);
 	const vencidoTotal = enMoneda.reduce((a, s) => a + s.vencido, 0);
+	const hayVencido = saldos.some((x) => x.vencido > 0);
 	let estado: EstadoCuenta = "AlDia";
 	if (segmentos.length === 0 && saldos.length === 0) {
 		estado = "SinDatos";
 	} else if (elegido?.bloqueado) {
 		estado = "Bloqueado";
-	} else if (vencidoTotal > 0) {
+	} else if (hayVencido) {
 		estado = "Vencido";
 	} else if (elegido && !elegido.vigente) {
 		estado = "LimiteVencido";
@@ -143,6 +146,7 @@ export function resumirCredito(segmentos: SegmentoCredito[], saldos: SaldoClient
 		segmentoElegido: elegido,
 		saldoTotal,
 		vencidoTotal,
+		hayVencido,
 		disponible: elegido ? Math.max(0, elegido.limite - saldoTotal) : null,
 		estado
 	};
@@ -152,6 +156,22 @@ export function resumirCredito(segmentos: SegmentoCredito[], saldos: SaldoClient
 export function fechaLocalISO(d: Date = new Date()): string {
 	const dos = (n: number): string => String(n).padStart(2, "0");
 	return `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}`;
+}
+
+/** "S/" para soles, "US$" para dolares; otra moneda, su codigo. */
+export function simboloMoneda(moneda: string): string {
+	return moneda === "PEN" ? "S/" : moneda === "USD" ? "US$" : moneda;
+}
+
+/**
+ * Importes del campo pedido agrupados por moneda (suma entre sociedades), en texto: "S/ 5,114.88 · US$ 393.33". Las monedas con
+ * importe cero se omiten; si todas son cero, devuelve el cero en la moneda dada. Asi no se esconde la deuda en dolares.
+ */
+export function textoPorMoneda(saldos: SaldoCliente[], campo: "saldo" | "vencido", formatear: (n: number) => string, monedaCero = "PEN"): string {
+	const porMoneda = new Map<string, number>();
+	saldos.forEach((x) => porMoneda.set(x.moneda, (porMoneda.get(x.moneda) ?? 0) + x[campo]));
+	const partes = [...porMoneda.entries()].filter(([, n]) => Math.abs(n) > 0.005).map(([m, n]) => `${simboloMoneda(m)} ${formatear(n)}`);
+	return partes.length ? partes.join(" · ") : `${simboloMoneda(monedaCero)} ${formatear(0)}`;
 }
 
 const comillas = (texto: string): string => texto.replace(/'/g, "''");

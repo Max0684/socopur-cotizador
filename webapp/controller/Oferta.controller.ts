@@ -14,7 +14,7 @@ import { buscarRepuestosConStock, motivoVacio } from "com/socopur/cotizador/mode
 import { listaDeSede } from "com/socopur/cotizador/model/Ciudades";
 import { ciudadPorClave, principalDe, sociedadDeCentro } from "com/socopur/cotizador/model/Ciudades";
 import { cargarContacto, cargarDirecciones, cargarMovimientos, type Movimiento } from "com/socopur/cotizador/model/ClienteDetalleService";
-import { cargarCreditoCliente, fechaLocalISO, resumirCredito, type EstadoCuenta, type ResumenCredito } from "com/socopur/cotizador/model/CreditoClienteService";
+import { cargarCreditoCliente, fechaLocalISO, resumirCredito, textoPorMoneda, type EstadoCuenta, type ResumenCredito } from "com/socopur/cotizador/model/CreditoClienteService";
 import { cargarModalidades, type ModalidadPantalla } from "com/socopur/cotizador/model/ModalidadesService";
 import { ordenarPorTexto } from "com/socopur/cotizador/model/Orden";
 import UIComponent from "sap/ui/core/UIComponent";
@@ -1139,10 +1139,10 @@ export default class Oferta extends Controller {
 			await this.abrirCliente("EstadoCuenta", {
 				real: true,
 				linea: r.segmentoElegido ? m(r.segmentoElegido.limite) : (i18n.getText("cuentaVariosSegmentos") as string),
-				saldo: m(r.saldoTotal),
+				saldo: textoPorMoneda(r.saldos, "saldo", (n) => this.formatMonto(n), String(this.modeloOferta().getProperty("/perfil/moneda") || "PEN")),
 				disponible: r.disponible === null ? "\u2014" : m(r.disponible),
-				vencido: m(r.vencidoTotal),
-				vencidoEstado: r.vencidoTotal > 0 ? "Error" : "Success",
+				vencido: textoPorMoneda(r.saldos, "vencido", (n) => this.formatMonto(n), String(this.modeloOferta().getProperty("/perfil/moneda") || "PEN")),
+				vencidoEstado: r.hayVencido ? "Error" : "Success",
 				segmentos: r.segmentos.map((s) => ({
 					segmento: s.segmento,
 					limite: this.formatMonto(s.limite),
