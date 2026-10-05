@@ -12,7 +12,7 @@ import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, 
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
 import { buscarRepuestosConStock, motivoVacio } from "com/socopur/cotizador/model/MaterialesService";
 import { listaDeSede } from "com/socopur/cotizador/model/Ciudades";
-import { ciudadPorClave } from "com/socopur/cotizador/model/Ciudades";
+import { ciudadPorClave, principalDe, sociedadDeCentro } from "com/socopur/cotizador/model/Ciudades";
 import { cargarContacto, cargarDirecciones, cargarMovimientos, type Movimiento } from "com/socopur/cotizador/model/ClienteDetalleService";
 import { cargarCreditoCliente, fechaLocalISO, resumirCredito, type EstadoCuenta, type ResumenCredito } from "com/socopur/cotizador/model/CreditoClienteService";
 import { cargarModalidades, type ModalidadPantalla } from "com/socopur/cotizador/model/ModalidadesService";
@@ -912,7 +912,8 @@ export default class Oferta extends Controller {
 		oferta.setProperty("/opcionesCentro", centros);
 		if (!centros.some((c) => c.key === oferta.getProperty("/perfil/centro"))) {
 			// Si el centro ya no es valido para el canal, se propone el principal de la sede del vendedor (no uno de otra ciudad).
-			const principal = ciudadPorClave(String(oferta.getProperty("/perfil/ciudad") ?? ""))?.centroPrincipal;
+			const ciudad = ciudadPorClave(String(oferta.getProperty("/perfil/ciudad") ?? ""));
+			const principal = ciudad ? principalDe(ciudad, sociedadDeCentro(String(oferta.getProperty("/perfil/centro") ?? ""))).centro : undefined;
 			oferta.setProperty("/perfil/centro", centros.find((c) => c.key === principal)?.key ?? centros[0]?.key ?? "");
 		}
 		this.refrescarListasSede();

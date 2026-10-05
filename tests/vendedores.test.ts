@@ -53,3 +53,15 @@ test("filtroEmpleado con sociedad suma el filtro Bukrs; sociedadesDe saca las di
 	assert.equal(textoSociedad("1300"), "1300 Socopur Selva");
 	assert.equal(textoSociedad("9999"), "9999");
 });
+
+test("organizacionesDeSociedad: cada sociedad ofrece sus tres organizaciones (vehiculos, taller, repuestos)", async () => {
+	const { organizacionesDeSociedad, orgPorDefecto } = await import("../webapp/model/VendedoresService.ts");
+	assert.deepEqual(organizacionesDeSociedad("1100").map((o) => o.key), ["1101", "1102", "1103"]);
+	assert.deepEqual(organizacionesDeSociedad("1200").map((o) => o.key), ["1201", "1202", "1203"]);
+	assert.deepEqual(organizacionesDeSociedad("1300").map((o) => o.key), ["1301", "1302", "1303"]);
+	assert.equal(organizacionesDeSociedad("").length, 9);
+	assert.match(organizacionesDeSociedad("1200")[2].text, /1203 Repuestos Promogesa/);
+	assert.equal(orgPorDefecto("repuestos", "1200"), "1203");
+	assert.equal(orgPorDefecto("vehiculos", "1300"), "1301");
+	assert.equal(orgPorDefecto("repuestos", ""), "1103");
+});

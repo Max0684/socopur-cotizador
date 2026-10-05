@@ -330,10 +330,29 @@ export interface OpcionVendedor {
 	text: string;
 }
 
+const SOCIEDADES_ORG: { sociedad: string; nombre: string }[] = [
+	{ sociedad: "1100", nombre: "Socopur" },
+	{ sociedad: "1200", nombre: "Promogesa" },
+	{ sociedad: "1300", nombre: "Socopur Selva" }
+];
+
 /**
- * Organizaciones de venta por tipo de venta. Solo la sociedad 1100 (Socopur): vehiculos 1101 y repuestos 1103.
- * Las sociedades 1200 y 1300 (centros 2xxx y 3xxx) no se usan en el Cotizador.
+ * Organizaciones de venta de una sociedad: siempre tres, con la numeracion de la sociedad. 1100 -> 1101 Vehiculos, 1102 Taller y
+ * 1103 Repuestos; 1200 -> 1201, 1202, 1203; 1300 -> 1301, 1302, 1303. Sin sociedad, las de todas.
  */
-export function organizacionesDe(tipo: string): OpcionVendedor[] {
-	return tipo === "vehiculos" ? [{ key: "1101", text: "1101 Veh\u00edculos Socopur" }] : [{ key: "1103", text: "1103 Repuestos Socopur" }];
+export function organizacionesDeSociedad(sociedad: string): OpcionVendedor[] {
+	return SOCIEDADES_ORG.filter((s) => !sociedad || s.sociedad === sociedad).flatMap((s) => {
+		const base = s.sociedad.slice(0, 2);
+		return [
+			{ key: `${base}01`, text: `${base}01 Veh\u00edculos ${s.nombre}` },
+			{ key: `${base}02`, text: `${base}02 Taller ${s.nombre}` },
+			{ key: `${base}03`, text: `${base}03 Repuestos ${s.nombre}` }
+		];
+	});
+}
+
+/** Organizacion que se propone segun el tipo de venta: repuestos 1X03, vehiculos 1X01 (X = digito de la sociedad). Sin sociedad, la de Socopur. */
+export function orgPorDefecto(tipo: string, sociedad: string): string {
+	const base = (sociedad || "1100").slice(0, 2);
+	return tipo === "vehiculos" ? `${base}01` : `${base}03`;
 }

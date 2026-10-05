@@ -12,13 +12,13 @@ import List from "sap/m/List";
 import ListItemBase from "sap/m/ListItemBase";
 import Switch from "sap/m/Switch";
 import Event from "sap/ui/base/Event";
-import { CIUDADES, ciudadDeCentro, ciudadPorClave, oficinaDeCentro } from "com/socopur/cotizador/model/Ciudades";
+import { SOCIEDADES, ciudadDeCentro, ciudadPorClave, ciudadesDeSociedad, oficinaDeCentro, principalDe, sociedadDeCentro } from "com/socopur/cotizador/model/Ciudades";
 import { ALMACEN_POR_DEFECTO, leerAlmacenes, leerCentros, leerOficinas, type OpcionCatalogo } from "com/socopur/cotizador/model/CatalogosService";
 import {
 	Vendedor,
 	buscarEmpleados,
-	cargarSociedades,
-	organizacionesDe,
+	organizacionesDeSociedad,
+	orgPorDefecto,
 	buscarVendedores,
 	type Empleado,
 	guardarVendedor,
@@ -47,7 +47,7 @@ export default class Vendedores extends Controller {
 	public onInit(): void {
 		const componente = this.getOwnerComponent() as UIComponent;
 		this.router = componente.getRouter();
-		this.getView()?.setModel(new JSONModel({ visibles: [], edicion: { ...VACIO }, esNuevo: true, nuevoPin: "", conBusqueda: false, empleados: [], busquedaEmpleado: "", sociedad: "", opcSociedad: [], filtroSociedad: "", opcFiltroSociedad: [], opcCiudad: CIUDADES.map((c) => ({ key: c.clave, text: `${c.nombre} (${c.region})` })), ciudad: "", opcOrg: [], opcOficina: [], opcCentro: [], opcAlmacen: [] }), "adm");
+		this.getView()?.setModel(new JSONModel({ visibles: [], edicion: { ...VACIO }, esNuevo: true, nuevoPin: "", conBusqueda: false, empleados: [], busquedaEmpleado: "", sociedad: "", opcSociedad: SOCIEDADES, filtroSociedad: "", opcFiltroSociedad: [], opcCiudad: [], ciudad: "", opcOrg: [], opcOficina: [], opcCentro: [], opcAlmacen: [] }), "adm");
 		this.router.getRoute("vendedores")?.attachPatternMatched(() => this.refrescar(), this);
 		// Al entrar por enlace o recargar, el vendedor se identifica DESPUES de abrirse la pantalla: se refresca cuando llega la lista.
 		this.modeloMock().attachPropertyChange((evento) => {
@@ -128,9 +128,10 @@ export default class Vendedores extends Controller {
 		adm.setProperty("/conBusqueda", this.odata() !== undefined);
 		adm.setProperty("/empleados", []);
 		adm.setProperty("/busquedaEmpleado", "");
-		adm.setProperty("/sociedad", "");
-		void this.cargarOpcionesSociedad();
-		adm.setProperty("/opcOrg", organizacionesDe(edicion.tipo));
+		// La sociedad decide las organizaciones, los centros y las ciudades. En una fila existente sale de su empleado o de su centro.
+		const sociedad = edicion.bukrs || sociedadDeCentro(edicion.werks) || "";
+		adm.setProperty("/sociedad", sociedad);
+		this.aplicarSociedad(sociedad, esNuevo);
 		// La ciudad no se guarda: se deduce del centro (un centro pertenece a una sola ciudad).
 		adm.setProperty("/ciudad", ciudadDeCentro(edicion.werks)?.clave ?? "");
 		this.dialogo.open();
@@ -209,8 +210,9 @@ export default class Vendedores extends Controller {
 		const adm = this.modeloAdm();
 		const ciudad = ciudadPorClave(String(adm.getProperty("/ciudad") ?? ""));
 		if (ciudad) {
-			adm.setProperty("/edicion/werks", ciudad.centroPrincipal);
-			adm.setProperty("/edicion/vkbur", ciudad.oficinaPrincipal);
+			const principal = principalDe(ciudad, String(adm.getProperty("/sociedad") ?? ""));
+			adm.setProperty("/edicion/werks", principal.centro);
+			adm.setProperty("/edicion/vkbur", principal.oficina);
 			adm.setProperty("/edicion/lgort", "");
 		}
 		await this.cargarOpcionesArea();
@@ -227,13 +229,29 @@ export default class Vendedores extends Controller {
 		await this.cargarAlmacenes();
 	}
 
-	/** Al cambiar el tipo de venta se recalculan las organizaciones posibles y se elige la primera. */
+	/**
+	 * Con la sociedad elegida se ofrecen sus tres organizaciones y las ciudades en las que opera. Si la organizacion actual no es de esa
+	 * sociedad (o es un alta nueva) se propone la del tipo de venta; la ciudad se limpia si la sociedad no opera en ella.
+	 */
+	private aplicarSociedad(sociedad: string, proponerOrg: boolean): void {
+		const adm = this.modeloAdm();
+		const orgs = organizacionesDeSociedad(sociedad);
+		adm.setProperty("/opcOrg", orgs);
+		const ciudades = ciudadesDeSociedad(sociedad);
+		adm.setProperty("/opcCiudad", ciudades.map((c) => ({ key: c.clave, text: c.region ? `${c.nombre} (${c.region})` : c.nombre })));
+		if (!ciudades.some((c) => c.clave === adm.getProperty("/ciudad"))) {
+			adm.setProperty("/ciudad", "");
+		}
+		const vkorg = String(adm.getProperty("/edicion/vkorg") ?? "");
+		if (proponerOrg || !orgs.some((o) => o.key === vkorg)) {
+			adm.setProperty("/edicion/vkorg", orgPorDefecto(String(adm.getProperty("/edicion/tipo")), sociedad));
+		}
+	}
+
+	/** Al cambiar el tipo de venta se propone la organizacion que le corresponde dentro de la sociedad (el administrador puede cambiarla). */
 	public async onCambiaTipo(): Promise<void> {
 		const adm = this.modeloAdm();
-		const tipo = String(adm.getProperty("/edicion/tipo"));
-		const orgs = organizacionesDe(tipo);
-		adm.setProperty("/opcOrg", orgs);
-		adm.setProperty("/edicion/vkorg", orgs[0].key);
+		adm.setProperty("/edicion/vkorg", orgPorDefecto(String(adm.getProperty("/edicion/tipo")), String(adm.getProperty("/sociedad") ?? "")));
 		await this.cargarOpcionesArea();
 	}
 
@@ -242,25 +260,14 @@ export default class Vendedores extends Controller {
 		await this.cargarOpcionesArea();
 	}
 
-	/** Sociedades que existen entre los empleados (una sola lectura por sesion). */
-	private sociedadesCargadas = false;
-
-	private async cargarOpcionesSociedad(): Promise<void> {
-		const odata = this.odata();
-		if (!odata || this.sociedadesCargadas) {
-			return;
-		}
-		try {
-			this.modeloAdm().setProperty("/opcSociedad", await cargarSociedades(odata));
-			this.sociedadesCargadas = true;
-		} catch (error) {
-			MessageBox.error((error as Error).message);
-		}
-	}
-
 	/** Al cambiar la sociedad se repite la busqueda con el texto que ya hay. */
 	public async onCambiaSociedad(): Promise<void> {
 		const adm = this.modeloAdm();
+		if (adm.getProperty("/esNuevo")) {
+			adm.setProperty("/edicion/bukrs", String(adm.getProperty("/sociedad") ?? ""));
+			this.aplicarSociedad(String(adm.getProperty("/sociedad") ?? ""), true);
+			await this.cargarOpcionesArea();
+		}
 		const texto = String(adm.getProperty("/busquedaEmpleado") ?? "");
 		const odata = this.odata();
 		if (!odata || !texto.trim()) {
@@ -304,6 +311,11 @@ export default class Vendedores extends Controller {
 		adm.setProperty("/edicion/pernr", empleado.pernr);
 		adm.setProperty("/edicion/nombre", empleado.nombre);
 		adm.setProperty("/edicion/bukrs", empleado.sociedad);
+		if (empleado.sociedad && empleado.sociedad !== adm.getProperty("/sociedad")) {
+			adm.setProperty("/sociedad", empleado.sociedad);
+			this.aplicarSociedad(empleado.sociedad, true);
+			void this.cargarOpcionesArea();
+		}
 	}
 
 	public onCerrarEdicion(): void {

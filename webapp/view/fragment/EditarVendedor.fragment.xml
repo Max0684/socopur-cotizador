@@ -10,12 +10,13 @@
 		resizable="true">
 		<content>
 			<form:SimpleForm editable="true" layout="ResponsiveGridLayout" labelSpanM="4" labelSpanL="4" columnsM="1" columnsL="1">
+				<Label text="{i18n>vendAdmSociedad}" required="true" />
+				<Select selectedKey="{adm>/sociedad}" items="{adm>/opcSociedad}" forceSelection="false" enabled="{adm>/esNuevo}" change=".onCambiaSociedad">
+					<core:Item key="" text="{i18n>vendAdmTodasSociedades}" />
+					<core:Item key="{adm>key}" text="{adm>text}" />
+				</Select>
 				<Label text="{i18n>vendAdmEmpleado}" visible="{= ${adm>/esNuevo} &amp;&amp; ${adm>/conBusqueda} }" />
 				<VBox visible="{= ${adm>/esNuevo} &amp;&amp; ${adm>/conBusqueda} }">
-					<Select selectedKey="{adm>/sociedad}" items="{adm>/opcSociedad}" forceSelection="false" change=".onCambiaSociedad" class="sapUiTinyMarginBottom">
-						<core:Item key="" text="{i18n>vendAdmTodasSociedades}" />
-						<core:Item key="{adm>key}" text="{adm>text}" />
-					</Select>
 					<SearchField value="{adm>/busquedaEmpleado}" placeholder="{i18n>vendAdmEmpleadoBuscar}" liveChange=".onBuscarEmpleado" search=".onBuscarEmpleado" />
 					<List mode="SingleSelectMaster" items="{adm>/empleados}" selectionChange=".onEmpleadoElegido" noDataText="{i18n>vendAdmEmpleadoNinguno}" growing="false">
 						<StandardListItem title="{adm>nombre}" description="{adm>pernr} &#183; {adm>sociedad}" />
