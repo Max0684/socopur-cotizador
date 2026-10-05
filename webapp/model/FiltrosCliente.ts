@@ -29,5 +29,8 @@ export function filtroClientes(texto: string, vkorg: string | string[] = []): st
 	const porOrg = orgs.length === 0 ? "" : orgs.length === 1 ? `Vkorg eq '${comillas(orgs[0])}' and ` : `(${orgs.map((o) => `Vkorg eq '${comillas(o)}'`).join(" or ")}) and `;
 	const palabras = palabrasDeNombre(texto);
 	const porNombre = palabras.map((p) => `(contains(Name1,'${p}') or contains(Name2,'${p}'))`).join(" and ");
-	return `${porOrg}(Stcd1 eq '${t}' or Stcd2 eq '${t}' or Kunnr eq '${t.padStart(10, "0")}' or ${palabras.length ? `(${porNombre})` : "false"})`;
+	// El numero de cliente (Kunnr) mide 10 caracteres: un valor mas largo (p. ej. un RUC de 11 digitos) no se le manda, porque SAP puede
+	// rechazar toda la consulta por valor demasiado largo. Textos de 10 o menos se completan con ceros a la izquierda.
+	const porCliente = t.length <= 10 ? ` or Kunnr eq '${t.padStart(10, "0")}'` : "";
+	return `${porOrg}(Stcd1 eq '${t}' or Stcd2 eq '${t}'${porCliente} or ${palabras.length ? `(${porNombre})` : "false"})`;
 }

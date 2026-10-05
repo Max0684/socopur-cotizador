@@ -24,7 +24,11 @@ test("filtroClientes: el nombre busca cada palabra en Name1 o Name2, en mayuscul
 test("filtroClientes: documento y numero de cliente siguen siendo exactos; las comillas se escapan", () => {
 	const f = filtroClientes("20100070970", "1103");
 	assert.ok(f.includes("Stcd1 eq '20100070970'"));
-	assert.ok(f.includes("Kunnr eq '20100070970'"));
+	// Un RUC de 11 digitos no puede ser un numero de cliente (10 caracteres): no se manda ese filtro.
+	assert.ok(!f.includes("Kunnr eq"));
+	assert.ok(f.includes("Stcd2 eq '20100070970'"));
+	assert.ok(filtroClientes("45211870", "1103").includes("Kunnr eq '0045211870'"));
+	assert.ok(filtroClientes("100005387").includes("Kunnr eq '0100005387'"));
 	// El apostrofo del texto no rompe el filtro: se quita al armar las palabras.
 	assert.ok(!filtroClientes("o'brien", "1103").includes("O'BRIEN"));
 	assert.ok(filtroClientes("o'brien", "1103").includes("OBRIEN"));
