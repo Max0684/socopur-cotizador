@@ -17,11 +17,13 @@ import { ALMACEN_POR_DEFECTO, leerAlmacenes, leerCentros, leerOficinas, type Opc
 import {
 	Vendedor,
 	buscarEmpleados,
+	cargarSociedades,
 	organizacionesDe,
 	buscarVendedores,
 	type Empleado,
 	guardarVendedor,
 	fijarPin,
+	textoSociedad,
 	validarVendedor
 } from "com/socopur/cotizador/model/VendedoresService";
 
@@ -45,7 +47,7 @@ export default class Vendedores extends Controller {
 	public onInit(): void {
 		const componente = this.getOwnerComponent() as UIComponent;
 		this.router = componente.getRouter();
-		this.getView()?.setModel(new JSONModel({ visibles: [], edicion: { ...VACIO }, esNuevo: true, nuevoPin: "", conBusqueda: false, empleados: [], busquedaEmpleado: "", opcCiudad: CIUDADES.map((c) => ({ key: c.clave, text: `${c.nombre} (${c.region})` })), ciudad: "", opcOrg: [], opcOficina: [], opcCentro: [], opcAlmacen: [] }), "adm");
+		this.getView()?.setModel(new JSONModel({ visibles: [], edicion: { ...VACIO }, esNuevo: true, nuevoPin: "", conBusqueda: false, empleados: [], busquedaEmpleado: "", sociedad: "", opcSociedad: [], filtroSociedad: "", opcFiltroSociedad: [], opcCiudad: CIUDADES.map((c) => ({ key: c.clave, text: `${c.nombre} (${c.region})` })), ciudad: "", opcOrg: [], opcOficina: [], opcCentro: [], opcAlmacen: [] }), "adm");
 		this.router.getRoute("vendedores")?.attachPatternMatched(() => this.refrescar(), this);
 		// Al entrar por enlace o recargar, el vendedor se identifica DESPUES de abrirse la pantalla: se refresca cuando llega la lista.
 		this.modeloMock().attachPropertyChange((evento) => {
@@ -80,11 +82,18 @@ export default class Vendedores extends Controller {
 
 	private refrescar(): void {
 		const adm = this.modeloAdm();
-		adm.setProperty("/visibles", buscarVendedores(this.lista(), this.filtro));
+		const sociedad = String(adm.getProperty("/filtroSociedad") ?? "");
+		const lista = this.lista();
+		adm.setProperty("/opcFiltroSociedad", [...new Set(lista.map((v) => v.bukrs ?? "").filter(Boolean))].sort().map((c) => ({ key: c, text: textoSociedad(c) })));
+		adm.setProperty("/visibles", buscarVendedores(lista, this.filtro).filter((v) => !sociedad || v.bukrs === sociedad));
 	}
 
 	public onVolver(): void {
 		this.router.navTo("lista");
+	}
+
+	public onFiltroSociedad(): void {
+		this.refrescar();
 	}
 
 	public onBuscar(event: Event): void {
@@ -119,6 +128,8 @@ export default class Vendedores extends Controller {
 		adm.setProperty("/conBusqueda", this.odata() !== undefined);
 		adm.setProperty("/empleados", []);
 		adm.setProperty("/busquedaEmpleado", "");
+		adm.setProperty("/sociedad", "");
+		void this.cargarOpcionesSociedad();
 		adm.setProperty("/opcOrg", organizacionesDe(edicion.tipo));
 		// La ciudad no se guarda: se deduce del centro (un centro pertenece a una sola ciudad).
 		adm.setProperty("/ciudad", ciudadDeCentro(edicion.werks)?.clave ?? "");
@@ -231,7 +242,39 @@ export default class Vendedores extends Controller {
 		await this.cargarOpcionesArea();
 	}
 
-	/** Busca empleados de HCM mientras se escribe (nombre o PERNR). */
+	/** Sociedades que existen entre los empleados (una sola lectura por sesion). */
+	private sociedadesCargadas = false;
+
+	private async cargarOpcionesSociedad(): Promise<void> {
+		const odata = this.odata();
+		if (!odata || this.sociedadesCargadas) {
+			return;
+		}
+		try {
+			this.modeloAdm().setProperty("/opcSociedad", await cargarSociedades(odata));
+			this.sociedadesCargadas = true;
+		} catch (error) {
+			MessageBox.error((error as Error).message);
+		}
+	}
+
+	/** Al cambiar la sociedad se repite la busqueda con el texto que ya hay. */
+	public async onCambiaSociedad(): Promise<void> {
+		const adm = this.modeloAdm();
+		const texto = String(adm.getProperty("/busquedaEmpleado") ?? "");
+		const odata = this.odata();
+		if (!odata || !texto.trim()) {
+			adm.setProperty("/empleados", []);
+			return;
+		}
+		try {
+			adm.setProperty("/empleados", await buscarEmpleados(odata, texto, String(adm.getProperty("/sociedad") ?? "")));
+		} catch (error) {
+			MessageBox.error((error as Error).message);
+		}
+	}
+
+	/** Busca empleados de HCM mientras se escribe (nombre o PERNR), dentro de la sociedad elegida si hay una. */
 	public async onBuscarEmpleado(event: Event): Promise<void> {
 		const odata = this.odata();
 		if (!odata) {
@@ -240,7 +283,7 @@ export default class Vendedores extends Controller {
 		const texto = (event.getSource() as SearchField).getValue();
 		const adm = this.modeloAdm();
 		try {
-			const lista = await buscarEmpleados(odata, texto);
+			const lista = await buscarEmpleados(odata, texto, String(adm.getProperty("/sociedad") ?? ""));
 			// Si mientras tanto el texto cambio, esta respuesta ya no sirve.
 			if ((event.getSource() as SearchField).getValue() === texto) {
 				adm.setProperty("/empleados", lista);
@@ -260,6 +303,7 @@ export default class Vendedores extends Controller {
 		const adm = this.modeloAdm();
 		adm.setProperty("/edicion/pernr", empleado.pernr);
 		adm.setProperty("/edicion/nombre", empleado.nombre);
+		adm.setProperty("/edicion/bukrs", empleado.sociedad);
 	}
 
 	public onCerrarEdicion(): void {

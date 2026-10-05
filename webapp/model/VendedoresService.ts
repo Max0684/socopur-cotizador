@@ -24,6 +24,8 @@ export interface Vendedor {
 	waers: string;
 	vigenciaDias: number;
 	rol: string;
+	/** Sociedad del empleado (HCM); vacia en filas antiguas. */
+	bukrs?: string;
 	/** Tiene PIN fijado. SAP no expone el hash: el PIN solo se comprueba con la accion verificarPin. */
 	conPin: boolean;
 	/** Solo prototipo (sin SAP): SHA-256 del PIN en hexadecimal. */
@@ -47,6 +49,7 @@ interface VendedorSap {
 	/** NUMC3 en SAP: llega y se envia como texto de 3 digitos ("007"). */
 	VigenciaDias?: string | number;
 	Rol?: string;
+	Bukrs?: string;
 	ConPin?: boolean | string;
 	Activo?: string;
 }
@@ -94,6 +97,7 @@ export async function cargarVendedores(modelo: ODataModel | undefined, prototipo
 			waers: v.Waers ?? "PEN",
 			vigenciaDias: Number(v.VigenciaDias) || 7,
 			rol: v.Rol ?? "V",
+			bukrs: v.Bukrs ?? "",
 			conPin: v.ConPin === true || v.ConPin === "X",
 			activo: v.Activo === "X"
 		};
@@ -207,6 +211,7 @@ export function aFilaSap(v: Vendedor): VendedorSap {
 		Waers: v.waers,
 		VigenciaDias: String(v.vigenciaDias).padStart(3, "0"),
 		Rol: v.rol,
+		Bukrs: v.bukrs ?? "",
 		Activo: v.activo ? "X" : ""
 	};
 }
@@ -280,16 +285,32 @@ export interface Empleado {
 export const MINIMO_BUSQUEDA = 3;
 
 /** Filtro OData: solo digitos = PERNR exacto (completado a 8); si no, el nombre CONTIENE el texto (los nombres de HCM van en mayusculas). */
-export function filtroEmpleado(texto: string): string {
+export function filtroEmpleado(texto: string, sociedad = ""): string {
 	const t = texto.trim();
-	if (/^\d+$/.test(t)) {
-		return `Pernr eq '${normalizarPernr(t)}'`;
-	}
-	return `contains(Nombre,'${t.toUpperCase().replace(/'/g, "''")}')`;
+	const base = /^\d+$/.test(t) ? `Pernr eq '${normalizarPernr(t)}'` : `contains(Nombre,'${t.toUpperCase().replace(/'/g, "''")}')`;
+	return sociedad ? `${base} and Bukrs eq '${sociedad.replace(/'/g, "''")}'` : base;
+}
+
+/** Nombre de las sociedades conocidas de Socopur; una sociedad nueva se muestra con su codigo. */
+const NOMBRE_SOCIEDAD: Record<string, string> = { "1100": "Socopur", "1200": "Promotora G\u00e9nesis", "1300": "Socopur Selva" };
+
+export function textoSociedad(codigo: string): string {
+	return NOMBRE_SOCIEDAD[codigo] ? `${codigo} ${NOMBRE_SOCIEDAD[codigo]}` : codigo;
+}
+
+/** Sociedades distintas que traen los empleados, ordenadas por codigo, como opciones de lista. */
+export function sociedadesDe(empleados: { Bukrs?: string }[]): OpcionVendedor[] {
+	return [...new Set(empleados.map((e) => e.Bukrs ?? "").filter(Boolean))].sort().map((c) => ({ key: c, text: textoSociedad(c) }));
+}
+
+/** Lee las sociedades que existen entre los empleados activos de HCM (una sola lectura liviana: solo el campo Bukrs). */
+export async function cargarSociedades(modelo: ODataModel): Promise<OpcionVendedor[]> {
+	const filas = await modelo.bindList("/Empleado", undefined, undefined, undefined, { $select: "Pernr,Bukrs" }).requestContexts(0, 3000);
+	return sociedadesDe(filas.map((c) => c.getObject() as { Bukrs?: string }));
 }
 
 /** Busca empleados activos de HCM por nombre o PERNR (maximo 20). Vacio si el texto es muy corto. */
-export async function buscarEmpleados(modelo: ODataModel, texto: string, maximo = 20): Promise<Empleado[]> {
+export async function buscarEmpleados(modelo: ODataModel, texto: string, sociedad = "", maximo = 20): Promise<Empleado[]> {
 	const t = texto.trim();
 	if (t.length < MINIMO_BUSQUEDA && !/^\d+$/.test(t)) {
 		return [];
@@ -297,7 +318,7 @@ export async function buscarEmpleados(modelo: ODataModel, texto: string, maximo 
 	if (!t) {
 		return [];
 	}
-	const filas = await modelo.bindList("/Empleado", undefined, undefined, undefined, { $filter: filtroEmpleado(t), $orderby: "Nombre" }).requestContexts(0, maximo);
+	const filas = await modelo.bindList("/Empleado", undefined, undefined, undefined, { $filter: filtroEmpleado(t, sociedad), $orderby: "Nombre" }).requestContexts(0, maximo);
 	return filas.map((c) => {
 		const e = c.getObject() as EmpleadoSap;
 		return { pernr: normalizarPernr(e.Pernr), nombre: e.Nombre ?? e.Pernr, sociedad: e.Bukrs ?? "" };

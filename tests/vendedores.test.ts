@@ -43,3 +43,13 @@ test("claveVendedor distingue las filas de un mismo PERNR por organizacion y tip
 	assert.notEqual(a, b);
 	assert.equal(a, "99000298|1103|repuestos");
 });
+
+test("filtroEmpleado con sociedad suma el filtro Bukrs; sociedadesDe saca las distintas, ordenadas y con nombre", async () => {
+	const { filtroEmpleado, sociedadesDe, textoSociedad } = await import("../webapp/model/VendedoresService.ts");
+	assert.equal(filtroEmpleado("406"), "Pernr eq '00000406'");
+	assert.equal(filtroEmpleado("406", "1200"), "Pernr eq '00000406' and Bukrs eq '1200'");
+	assert.equal(filtroEmpleado("garay", "1100"), "contains(Nombre,'GARAY') and Bukrs eq '1100'");
+	assert.deepEqual(sociedadesDe([{ Bukrs: "1200" }, { Bukrs: "1100" }, { Bukrs: "1200" }, {}, { Bukrs: "9999" }]).map((o) => o.key), ["1100", "1200", "9999"]);
+	assert.equal(textoSociedad("1300"), "1300 Socopur Selva");
+	assert.equal(textoSociedad("9999"), "9999");
+});

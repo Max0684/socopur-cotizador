@@ -17,6 +17,10 @@
 				<headerToolbar>
 					<OverflowToolbar>
 						<SearchField width="20rem" placeholder="{i18n>vendIdBuscar}" liveChange=".onBuscar" search=".onBuscar" />
+						<Select selectedKey="{adm>/filtroSociedad}" items="{adm>/opcFiltroSociedad}" forceSelection="false" change=".onFiltroSociedad" width="14rem">
+							<core:Item key="" text="{i18n>vendAdmTodasSociedades}" />
+							<core:Item key="{adm>key}" text="{adm>text}" />
+						</Select>
 						<ToolbarSpacer />
 						<Button text="{i18n>vendAdmNuevo}" icon="sap-icon://add" type="Emphasized" press=".onNuevo" />
 					</OverflowToolbar>
@@ -24,6 +28,7 @@
 				<columns>
 					<Column><Text text="{i18n>vendAdmPernr}" /></Column>
 					<Column><Text text="{i18n>vendAdmNombre}" /></Column>
+					<Column><Text text="{i18n>vendAdmSociedad}" /></Column>
 					<Column><Text text="{i18n>vendAdmTipo}" /></Column>
 					<Column><Text text="{i18n>vendAdmOrg}" /></Column>
 					<Column><Text text="{i18n>vendAdmCentro}" /></Column>
@@ -36,6 +41,7 @@
 						<cells>
 							<Text text="{adm>pernr}" />
 							<Text text="{adm>nombre}" />
+							<Text text="{= ${adm>bukrs} || '\u2014' }" />
 							<Text text="{adm>tipo}" />
 							<Text text="{adm>vkorg}/{adm>vtweg}" />
 							<Text text="{adm>werks}" />
