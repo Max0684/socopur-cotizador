@@ -41,7 +41,7 @@
 						<cells>
 							<Text text="{adm>pernr}" />
 							<Text text="{adm>nombre}" />
-							<Text text="{= ${adm>bukrs} || '\u2014' }" />
+							<Text text="{= ${adm>bukrs} || '—' }" />
 							<Text text="{adm>tipo}" />
 							<Text text="{adm>vkorg}/{adm>vtweg}" />
 							<Text text="{adm>werks}" />
