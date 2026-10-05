@@ -10,7 +10,7 @@ import { agruparVehiculos, buscarVehiculos, filtrarVehiculos } from "com/socopur
 import { almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, gruposParaGuardar, modalidadPorDefecto, sectorDeCabecera, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
 import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type VinAsignado } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
-import { motivoVacio } from "com/socopur/cotizador/model/MaterialesService";
+import { buscarRepuestosConStock, motivoVacio } from "com/socopur/cotizador/model/MaterialesService";
 import { listaDeSede } from "com/socopur/cotizador/model/Ciudades";
 import { ciudadPorClave } from "com/socopur/cotizador/model/Ciudades";
 import { cargarContacto, cargarDirecciones, cargarMovimientos, type Movimiento } from "com/socopur/cotizador/model/ClienteDetalleService";
@@ -421,6 +421,7 @@ export default class Oferta extends Controller {
 		b.setProperty("/faltaFiltro", !hayFiltro);
 		b.setProperty("/avisoVacio", "");
 		b.setProperty("/motivoVacio", "");
+		b.setProperty("/parcial", false);
 		b.setProperty("/buscado", hayFiltro);
 		b.setProperty("/elegido", null);
 		this.limpiarSeleccion();
@@ -560,42 +561,21 @@ export default class Oferta extends Controller {
 		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel;
 		b.setProperty("/cargando", true);
 		try {
-			const filas = await buscarMateriales(odata, {
-				vkorg: String(mock.getProperty("/perfil/busqueda/orgs/repuestos") ?? "1103"),
-				vtweg: String(mock.getProperty("/perfil/busqueda/canal") ?? "11"),
-				linea: g("linea"),
-				clase: g("clase"),
-				familia: g("familia"),
-				codigo: g("codigo"),
-				descripcion: g("descripcion"),
-				texto: g("texto"),
-				sector: g("sector"),
-				marca: g("marca")
-			}, sectorDeCabecera);
-			// Stock fisico, disponible (ATP) y comprometido en el centro del perfil (entidad MaterialAtp).
 			const vkorg = String(mock.getProperty("/perfil/busqueda/orgs/repuestos") ?? "1103");
 			const vtweg = String(mock.getProperty("/perfil/busqueda/canal") ?? "11");
 			const centro = String(this.modeloOferta().getProperty("/perfil/centro") ?? "");
-			let stock: Record<string, Disponibilidad> = {};
-			try {
-				stock = await disponibilidadPorCentro(odata, vkorg, vtweg, centro, filas.map((f) => f.material));
-			} catch (error) {
-				MessageToast.show(this.i18n().getText("busquedaMaterialError", [(error as Error).message]) as string);
-			}
 			const soloStock = b.getProperty("/soloStock") as boolean;
-			const conDatos = filas.map((f) => ({
-				...f,
-				disponible: stock[f.material]?.disponible ?? 0,
-				comprometido: stock[f.material] ? stock[f.material].comprometido : "\u2014",
-				total: stock[f.material]?.fisico ?? 0,
-				precioUsd: 0,
-				condicionPct: 0,
-				promocion: null,
-				sinPrecio: true
-			}));
-			const visibles = conDatos.filter((f) => !soloStock || f.disponible > 0);
-			b.setProperty("/repuestos", visibles);
-			this.avisarSinResultados(motivoVacio(conDatos.length, visibles.length, soloStock), conDatos.length, centro);
+			const resultado = await buscarRepuestosConStock(
+				odata,
+				{ vkorg, vtweg, linea: g("linea"), clase: g("clase"), familia: g("familia"), codigo: g("codigo"), descripcion: g("descripcion"), texto: g("texto"), sector: g("sector"), marca: g("marca") },
+				centro,
+				soloStock,
+				sectorDeCabecera
+			);
+			const conDatos = resultado.filas.map((f) => ({ ...f, precioUsd: 0, condicionPct: 0, promocion: null, sinPrecio: true }));
+			b.setProperty("/repuestos", conDatos);
+			b.setProperty("/parcial", resultado.parcial);
+			this.avisarSinResultados(motivoVacio(resultado.coinciden, conDatos.length, soloStock), resultado.coinciden, centro);
 		} catch (error) {
 			b.setProperty("/repuestos", []);
 			MessageBox.error(this.i18n().getText("busquedaMaterialError", [(error as Error).message]) as string);

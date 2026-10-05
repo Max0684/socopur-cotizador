@@ -125,6 +125,7 @@
 					showIcon="true"
 					class="sapUiSmallMarginBottom" />
 
+				<MessageStrip text="{i18n>busquedaParcial}" type="Information" showIcon="true" visible="{busqueda>/parcial}" class="sapUiSmallMarginBottom" />
 				<VBox visible="{= !!${busqueda>/avisoVacio} }" class="sapUiSmallMarginBottom">
 					<MessageStrip text="{busqueda>/avisoVacio}" type="Warning" showIcon="true" />
 					<HBox class="sapUiTinyMarginTop">

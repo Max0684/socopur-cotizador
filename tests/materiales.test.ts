@@ -131,3 +131,53 @@ test("motivoVacio distingue 'sin coincidencias' de 'sin stock en el centro'", as
 	assert.equal(motivoVacio(12, 0, false), "");
 	assert.equal(motivoVacio(12, 3, true), "");
 });
+
+/** Modelo OData falso: 120 materiales M001..M120 de la linea O; solo M101..M110 tienen stock en el centro; el ATP falla para M105. */
+function modeloFalso(opciones: { atpFalla?: boolean } = {}): Parameters<typeof import("../webapp/model/MaterialesService.ts").buscarRepuestosConStock>[0] {
+	const todos = Array.from({ length: 120 }, (_, i) => `M${String(i + 1).padStart(3, "0")}`);
+	const conStock = new Set(Array.from({ length: 10 }, (_, i) => `M${String(101 + i).padStart(3, "0")}`));
+	const ctx = (o: unknown) => ({ getObject: () => o });
+	return {
+		bindList: (ruta: string, _a: unknown, _b: unknown, _c: unknown, p: { $filter: string }) => ({
+			requestContexts: async (desde: number, n: number) => {
+				if (ruta === "/Material") {
+					return todos.slice(desde, desde + n).map((m) => ctx({ Matnr: m, Maktx: `MATERIAL ${m}`, Meins: "UN", Spart: "50" }));
+				}
+				const pedidos = [...p.$filter.matchAll(/Matnr eq '([^']+)'/g)].map((x) => x[1]);
+				if (ruta === "/MaterialCentro") {
+					return pedidos.filter((m) => conStock.has(m)).map((m) => ctx({ Matnr: m, StockLibre: "100.000" }));
+				}
+				if (opciones.atpFalla) {
+					throw new Error("ATP caido");
+				}
+				return pedidos.filter((m) => conStock.has(m)).map((m) => ctx({ Matnr: m, StockLibre: "100.000", Disponible: m === "M105" ? "0" : "90.000", Comprometido: "10.000", Respuesta: m === "M105" ? 1 : 0 }));
+			}
+		})
+	} as never;
+}
+
+test("buscarRepuestosConStock con stock: recorre paginas hasta hallar los materiales con stock (no solo los 50 primeros)", async () => {
+	const { buscarRepuestosConStock } = await import("../webapp/model/MaterialesService.ts");
+	const r = await buscarRepuestosConStock(modeloFalso(), { vkorg: "1103", vtweg: "11", linea: "O" }, "1101", true);
+	assert.deepEqual(r.filas.map((f) => f.material), Array.from({ length: 10 }, (_, i) => `M${String(101 + i).padStart(3, "0")}`));
+	assert.equal(r.coinciden, 120);
+	assert.equal(r.parcial, false);
+});
+
+test("buscarRepuestosConStock: un material con stock no se pierde si el ATP falla (usa el stock libre)", async () => {
+	const { buscarRepuestosConStock } = await import("../webapp/model/MaterialesService.ts");
+	const r = await buscarRepuestosConStock(modeloFalso(), { vkorg: "1103", vtweg: "11", linea: "O" }, "1101", true);
+	const m105 = r.filas.find((f) => f.material === "M105");
+	assert.ok(m105, "M105 debe aparecer aunque su ATP sea 0 o falle");
+	const sinAtp = await buscarRepuestosConStock(modeloFalso({ atpFalla: true }), { vkorg: "1103", vtweg: "11", linea: "O" }, "1101", true);
+	assert.equal(sinAtp.filas.length, 10);
+	assert.equal(sinAtp.filas[0].disponible, 100);
+	assert.equal(sinAtp.filas[0].comprometido, "\u2014");
+});
+
+test("buscarRepuestosConStock sin filtro de stock: solo la primera pagina, con su stock", async () => {
+	const { buscarRepuestosConStock } = await import("../webapp/model/MaterialesService.ts");
+	const r = await buscarRepuestosConStock(modeloFalso(), { vkorg: "1103", vtweg: "11", linea: "O" }, "1101", false);
+	assert.equal(r.filas.length, 50);
+	assert.equal(r.filas[0].total, 0);
+});

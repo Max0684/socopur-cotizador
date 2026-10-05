@@ -242,3 +242,73 @@ export function motivoVacio(coinciden: number, visibles: number, soloStock: bool
 	}
 	return soloStock ? "sinStock" : "";
 }
+
+/** Fila de repuesto con su stock en el centro del perfil. */
+export type FilaConStock = FilaRepuestoSap & { disponible: number; comprometido: number | string; total: number };
+
+/**
+ * Une los materiales con su stock en el centro. El stock libre (MaterialCentro) es lo que decide si "hay stock": es la fuente confiable.
+ * El ATP (MaterialAtp) solo aporta Disponible y Comprometido; si SAP no pudo calcularlo para un material, no se descarta: se muestra el
+ * stock libre como disponible y el comprometido como "\u2014".
+ */
+export function combinarStock(filas: FilaRepuestoSap[], libre: Record<string, number>, atp: Record<string, Disponibilidad>): FilaConStock[] {
+	return filas.map((f) => {
+		const stock = libre[f.material] ?? 0;
+		const a = atp[f.material];
+		return { ...f, disponible: a ? a.disponible : stock, comprometido: a ? a.comprometido : "\u2014", total: stock };
+	});
+}
+
+export interface ResultadoBusquedaStock {
+	filas: FilaConStock[];
+	/** Cuantos materiales cumplian los filtros entre los revisados (con o sin stock). */
+	coinciden: number;
+	/** true si se llego al tope de paginas revisadas y puede haber mas materiales con stock. */
+	parcial: boolean;
+}
+
+/** Paginas de 50 materiales que se revisan como maximo buscando stock (20 = 1000 materiales). */
+export const MAX_PAGINAS_STOCK = 20;
+export const FILAS_POR_PAGINA = 50;
+
+/**
+ * Busca repuestos con el filtro de stock del servidor: recorre los materiales por paginas, mira el stock libre de cada pagina y se queda
+ * con los que tienen stock hasta juntar una pagina de resultados o agotar los materiales (o el tope de paginas). Sin `soloStock` trae
+ * la primera pagina, con su stock. El ATP solo se pide para los que se van a mostrar.
+ */
+export async function buscarRepuestosConStock(
+	modelo: ODataModel,
+	filtros: FiltrosMaterial,
+	werks: string,
+	soloStock: boolean,
+	sectorCab?: (canal: string, sector: string) => string
+): Promise<ResultadoBusquedaStock> {
+	const filas: FilaConStock[] = [];
+	let coinciden = 0;
+	let parcial = false;
+	for (let pagina = 0; pagina < MAX_PAGINAS_STOCK; pagina++) {
+		const materiales = await buscarMateriales(modelo, filtros, sectorCab, pagina, FILAS_POR_PAGINA);
+		if (materiales.length === 0) {
+			break;
+		}
+		coinciden += materiales.length;
+		const libre = await stockPorCentro(modelo, filtros.vkorg, filtros.vtweg, werks, materiales.map((m) => m.material));
+		const aMostrar = soloStock ? materiales.filter((m) => (libre[m.material] ?? 0) > 0) : materiales;
+		let atp: Record<string, Disponibilidad> = {};
+		if (aMostrar.length > 0) {
+			try {
+				atp = await disponibilidadPorCentro(modelo, filtros.vkorg, filtros.vtweg, werks, aMostrar.map((m) => m.material));
+			} catch {
+				// Sin ATP se muestra el stock libre; no se pierde el resultado.
+			}
+		}
+		filas.push(...combinarStock(aMostrar, libre, atp));
+		if (!soloStock || filas.length >= FILAS_POR_PAGINA || materiales.length < FILAS_POR_PAGINA) {
+			break;
+		}
+		if (pagina === MAX_PAGINAS_STOCK - 1) {
+			parcial = true;
+		}
+	}
+	return { filas, coinciden, parcial };
+}
