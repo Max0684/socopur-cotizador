@@ -81,3 +81,35 @@ export async function consultarPrecio(modelo: ODataModel, consulta: ConsultaPrec
 		impuestos: Number(fila.Impuestos)
 	};
 }
+
+/** Fila de la entidad PrecioCond: una condicion de la simulacion de precios de SAP para la linea. */
+export interface CondicionSap {
+	CondType: string;
+	/** Importe de esa condicion para TODA la linea (KWERT), en la moneda pedida. */
+	Total?: string | number;
+}
+
+export interface ImpuestosLinea {
+	igv: number;
+	isc: number;
+}
+
+const redondear2 = (v: number): number => Math.round(v * 100) / 100;
+
+/**
+ * IGV (condicion ZIGV) e ISC (ZISC) de una linea, sumando el Total de cada condicion. Se usa Total (importe de la linea) y NO Valor:
+ * en los porcentajes el valor sale dividido por 10 (18 % aparece como 1.8).
+ */
+export function impuestosDeCondiciones(condiciones: CondicionSap[]): ImpuestosLinea {
+	const suma = (tipo: string): number => redondear2(condiciones.filter((c) => c.CondType === tipo).reduce((a, c) => a + (Number(c.Total) || 0), 0));
+	return { igv: suma("ZIGV"), isc: suma("ZISC") };
+}
+
+/**
+ * IGV e ISC estimados de una linea ANTES de guardar: la misma simulacion de precios de SAP que se usa al crear el documento (cliente,
+ * centro, organizacion, canal, clase y cantidad). Es una estimacion; el valor final es el del documento.
+ */
+export async function consultarImpuestos(modelo: ODataModel, consulta: ConsultaPrecio): Promise<ImpuestosLinea> {
+	const filas = await modelo.bindList("/PrecioCond", undefined, undefined, undefined, { $filter: filtroPrecio(consulta) }).requestContexts(0, 100);
+	return impuestosDeCondiciones(filas.map((c) => c.getObject() as CondicionSap));
+}

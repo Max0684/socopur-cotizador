@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { consultarPrecio, filtroPrecio, type ConsultaPrecio } from "../webapp/model/PreciosService.ts";
+import { consultarPrecio, filtroPrecio, impuestosDeCondiciones, type ConsultaPrecio } from "../webapp/model/PreciosService.ts";
 import { crearModeloFalso } from "./helpers/modeloFalso.ts";
 
 const consulta: ConsultaPrecio = {
@@ -69,4 +69,20 @@ test("consultarPrecio: un precio unitario de 0 es 'sin precio vigente' y lanza e
 		precios: [{ Moneda: "PEN", PrecioLista: "0.00", PrecioUnitario: "0.00", Neto: "0.00", Impuestos: "0.00", Respuesta: 0, Mensaje: "" }]
 	});
 	await assert.rejects(() => consultarPrecio(como(modelo), consulta), /precio vigente/);
+});
+
+test("impuestosDeCondiciones: suma el Total de ZIGV y de ZISC por separado e ignora las demas condiciones (caso 65.30 con IGV 18 %)", () => {
+	const r = impuestosDeCondiciones([
+		{ CondType: "Z303", Total: "65.30" },
+		{ CondType: "Z302", Total: "65.30" },
+		{ CondType: "ZIGV", Total: "11.75" },
+		{ CondType: "ZISC", Total: "0.00" }
+	]);
+	assert.deepEqual(r, { igv: 11.75, isc: 0 });
+});
+
+test("impuestosDeCondiciones: sin condiciones de impuesto (cliente exonerado o sin base) da cero y varias filas del mismo tipo se suman", () => {
+	assert.deepEqual(impuestosDeCondiciones([{ CondType: "Z303", Total: "65.30" }]), { igv: 0, isc: 0 });
+	assert.deepEqual(impuestosDeCondiciones([{ CondType: "ZIGV", Total: "1.10" }, { CondType: "ZIGV", Total: 2.2 }, { CondType: "ZISC", Total: "5" }]), { igv: 3.3, isc: 5 });
+	assert.deepEqual(impuestosDeCondiciones([]), { igv: 0, isc: 0 });
 });

@@ -5,7 +5,7 @@ import { cargarDetalleOferta } from "com/socopur/cotizador/model/OfertasService"
 import type { GrupoEstado } from "com/socopur/cotizador/model/odata/Entidades";
 import { leerCentros, leerOficinas } from "com/socopur/cotizador/model/CatalogosService";
 import { buscarMateriales, cargarSegmentos, disponibilidadPorCentro, materialesDisponibles, type Disponibilidad } from "com/socopur/cotizador/model/MaterialesService";
-import { consultarPrecio } from "com/socopur/cotizador/model/PreciosService";
+import { consultarImpuestos, consultarPrecio } from "com/socopur/cotizador/model/PreciosService";
 import { agruparVehiculos, buscarVehiculos, filtrarVehiculos } from "com/socopur/cotizador/model/VehiculosService";
 import { almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, gruposParaGuardar, igvExonerado, modalidadPorDefecto, sectorDeCabecera, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
 import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type VinAsignado } from "com/socopur/cotizador/model/CotizacionesService";
@@ -215,6 +215,8 @@ interface Linea extends LineaMock {
 	isc?: number;
 	igvImporte?: number;
 	totalConImpuestos?: number;
+	/** true si isc e igvImporte son la ESTIMACION de la simulacion de SAP antes de guardar (despues de guardar son los del documento). */
+	impuestoEstimado?: boolean;
 	iscPct?: number;
 	unica?: boolean;
 	/** Solo vehiculos de SAP: variante, centro y VIN del vehiculo elegido. */
@@ -1010,12 +1012,28 @@ export default class Oferta extends Controller {
 			await Promise.all(
 				delSap.map(async (l) => {
 					const base = { kunnr, vkorg: l.orgVentas, vtweg: canal, spart: l.sector, auart: CLASE_OFERTA_PRECIO, matnr: l.material, werks: centro, cantidad: l.cantidad };
-					const [pen, usd] = await Promise.all([consultarPrecio(odata, { ...base, waers: "PEN" }), consultarPrecio(odata, { ...base, waers: "USD" })]);
+					const monedaOferta = oferta.getProperty("/perfil/moneda") === "USD" ? "USD" : "PEN";
+					const [pen, usd, imp] = await Promise.all([
+						consultarPrecio(odata, { ...base, waers: "PEN" }),
+						consultarPrecio(odata, { ...base, waers: "USD" }),
+						// IGV e ISC estimados con la misma simulacion de SAP, en la moneda de la oferta; si fallan, el impuesto queda "—" y no se inventa.
+						consultarImpuestos(odata, { ...base, waers: monedaOferta }).catch(() => null)
+					]);
 					l.precioPenSap = pen.precioUnitario;
 					l.precioUsdSap = usd.precioUnitario;
 					l.precio = oferta.getProperty("/perfil/moneda") === "USD" ? usd.precioUnitario : pen.precioUnitario;
 					l.total = this.redondear(l.cantidad * l.precio);
 					l.sinPrecioVigente = false;
+					if (imp) {
+						l.isc = imp.isc;
+						l.igvImporte = imp.igv;
+						l.totalConImpuestos = this.redondear(l.total + imp.isc + imp.igv);
+						l.impuestoEstimado = true;
+					} else {
+						l.isc = undefined;
+						l.igvImporte = undefined;
+						l.totalConImpuestos = undefined;
+					}
 				})
 			);
 			oferta.setProperty("/lineas", lineas);
@@ -1053,6 +1071,8 @@ export default class Oferta extends Controller {
 		oferta.setProperty("/lineas", lineas);
 		oferta.setProperty("/guardado", { visible: false, texto: "" });
 		this.recalcular();
+		// Los impuestos de SAP vienen en la moneda pedida: al cambiar de moneda se vuelven a pedir.
+		void this.repreciarLineasSap();
 	}
 
 	public async onCambiaCantidadFila(event: Event<{ value: number }>): Promise<void> {
@@ -3513,7 +3533,7 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 			...totales,
 			igvTxt: totales.igvConocido ? this.formatMonto(totales.igv) : "\u2014",
 			iscEtq: this.i18n().getText(totales.desglose ? "isc" : "iscIncluido") as string,
-			igvEtq: this.i18n().getText(igvExonerado(totales) ? "igvExonerado" : "igv") as string
+			igvEtq: `${this.i18n().getText(igvExonerado(totales) ? "igvExonerado" : "igv") as string}${lineas.length > 0 && lineas.every((l) => l.impuestoEstimado) ? ` ${this.i18n().getText("estimado") as string}` : ""}`
 		});
 		if (oferta.getProperty("/cliente") && !oferta.getProperty("/entregaDatos/direccionId")) {
 			this.aplicarDireccionEnvio();
