@@ -566,13 +566,18 @@ export default class Oferta extends Controller {
 			const vtweg = String(mock.getProperty("/perfil/busqueda/canal") ?? "11");
 			const centro = String(this.modeloOferta().getProperty("/perfil/centro") ?? "");
 			const soloStock = b.getProperty("/soloStock") as boolean;
+			const t0 = Date.now();
+			const fases: string[] = [];
 			const resultado = await buscarRepuestosConStock(
 				odata,
 				{ vkorg, vtweg, linea: g("linea"), clase: g("clase"), familia: g("familia"), codigo: g("codigo"), descripcion: g("descripcion"), texto: g("texto"), sector: g("sector"), marca: g("marca") },
 				centro,
 				soloStock,
-				sectorDeCabecera
+				sectorDeCabecera,
+				(fase, ms) => fases.push(`${fase}: ${ms} ms`)
 			);
+			// Diagnostico de lentitud (consola del navegador, F12): tiempo por fase y total hasta tener la lista.
+			console.info(`[Cotizador] busqueda de repuestos: ${Date.now() - t0} ms | ${fases.join(" | ")}`);
 			const sectores = (mock.getProperty("/sectores/repuestos") as { key: string; text: string }[]) ?? [];
 			// El sector del material con su descripcion ("50 · Rep. alternativos y llantas"); sin descripcion conocida, solo el codigo.
 			const textoSector = (c: string): string => (sectores.find((x) => x.key === c)?.text ?? c).replace(/^(\d+)\s*[—–-]\s*/, "$1 · ");
@@ -612,8 +617,11 @@ export default class Oferta extends Controller {
 		const moneda = oferta.getProperty("/perfil/moneda") === "USD" ? "USD" : "PEN";
 		const simbolo = moneda === "USD" ? "US$" : "S/";
 		const filas = ((b.getProperty("/repuestos") as { material: string; orgVentas: string; sectorOferta: string }[]) ?? []).slice(0, Oferta.PRECIOS_EN_LISTA);
+		const t0 = Date.now();
+		const tiempos: number[] = [];
 		await Promise.all(
 			filas.map(async (f, i) => {
+				const t1 = Date.now();
 				try {
 					const precio = await consultarPrecio(odata, { kunnr, vkorg: f.orgVentas, vtweg: canal, spart: f.sectorOferta, auart: CLASE_OFERTA_PRECIO, matnr: f.material, werks: centro, cantidad: 1, waers: moneda });
 					if (turno === this.busquedaPrecios) {
@@ -622,9 +630,12 @@ export default class Oferta extends Controller {
 					}
 				} catch {
 					// Sin precio en la lista: sigue "al elegir" y el aviso aparece al seleccionar el material.
+				} finally {
+					tiempos.push(Date.now() - t1);
 				}
 			})
 		);
+		console.info(`[Cotizador] precios de la lista: ${filas.length} consultas en paralelo, total ${Date.now() - t0} ms (la mas lenta ${Math.max(0, ...tiempos)} ms, promedio ${Math.round(tiempos.reduce((a, c) => a + c, 0) / Math.max(1, tiempos.length))} ms)`);
 	}
 
 	/** Explica por que no hay resultados (sin coincidencias o sin stock en el centro) y que se puede hacer. */

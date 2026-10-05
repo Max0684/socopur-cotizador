@@ -281,23 +281,33 @@ export async function buscarRepuestosConStock(
 	filtros: FiltrosMaterial,
 	werks: string,
 	soloStock: boolean,
-	sectorCab?: (canal: string, sector: string) => string
+	sectorCab?: (canal: string, sector: string) => string,
+	/** Medicion opcional: nombre de la fase y milisegundos (solo para diagnosticar lentitud). */
+	medir?: (fase: string, ms: number) => void
 ): Promise<ResultadoBusquedaStock> {
+	const cronometrar = async <T>(fase: string, tarea: () => Promise<T>): Promise<T> => {
+		const t0 = Date.now();
+		try {
+			return await tarea();
+		} finally {
+			medir?.(fase, Date.now() - t0);
+		}
+	};
 	const filas: FilaConStock[] = [];
 	let coinciden = 0;
 	let parcial = false;
 	for (let pagina = 0; pagina < MAX_PAGINAS_STOCK; pagina++) {
-		const materiales = await buscarMateriales(modelo, filtros, sectorCab, pagina, FILAS_POR_PAGINA);
+		const materiales = await cronometrar(`Material p${pagina}`, () => buscarMateriales(modelo, filtros, sectorCab, pagina, FILAS_POR_PAGINA));
 		if (materiales.length === 0) {
 			break;
 		}
 		coinciden += materiales.length;
-		const libre = await stockPorCentro(modelo, filtros.vkorg, filtros.vtweg, werks, materiales.map((m) => m.material));
+		const libre = await cronometrar(`Stock p${pagina}`, () => stockPorCentro(modelo, filtros.vkorg, filtros.vtweg, werks, materiales.map((m) => m.material)));
 		const aMostrar = soloStock ? materiales.filter((m) => (libre[m.material] ?? 0) > 0) : materiales;
 		let atp: Record<string, Disponibilidad> = {};
 		if (aMostrar.length > 0) {
 			try {
-				atp = await disponibilidadPorCentro(modelo, filtros.vkorg, filtros.vtweg, werks, aMostrar.map((m) => m.material));
+				atp = await cronometrar(`ATP p${pagina} (${aMostrar.length})`, () => disponibilidadPorCentro(modelo, filtros.vkorg, filtros.vtweg, werks, aMostrar.map((m) => m.material)));
 			} catch {
 				// Sin ATP se muestra el stock libre; no se pierde el resultado.
 			}
