@@ -89,7 +89,12 @@ export function filtroMateriales(f: FiltrosMaterial): string {
 		partes.push(`contains(Matnr,'${comillas(f.codigo.toUpperCase())}')`);
 	}
 	if (f.descripcion) {
-		partes.push(`contains(Maktx,'${comillas(f.descripcion.toUpperCase())}')`);
+		// Cada palabra se busca por separado (en cualquier orden): "rodaje 6202" encuentra "RODAJE BOLAS 6202-2NSL".
+		f.descripcion
+			.trim()
+			.split(/\s+/)
+			.filter(Boolean)
+			.forEach((palabra) => partes.push(`contains(Maktx,'${comillas(palabra.toUpperCase())}')`));
 	}
 	return partes.join(" and ");
 }

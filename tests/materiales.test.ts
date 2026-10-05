@@ -181,3 +181,13 @@ test("buscarRepuestosConStock sin filtro de stock: solo la primera pagina, con s
 	assert.equal(r.filas.length, 50);
 	assert.equal(r.filas[0].total, 0);
 });
+
+test("filtroMateriales: la descripcion busca cada palabra por separado, en cualquier orden y en mayusculas", async () => {
+	const { filtroMateriales } = await import("../webapp/model/MaterialesService.ts");
+	const f = filtroMateriales({ vkorg: "1103", vtweg: "11", descripcion: "  rodaje   6202 " });
+	assert.ok(f.includes("contains(Maktx,'RODAJE')"));
+	assert.ok(f.includes("contains(Maktx,'6202')"));
+	assert.ok(!f.includes("RODAJE 6202"));
+	assert.ok(f.startsWith("Vkorg eq '1103' and Vtweg eq '11'"));
+	assert.ok(!filtroMateriales({ vkorg: "1103", vtweg: "11", descripcion: "   " }).includes("Maktx"));
+});
