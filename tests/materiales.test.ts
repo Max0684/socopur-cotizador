@@ -21,7 +21,11 @@ test("filaDeMaterial arma la fila de la tabla; el sector de cabecera sale del se
 	const regla = (canal: string, sector: string) => (canal === "11" ? "99" : sector);
 	assert.equal(filaDeMaterial(m, "1103", "11", regla).sectorOferta, "99");
 	assert.equal(filaDeMaterial(m, "1103", "10", regla).sectorOferta, "50");
-	assert.equal(filaDeMaterial({ ...m, SpartCabecera: "55" }, "1103", "11", regla).sectorOferta, "55");
+	// Con regla, la regla manda sobre el SpartCabecera del servicio (que solo esta calculado para 1103).
+	assert.equal(filaDeMaterial({ ...m, SpartCabecera: "55" }, "1103", "11", regla).sectorOferta, "99");
+	// Sin regla se usa lo que traiga el servicio.
+	assert.equal(filaDeMaterial({ ...m, SpartCabecera: "55" }, "1103", "11").sectorOferta, "55");
+	assert.equal(filaDeMaterial(m, "1103", "11").sectorOferta, m.Spart);
 	const f = filaDeMaterial(m, "1103", "10");
 	assert.deepEqual([f.material, f.denominacion, f.marca, f.linea, f.um, f.origen], ["SFX428H-150-MTK", "CADENA", "SFX", "P", "UN", "sap"]);
 });
@@ -190,4 +194,17 @@ test("filtroMateriales: la descripcion busca cada palabra por separado, en cualq
 	assert.ok(!f.includes("RODAJE 6202"));
 	assert.ok(f.startsWith("Vkorg eq '1103' and Vtweg eq '11'"));
 	assert.ok(!filtroMateriales({ vkorg: "1103", vtweg: "11", descripcion: "   " }).includes("Maktx"));
+});
+
+test("sector de cabecera con la regla real en Promogesa y Selva: 1203/11/50 y 1303/11/50 salen con 99 aunque el servicio devuelva 50", async () => {
+	const { sectorDeCabecera } = await import("../webapp/model/Reglas.ts");
+	const m = { Matnr: "SFX-18X300-C051", Maktx: "LLANTA", Meins: "UN", Spart: "50", SpartCabecera: "50" };
+	for (const org of ["1103", "1203", "1303"]) {
+		assert.equal(filaDeMaterial(m, org, "11", sectorDeCabecera).sectorOferta, "99", `${org}/11`);
+		assert.equal(filaDeMaterial(m, org, "14", sectorDeCabecera).sectorOferta, "99", `${org}/14`);
+		assert.equal(filaDeMaterial(m, org, "10", sectorDeCabecera).sectorOferta, "50", `${org}/10`);
+		assert.equal(filaDeMaterial({ ...m, Spart: "55" }, org, "12", sectorDeCabecera).sectorOferta, "55", `${org}/12`);
+	}
+	// Vehiculos y taller no cambian: el sector del material.
+	assert.equal(filaDeMaterial({ ...m, Spart: "16" }, "1101", "11", sectorDeCabecera).sectorOferta, "16");
 });

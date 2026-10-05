@@ -34,6 +34,17 @@ test("sectorDeCabecera: canales 11, 14 y 99 solo existen con sector 99 (TVAKZ, o
 	assert.equal(sectorDeCabecera("99", "55"), "99");
 });
 
+test("sectorDeCabecera: 1203 y 1303 siguen la misma regla que 1103 (TVAKZ: canal 11 y 14 solo sector 99); vehiculos no", () => {
+	for (const org of ["1103", "1203", "1303"]) {
+		assert.equal(sectorDeCabecera("11", "50", org), "99", org);
+		assert.equal(sectorDeCabecera("14", "50", org), "99", org);
+		assert.equal(sectorDeCabecera("10", "50", org), "50", org);
+		assert.equal(sectorDeCabecera("12", "56", org), "56", org);
+	}
+	assert.equal(sectorDeCabecera("11", "16", "1101"), "16");
+	assert.equal(sectorDeCabecera("11", "16", "1201"), "16");
+});
+
 test("sectorDeCabecera: canales 10 y 12 usan el sector del material", () => {
 	assert.equal(sectorDeCabecera("10", "50"), "50");
 	assert.equal(sectorDeCabecera("12", "54"), "54");

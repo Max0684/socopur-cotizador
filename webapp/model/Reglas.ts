@@ -32,7 +32,13 @@ export interface PerfilVenta {
 	centro?: string;
 }
 
-/** Canales que en TVAKZ (org. 1103) solo existen con sector 99. El 10 y el 12 usan el sector del material (50-56 y 90). */
+/**
+ * Organizaciones de REPUESTOS de las tres sociedades (1103 Socopur, 1203 Promogesa, 1303 Selva): comparten la misma regla de sector de
+ * cabecera (lectura de TVAKZ en DS4/130, 05/10/2026). Las de vehiculos y taller usan el sector del material.
+ */
+const ORGS_REPUESTOS = ["1103", "1203", "1303"];
+
+/** Canales que en TVAKZ (orgs. de repuestos) solo existen con sector 99. El 10 y el 12 usan el sector del material (50-56 y 90). */
 const CANALES_SECTOR_99 = ["11", "14", "99"];
 
 /** "11 Retail" -> "11". Texto vacio o sin numero inicial -> "". */
@@ -47,13 +53,13 @@ export function oficinaDe(texto?: string): string {
 
 /** Sector de la cabecera de la oferta segun el canal (si no, SAP rechaza: "no esta prevista la clase de pedido"). */
 export function sectorDeCabecera(canal: string, sectorDelMaterial: string, orgVentas?: string): string {
-	// La regla del sector 99 es de la org. 1103 (repuestos). Las demas organizaciones (p. ej. 1101, vehiculos) usan el sector del material;
-	// solo el canal 15 (Administrativo) pasa a 90 en todas.
-	if (orgVentas && orgVentas !== "1103") {
+	// La regla del sector 99 es de las orgs. de repuestos (1103, 1203 y 1303: la misma en las tres). Las demas (p. ej. 1101, vehiculos) usan
+	// el sector del material; solo el canal 15 (Administrativo) pasa a 90 en todas. Sin organizacion se aplica la de repuestos.
+	if (orgVentas && !ORGS_REPUESTOS.includes(orgVentas)) {
 		return canal === "15" ? "90" : sectorDelMaterial;
 	}
 	if (canal === "15") {
-		// En TVAKZ de la org. 1103 el canal 15 (Administrativo) solo admite el sector 90 (lo calcula igual la entidad Material).
+		// En TVAKZ de las orgs. de repuestos el canal 15 (Administrativo) solo admite el sector 90 (lo calcula igual la entidad Material).
 		return "90";
 	}
 	return CANALES_SECTOR_99.includes(canal) ? "99" : sectorDelMaterial;

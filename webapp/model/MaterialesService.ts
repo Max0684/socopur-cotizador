@@ -100,8 +100,12 @@ export function filtroMateriales(f: FiltrosMaterial): string {
 }
 
 /** Convierte una fila del servicio a la fila que muestra la tabla de repuestos. */
-/** `sectorCab` es la regla del sector de cabecera por canal (Reglas.sectorDeCabecera); sin ella se usa el sector del material. */
-export function filaDeMaterial(m: MaterialSap, vkorg: string, vtweg: string, sectorCab: (canal: string, sector: string) => string = (_c, sector) => sector): FilaRepuestoSap {
+/**
+ * `sectorCab` es la regla del sector de cabecera (Reglas.sectorDeCabecera: por organizacion y canal). Cuando se da, MANDA sobre el campo
+ * SpartCabecera del servicio, que hoy solo esta calculado para la org. 1103 y devolvia el sector del material en 1203 y 1303 (SAP rechazaba
+ * la oferta: "1203/11/50 no esta prevista la clase Z300"). Sin regla se usa SpartCabecera y, si falta, el sector del material.
+ */
+export function filaDeMaterial(m: MaterialSap, vkorg: string, vtweg: string, sectorCab?: (canal: string, sector: string, org?: string) => string): FilaRepuestoSap {
 	return {
 		material: m.Matnr,
 		denominacion: m.Maktx,
@@ -112,7 +116,7 @@ export function filaDeMaterial(m: MaterialSap, vkorg: string, vtweg: string, sec
 		sector: m.Spart ?? "",
 		sectorTxt: "",
 		// Si el servicio no calcula el sector de cabecera, se usa la regla probada (canales 11, 14 y 99 -> 99).
-		sectorOferta: m.SpartCabecera || sectorCab(vtweg, m.Spart ?? ""),
+		sectorOferta: sectorCab ? sectorCab(vtweg, m.Spart ?? "", vkorg) : m.SpartCabecera || (m.Spart ?? ""),
 		orgVentas: vkorg,
 		um: m.Meins,
 		grupo: "Repuestos y accesorios",
@@ -121,7 +125,7 @@ export function filaDeMaterial(m: MaterialSap, vkorg: string, vtweg: string, sec
 }
 
 /** Busca materiales en SAP (maximo 50 por pagina, orden por codigo). Lanza el error del servicio si falla. */
-export async function buscarMateriales(modelo: ODataModel, filtros: FiltrosMaterial, sectorCab?: (canal: string, sector: string) => string, pagina = 0, tamano = 50): Promise<FilaRepuestoSap[]> {
+export async function buscarMateriales(modelo: ODataModel, filtros: FiltrosMaterial, sectorCab?: (canal: string, sector: string, org?: string) => string, pagina = 0, tamano = 50): Promise<FilaRepuestoSap[]> {
 	const lista = modelo.bindList("/Material", undefined, undefined, undefined, {
 		$filter: filtroMateriales(filtros),
 		$orderby: "Matnr",
@@ -288,7 +292,7 @@ export async function buscarRepuestosConStock(
 	filtros: FiltrosMaterial,
 	werks: string,
 	soloStock: boolean,
-	sectorCab?: (canal: string, sector: string) => string,
+	sectorCab?: (canal: string, sector: string, org?: string) => string,
 	/** Medicion opcional: nombre de la fase y milisegundos (solo para diagnosticar lentitud). */
 	medir?: (fase: string, ms: number) => void,
 	/** Avance para mostrar al vendedor: materiales revisados y cuantos tienen stock hasta ahora. */
