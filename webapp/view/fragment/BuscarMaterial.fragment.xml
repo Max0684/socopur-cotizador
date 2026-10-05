@@ -208,10 +208,10 @@
 						<Column width="7rem" hAlign="End" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colComprometido}" /></Column>
 						<Column width="6rem" hAlign="End" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colStockTotal}" /></Column>
 						<Column width="3rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colUm}" /></Column>
-						<Column width="7rem" hAlign="End" visible="{busqueda>/hayPrecioLista}" minScreenWidth="60rem" demandPopin="true">
+						<Column width="8rem" hAlign="End" visible="{busqueda>/hayPrecioLista}" minScreenWidth="60rem" demandPopin="true">
 							<VBox alignItems="End"><Text text="{i18n>colMayorista}" tooltip="{i18n>colMayoristaTip}" /><ObjectStatus text="{i18n>canal10}" inverted="false" state="None" /></VBox>
 						</Column>
-						<Column width="7rem" hAlign="End" visible="{busqueda>/hayPrecioLista}" minScreenWidth="60rem" demandPopin="true">
+						<Column width="8rem" hAlign="End" visible="{busqueda>/hayPrecioLista}" minScreenWidth="60rem" demandPopin="true">
 							<VBox alignItems="End"><Text text="{i18n>colRetail}" tooltip="{i18n>colRetailTip}" /><ObjectStatus text="{i18n>canal11}" inverted="false" state="None" /></VBox>
 						</Column>
 						<Column width="9rem" hAlign="End"><Text text="{i18n>colPrecioCliente}" tooltip="{i18n>colPrecioClienteTip}" /></Column>
@@ -230,10 +230,14 @@
 								<Text text="{busqueda>comprometido}" />
 								<Text text="{busqueda>total}" />
 								<Text text="{busqueda>um}" />
-								<ObjectNumber visible="{= !${busqueda>borradoMay} }" tooltip="{= ${busqueda>precioMay} === '—' || !${busqueda>precioMay} ? ${i18n>sinPrecioListaTip} : '' }" number="{= ${busqueda>precioMay} || '—' }" emphasized="{= ${busqueda>/canalPerfil} === '10' }" state="{= ${busqueda>/canalPerfil} === '10' ? 'Information' : 'None' }" textAlign="End" />
-								<ObjectStatus visible="{busqueda>borradoMay}" text="{busqueda>precioMay}" icon="sap-icon://alert" state="Warning" tooltip="{i18n>precioBorradoTip}" class="sapUiTinyMarginBegin" />
-								<ObjectNumber visible="{= !${busqueda>borradoRet} }" tooltip="{= ${busqueda>precioRet} === '—' || !${busqueda>precioRet} ? ${i18n>sinPrecioListaTip} : '' }" number="{= ${busqueda>precioRet} || '—' }" emphasized="{= ${busqueda>/canalPerfil} === '11' }" state="{= ${busqueda>/canalPerfil} === '11' ? 'Information' : 'None' }" textAlign="End" />
-								<ObjectStatus visible="{busqueda>borradoRet}" text="{busqueda>precioRet}" icon="sap-icon://alert" state="Warning" tooltip="{i18n>precioBorradoTip}" class="sapUiTinyMarginBegin" />
+								<VBox alignItems="End">
+									<ObjectNumber visible="{= !${busqueda>borradoMay} }" tooltip="{= ${busqueda>precioMay} === '—' || !${busqueda>precioMay} ? ${i18n>sinPrecioListaTip} : '' }" number="{= ${busqueda>precioMay} || '—' }" emphasized="{= ${busqueda>/canalPerfil} === '10' }" state="{= ${busqueda>/canalPerfil} === '10' ? 'Information' : 'None' }" textAlign="End" />
+									<ObjectStatus visible="{busqueda>borradoMay}" text="{busqueda>precioMay}" icon="sap-icon://alert" state="Warning" tooltip="{i18n>precioBorradoTip}" />
+								</VBox>
+								<VBox alignItems="End">
+									<ObjectNumber visible="{= !${busqueda>borradoRet} }" tooltip="{= ${busqueda>precioRet} === '—' || !${busqueda>precioRet} ? ${i18n>sinPrecioListaTip} : '' }" number="{= ${busqueda>precioRet} || '—' }" emphasized="{= ${busqueda>/canalPerfil} === '11' }" state="{= ${busqueda>/canalPerfil} === '11' ? 'Information' : 'None' }" textAlign="End" />
+									<ObjectStatus visible="{busqueda>borradoRet}" text="{busqueda>precioRet}" icon="sap-icon://alert" state="Warning" tooltip="{i18n>precioBorradoTip}" />
+								</VBox>
 								<VBox alignItems="End">
 									<ObjectNumber visible="{= !${busqueda>sinPrecio} }" number="{path: 'busqueda>precioUsd', formatter: '.formatMonto'}" unit="USD" textAlign="End" />
 									<Text visible="{= !${busqueda>sinPrecio} }" text="{path: 'busqueda>precioUsd', formatter: '.formatPen'}" textAlign="End" />
