@@ -627,6 +627,9 @@ export default class Oferta extends Controller {
 			((b.getProperty("/repuestos") as { material: string }[]) ?? []).forEach((f, i) => {
 				b.setProperty(`/repuestos/${i}/precioMay`, textoPrecioLista(precios[f.material]?.mayorista));
 				b.setProperty(`/repuestos/${i}/precioRet`, textoPrecioLista(precios[f.material]?.retail));
+				// Un precio marcado para borrado en SAP se avisa aparte: no cuenta para vender.
+				b.setProperty(`/repuestos/${i}/borradoMay`, !!precios[f.material]?.mayorista?.borrado);
+				b.setProperty(`/repuestos/${i}/borradoRet`, !!precios[f.material]?.retail?.borrado);
 			});
 		} catch (error) {
 			// Los precios de lista son informativos: si fallan, las columnas quedan con raya y la busqueda sigue.

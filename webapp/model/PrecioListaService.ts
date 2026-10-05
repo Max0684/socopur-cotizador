@@ -20,6 +20,8 @@ export interface PrecioListaSap {
 	Um?: string;
 	/** Inicio de validez (AAAA-MM-DD). */
 	Datab?: string;
+	/** "X" / true si el registro de condicion esta MARCADO PARA BORRADO en SAP (no se usa para vender). */
+	Borrado?: boolean | string;
 }
 
 export interface PrecioLista {
@@ -27,6 +29,8 @@ export interface PrecioLista {
 	importe: number;
 	moneda: string;
 	kschl: string;
+	/** true si el unico precio que hay esta marcado para borrado en SAP: se muestra como aviso, no como precio vigente. */
+	borrado: boolean;
 }
 
 export interface PreciosDeLista {
@@ -42,18 +46,23 @@ const numero = (v: number | string | undefined): number => {
 	return Number.isFinite(n) ? n : 0;
 };
 
+const esBorrado = (f: PrecioListaSap): boolean => f.Borrado === true || f.Borrado === "X";
+
 /**
- * Elige UN precio entre las filas de un mismo material y canal: gana Z300 sobre Z200; con la misma condicion, el de inicio de validez
- * mas reciente (hay materiales con dos registros vigentes solapados). El importe se lleva a 1 unidad si el precio es "por" varias.
+ * Elige UN precio entre las filas de un mismo material y canal. Los registros VIGENTES mandan siempre: gana Z300 sobre Z200 y, con la
+ * misma condicion, el de inicio de validez mas reciente (hay materiales con dos registros solapados). Solo si NO hay ninguno vigente y
+ * existe uno marcado para borrado, se devuelve ese, con `borrado` en true, para avisar al vendedor. El importe se lleva a 1 unidad.
  */
 export function elegirPrecioLista(filas: PrecioListaSap[]): PrecioLista | undefined {
-	const ordenadas = [...filas].sort((a, b) => (PRIORIDAD[b.Kschl] ?? 0) - (PRIORIDAD[a.Kschl] ?? 0) || (b.Datab ?? "").localeCompare(a.Datab ?? ""));
+	const vigentes = filas.filter((f) => !esBorrado(f));
+	const candidatas = vigentes.length ? vigentes : filas;
+	const ordenadas = [...candidatas].sort((a, b) => (PRIORIDAD[b.Kschl] ?? 0) - (PRIORIDAD[a.Kschl] ?? 0) || (b.Datab ?? "").localeCompare(a.Datab ?? ""));
 	const f = ordenadas[0];
 	if (!f) {
 		return undefined;
 	}
 	const por = numero(f.Por) || 1;
-	return { importe: numero(f.Importe) / por, moneda: f.Moneda || "PEN", kschl: f.Kschl };
+	return { importe: numero(f.Importe) / por, moneda: f.Moneda || "PEN", kschl: f.Kschl, borrado: vigentes.length === 0 };
 }
 
 /** Agrupa las filas por material y arma el precio mayorista (canal 10) y retail (canal 11) de cada uno. */

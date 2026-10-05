@@ -55,3 +55,23 @@ test("filtroPrecioLista: organizacion, canales 10 y 11 y como maximo 50 material
 	assert.equal((filtro.match(/Matnr eq/g) ?? []).length, 50);
 	assert.ok(filtroPrecioLista("1103", ["O'B"]).includes("O''B"));
 });
+
+test("elegirPrecioLista: un precio marcado para borrado solo se devuelve si no hay ninguno vigente, y avisa", () => {
+	const soloBorrado = elegirPrecioLista([f({ Importe: "64.00", Borrado: "X" })]);
+	assert.equal(soloBorrado?.importe, 64);
+	assert.equal(soloBorrado?.borrado, true);
+	const conVigente = elegirPrecioLista([f({ Importe: "64.00", Borrado: true }), f({ Importe: "65.30", Datab: "2025-01-01" })]);
+	assert.equal(conVigente?.importe, 65.3);
+	assert.equal(conVigente?.borrado, false);
+	assert.equal(elegirPrecioLista([f({ Importe: "70" })])?.borrado, false);
+});
+
+test("preciosPorMaterial: el canal con solo un precio borrado queda marcado; el otro canal sigue vigente (SFX-18X300-C051 en 1203)", () => {
+	const r = preciosPorMaterial([
+		f({ Vtweg: "10", Importe: "65.30" }),
+		f({ Vtweg: "11", Importe: "64.00", Borrado: "X" })
+	]);
+	assert.equal(r["SFX-18X300-C051"].mayorista?.borrado, false);
+	assert.equal(r["SFX-18X300-C051"].retail?.borrado, true);
+	assert.equal(textoPrecioLista(r["SFX-18X300-C051"].retail), "S/ 64.00");
+});
