@@ -376,8 +376,8 @@
 											<Title text="{oferta>titulo}" />
 											<ToolbarSpacer />
 											<Label text="{i18n>modalidad}" />
-											<Select selectedKey="{oferta>modalidad}" width="18rem" change=".onCambiaModalidadGrupo" enabled="{= ${oferta>/pedidos}.length === 0 }" items="{oferta>opciones}">
-												<core:Item key="{oferta>key}" text="{oferta>texto}" />
+											<Select selectedKey="{oferta>modalidad}" width="26rem" change=".onCambiaModalidadGrupo" enabled="{= ${oferta>/pedidos}.length === 0 }" items="{oferta>opciones}">
+												<core:Item key="{oferta>key}" text="{= ${oferta>key}.toUpperCase() + ' · ' + ${oferta>texto} }" />
 											</Select>
 										</OverflowToolbar>
 									</headerToolbar>

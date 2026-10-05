@@ -1510,6 +1510,14 @@ export default class Oferta extends Controller {
 		grupo.claseOferta = m.claseOferta || porConfirmar;
 		grupo.clasePedido = m.clasePedido || porConfirmar;
 		grupo.canal = m.canal || "\u2014";
+		// El titulo muestra el sector del material; si SAP exige otro sector para la cabecera de la oferta (canal 11 y 14 = 99), se dice.
+		const primera = grupo.lineas[0];
+		if (primera) {
+			const canalGrupo = canalDe(m.canal);
+			const sectorCab = sectorDeCabecera(canalGrupo, primera.sector, primera.orgVentas);
+			const base = `${primera.grupo} · ${i18n.getText("grupoOrg", [primera.orgVentas, primera.sector]) as string}`;
+			grupo.titulo = canalGrupo && sectorCab !== primera.sector ? `${base} · ${i18n.getText("grupoSectorCab", [sectorCab]) as string}` : base;
+		}
 		// El cliente debe estar dado de alta en el area de ventas (organizacion + canal) de la modalidad
 		const cliente = oferta.getProperty("/cliente") as Cliente | null;
 		const canalNum = canalDe(m.canal);
