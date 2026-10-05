@@ -573,7 +573,10 @@ export default class Oferta extends Controller {
 				soloStock,
 				sectorDeCabecera
 			);
-			const conDatos = resultado.filas.map((f) => ({ ...f, precioUsd: 0, condicionPct: 0, promocion: null, sinPrecio: true }));
+			const sectores = (mock.getProperty("/sectores/repuestos") as { key: string; text: string }[]) ?? [];
+			// El sector del material con su descripcion ("50 · Rep. alternativos y llantas"); sin descripcion conocida, solo el codigo.
+			const textoSector = (c: string): string => (sectores.find((x) => x.key === c)?.text ?? c).replace(/^(\d+)\s*[—–-]\s*/, "$1 · ");
+			const conDatos = resultado.filas.map((f) => ({ ...f, sectorTxt: textoSector(f.sector), precioUsd: 0, condicionPct: 0, promocion: null, sinPrecio: true }));
 			b.setProperty("/repuestos", conDatos);
 			b.setProperty("/parcial", resultado.parcial);
 			void this.cargarPreciosVisibles(conDatos.length);
