@@ -215,6 +215,11 @@ interface Linea extends LineaMock {
 	isc?: number;
 	igvImporte?: number;
 	totalConImpuestos?: number;
+	/** Valor neto de la linea (sin impuestos) y el que se muestra en la columna del valor: el neto si se conoce; si no, el total. */
+	totalNeto?: number;
+	totalMostrado?: number;
+	/** true si `total` ya incluye el IGV (precio final de la lista) y igvImporte / isc son lo que SAP extrae de el. */
+	impuestoIncluido?: boolean;
 	/** true si isc e igvImporte son la ESTIMACION de la simulacion de SAP antes de guardar (despues de guardar son los del documento). */
 	impuestoEstimado?: boolean;
 	iscPct?: number;
@@ -1025,14 +1030,20 @@ export default class Oferta extends Controller {
 					l.total = this.redondear(l.cantidad * l.precio);
 					l.sinPrecioVigente = false;
 					if (imp) {
+						// El precio de lista INCLUYE el IGV: SAP lo extrae del precio final (IGV = precio x 18/118). El total con impuestos es
+						// el precio final y el valor neto es ese precio menos lo extraido; no se suma el impuesto encima.
 						l.isc = imp.isc;
 						l.igvImporte = imp.igv;
-						l.totalConImpuestos = this.redondear(l.total + imp.isc + imp.igv);
+						l.totalConImpuestos = this.redondear(l.total);
+						l.totalNeto = this.redondear(l.total - imp.isc - imp.igv);
+						l.impuestoIncluido = true;
 						l.impuestoEstimado = true;
 					} else {
 						l.isc = undefined;
 						l.igvImporte = undefined;
 						l.totalConImpuestos = undefined;
+						l.totalNeto = undefined;
+						l.impuestoIncluido = undefined;
 					}
 				})
 			);
@@ -3517,8 +3528,9 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 				});
 			}
 			const grupo = mapa.get(clave) as Grupo;
+			linea.totalMostrado = linea.totalNeto ?? linea.total;
 			grupo.lineas.push(linea);
-			grupo.subtotal += linea.total;
+			grupo.subtotal += linea.totalMostrado;
 		});
 		const grupos = Array.from(mapa.values());
 		grupos.forEach((g) => this.aplicarModalidadGrupo(g));
@@ -3533,6 +3545,7 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 			...totales,
 			igvTxt: totales.igvConocido ? this.formatMonto(totales.igv) : "\u2014",
 			iscEtq: this.i18n().getText(totales.desglose ? "isc" : "iscIncluido") as string,
+			estimado: lineas.length > 0 && lineas.every((l) => l.impuestoEstimado),
 			igvEtq: `${this.i18n().getText(igvExonerado(totales) ? "igvExonerado" : "igv") as string}${lineas.length > 0 && lineas.every((l) => l.impuestoEstimado) ? ` ${this.i18n().getText("estimado") as string}` : ""}`
 		});
 		if (oferta.getProperty("/cliente") && !oferta.getProperty("/entregaDatos/direccionId")) {

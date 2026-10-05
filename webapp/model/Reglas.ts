@@ -153,6 +153,11 @@ export interface LineaTotales {
 	/** ISC e IGV por separado (ZISC y ZIGV del documento SAP); si todas las lineas los traen, el total es neto + ISC + IGV. */
 	isc?: number;
 	igvImporte?: number;
+	/**
+	 * true si `total` es el precio FINAL (con IGV incluido) y isc / igvImporte son la parte de impuesto que SAP EXTRAE de ese precio: asi
+	 * funciona la lista Z300 para un cliente sujeto a IGV (neto = precio / 1.18; IGV = precio x 18/118). El total NO se suma de nuevo.
+	 */
+	impuestoIncluido?: boolean;
 }
 
 export interface TotalesOferta {
@@ -190,6 +195,12 @@ export function totalesDeOferta(lineas: LineaTotales[]): TotalesOferta {
 		// Documento SAP: el valor de las lineas ya es neto; se suma el ISC y el IGV reales (el IGV puede ser 0 si esta exonerado).
 		const iscSap = redondear(lineas.reduce((acc, l) => acc + (l.isc ?? 0), 0));
 		const igvSap = redondear(lineas.reduce((acc, l) => acc + (l.igvImporte ?? 0), 0));
+		if (lineas.every((l) => l.impuestoIncluido)) {
+			// Estimacion antes de guardar: el total ya es el precio final; el neto es el precio sin los impuestos que SAP extrae.
+			const bruto = redondear(subtotal);
+			const neto = redondear(bruto - iscSap - igvSap);
+			return { subtotal: neto, neto, isc: iscSap, hayIsc: iscSap > 0, igv: igvSap, igvConocido: true, total: bruto, desglose: true };
+		}
 		return { subtotal, neto: redondear(subtotal), isc: iscSap, hayIsc: iscSap > 0, igv: igvSap, igvConocido: true, total: redondear(subtotal + iscSap + igvSap), desglose: true };
 	}
 	const isc = redondear(lineas.reduce((acc, l) => acc + l.total - l.total / (1 + (l.iscPct ?? 0) / 100), 0));

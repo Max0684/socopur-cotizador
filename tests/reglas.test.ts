@@ -266,3 +266,32 @@ test("igvExonerado: solo con base mayor que cero; un documento en cero no es una
 	assert.equal(igvExonerado({ desglose: true, igv: 18, subtotal: 100 }), false);
 	assert.equal(igvExonerado({ desglose: false, igv: 0, subtotal: 100 }), false);
 });
+
+test("totalesDeOferta con impuesto INCLUIDO en el precio (lista Z300): neto 55.34 + IGV 9.96 = total 65.30, sin sumar el IGV otra vez", () => {
+	const t = totalesDeOferta([{ total: 65.3, isc: 0, igvImporte: 9.96, impuestoIncluido: true }]);
+	assert.equal(t.total, 65.3);
+	assert.equal(t.neto, 55.34);
+	assert.equal(t.subtotal, 55.34);
+	assert.equal(t.igv, 9.96);
+	assert.equal(t.igvConocido, true);
+	assert.equal(t.desglose, true);
+});
+
+test("totalesDeOferta con impuesto incluido: varias lineas y con ISC; un cliente exonerado (IGV 0) deja neto = total", () => {
+	const dos = totalesDeOferta([
+		{ total: 65.3, isc: 0, igvImporte: 9.96, impuestoIncluido: true },
+		{ total: 118, isc: 0, igvImporte: 18, impuestoIncluido: true }
+	]);
+	assert.equal(dos.total, 183.3);
+	assert.equal(dos.neto, 155.34);
+	assert.equal(dos.igv, 27.96);
+	const exonerado = totalesDeOferta([{ total: 2, isc: 0, igvImporte: 0, impuestoIncluido: true }]);
+	assert.equal(exonerado.neto, 2);
+	assert.equal(exonerado.total, 2);
+});
+
+test("totalesDeOferta de un documento SAP guardado (sin impuesto incluido) sigue sumando neto + ISC + IGV", () => {
+	const t = totalesDeOferta([{ total: 55.34, isc: 0, igvImporte: 9.96 }]);
+	assert.equal(t.total, 65.3);
+	assert.equal(t.neto, 55.34);
+});
