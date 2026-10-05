@@ -351,6 +351,11 @@ export function organizacionesDeSociedad(sociedad: string): OpcionVendedor[] {
 	});
 }
 
+/** "1203 Repuestos Promogesa" para una organizacion conocida; si no se conoce, solo el codigo. */
+export function textoOrganizacion(vkorg: string): string {
+	return organizacionesDeSociedad("").find((o) => o.key === vkorg)?.text ?? vkorg;
+}
+
 /** Organizacion que se propone segun el tipo de venta: repuestos 1X03, vehiculos 1X01 (X = digito de la sociedad). Sin sociedad, la de Socopur. */
 export function orgPorDefecto(tipo: string, sociedad: string): string {
 	const base = (sociedad || "1100").slice(0, 2);

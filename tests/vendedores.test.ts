@@ -65,3 +65,11 @@ test("organizacionesDeSociedad: cada sociedad ofrece sus tres organizaciones (ve
 	assert.equal(orgPorDefecto("vehiculos", "1300"), "1301");
 	assert.equal(orgPorDefecto("repuestos", ""), "1103");
 });
+
+test("textoOrganizacion: descripcion de las organizaciones conocidas; una desconocida queda con su codigo", async () => {
+	const { textoOrganizacion } = await import("../webapp/model/VendedoresService.ts");
+	assert.equal(textoOrganizacion("1203"), "1203 Repuestos Promogesa");
+	assert.equal(textoOrganizacion("1101"), "1101 Vehículos Socopur");
+	assert.equal(textoOrganizacion("1302"), "1302 Taller Socopur Selva");
+	assert.equal(textoOrganizacion("9999"), "9999");
+});

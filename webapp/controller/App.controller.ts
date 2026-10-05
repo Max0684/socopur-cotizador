@@ -16,6 +16,7 @@ import {
 	claveVendedor,
 	cargarVendedores,
 	pinCorrecto,
+	textoOrganizacion,
 	recordarVendedor,
 	vendedorRecordado
 } from "com/socopur/cotizador/model/VendedoresService";
@@ -78,6 +79,7 @@ export default class App extends Controller {
 		mock.setProperty("/perfil/sede", textoSede(vendedor.werks));
 		mock.setProperty("/perfil/ciudad", ciudadDeCentro(vendedor.werks)?.clave ?? "");
 		mock.setProperty("/perfil/orgVentas", vendedor.vkorg);
+		mock.setProperty("/perfil/orgVentasTxt", textoOrganizacion(vendedor.vkorg));
 	}
 
 	private activos(): Vendedor[] {
