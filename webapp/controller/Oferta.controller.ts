@@ -910,11 +910,18 @@ export default class Oferta extends Controller {
 		});
 		const centros = this.centrosDe(canal);
 		oferta.setProperty("/opcionesCentro", centros);
-		if (!centros.some((c) => c.key === oferta.getProperty("/perfil/centro"))) {
-			// Si el centro ya no es valido para el canal, se propone el principal de la sede del vendedor (no uno de otra ciudad).
+		const centroActual = String(oferta.getProperty("/perfil/centro") ?? "");
+		if (!centros.some((c) => c.key === centroActual)) {
+			// El centro del perfil no es valido para este canal. Solo se reemplaza por otro de la MISMA ciudad y sociedad del vendedor;
+			// si no hay ninguno, se deja el del perfil (nunca uno de otra sociedad) y el aviso explica que no esta habilitado.
 			const ciudad = ciudadPorClave(String(oferta.getProperty("/perfil/ciudad") ?? ""));
-			const principal = ciudad ? principalDe(ciudad, sociedadDeCentro(String(oferta.getProperty("/perfil/centro") ?? ""))).centro : undefined;
-			oferta.setProperty("/perfil/centro", centros.find((c) => c.key === principal)?.key ?? centros[0]?.key ?? "");
+			const sociedad = sociedadDeCentro(centroActual);
+			const propios = centros.filter((c) => !!ciudad && ciudad.centros.includes(c.key) && sociedadDeCentro(c.key) === sociedad);
+			const principal = ciudad ? principalDe(ciudad, sociedad).centro : "";
+			const elegido = propios.find((c) => c.key === principal) ?? propios[0];
+			if (elegido) {
+				oferta.setProperty("/perfil/centro", elegido.key);
+			}
 		}
 		this.refrescarListasSede();
 		oferta.setProperty("/guardado", { visible: false, texto: "" });
