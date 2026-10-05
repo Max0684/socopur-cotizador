@@ -1,4 +1,5 @@
 import Controller from "sap/ui/core/mvc/Controller";
+import View from "sap/ui/core/mvc/View";
 import UIComponent from "sap/ui/core/UIComponent";
 import Router from "sap/ui/core/routing/Router";
 import Filter from "sap/ui/model/Filter";
@@ -34,6 +35,12 @@ export default class Main extends Controller {
 			}
 			this.actualizarVigencias(mock);
 		});
+	}
+
+	/** El usuario SAP es compartido: el boton del vendedor reabre la identificacion que vive en el controlador de la App. */
+	public onCambiarVendedor(): void {
+		const raiz = (this.getOwnerComponent() as UIComponent).getRootControl() as View;
+		void (raiz.getController() as unknown as { onCambiarVendedor(): Promise<void> }).onCambiarVendedor();
 	}
 
 	/** La lista lee del servicio real solo con ?odata=1 en la URL; sin la bandera sigue con los datos simulados. */

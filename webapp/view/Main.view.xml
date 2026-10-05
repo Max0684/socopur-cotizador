@@ -21,6 +21,13 @@
 				</f:content>
 				<f:actions>
 					<Button
+						id="vendedorBtn"
+						text="{mock>/perfil/vendedor}"
+						tooltip="{i18n>vendIdCambiar}"
+						type="Transparent"
+						icon="sap-icon://person-placeholder"
+						press=".onCambiarVendedor" />
+					<Button
 						id="nuevaOfertaBtn"
 						text="{i18n>nuevaOferta}"
 						type="Emphasized"

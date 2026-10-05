@@ -1,0 +1,42 @@
+<core:FragmentDefinition
+	xmlns="sap.m"
+	xmlns:core="sap.ui.core">
+	<Dialog
+		id="dlgVendedor"
+		title="{i18n>vendIdTitulo}"
+		contentWidth="30rem"
+		draggable="false"
+		resizable="false"
+		escapeHandler=".onVendedorEscape">
+		<content>
+			<VBox class="sapUiSmallMargin">
+				<MessageStrip text="{i18n>vendIdNota}" type="Information" showIcon="true" class="sapUiSmallMarginBottom" />
+				<SearchField
+					id="vendBuscar"
+					placeholder="{i18n>vendIdBuscar}"
+					liveChange=".onVendedorBuscar"
+					search=".onVendedorBuscar"
+					class="sapUiTinyMarginBottom" />
+				<List
+					id="vendLista"
+					mode="SingleSelectMaster"
+					items="{vend>/visibles}"
+					noDataText="{i18n>vendIdNinguno}"
+					selectionChange=".onVendedorElegido"
+					class="sapUiSmallMarginBottom">
+					<StandardListItem
+						title="{vend>nombre}"
+						description="{vend>pernr} · {vend>tipo}"
+						icon="sap-icon://person-placeholder" />
+				</List>
+				<HBox alignItems="Center" visible="{= !!${vend>/elegido} }">
+					<Label text="{i18n>vendIdPin}" labelFor="vendPin" class="sapUiSmallMarginEnd" visible="{vend>/pedirPin}" />
+					<Input id="vendPin" type="Password" width="12rem" value="{vend>/pin}" visible="{vend>/pedirPin}" valueState="{vend>/estadoPin}" valueStateText="{i18n>vendIdPinMal}" submit=".onVendedorEntrar" />
+				</HBox>
+			</VBox>
+		</content>
+		<beginButton>
+			<Button text="{i18n>vendIdEntrar}" type="Emphasized" enabled="{= !!${vend>/elegido} }" press=".onVendedorEntrar" />
+		</beginButton>
+	</Dialog>
+</core:FragmentDefinition>

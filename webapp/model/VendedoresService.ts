@@ -1,0 +1,159 @@
+import type ODataModel from "sap/ui/model/odata/v4/ODataModel";
+import type JSONModel from "sap/ui/model/json/JSONModel";
+
+/**
+ * Vendedor del Cotizador. El usuario SAP es compartido: cada vendedor se identifica con su PERNR (empleado HR, el mismo
+ * que SAP guarda como interlocutor VE en VBPA) y de su fila salen los valores por defecto de la oferta.
+ * Rol: "V" vendedor, "A" administrador (personal de TI que mantiene la tabla YCOTIZ_VENDEDOR).
+ */
+export interface Vendedor {
+	pernr: string;
+	nombre: string;
+	/** "repuestos" | "vehiculos". */
+	tipo: string;
+	vkorg: string;
+	vkbur: string;
+	werks: string;
+	lgort: string;
+	/** Canal por defecto. */
+	vtweg: string;
+	zterm: string;
+	vsbed: string;
+	waers: string;
+	vigenciaDias: number;
+	rol: string;
+	/** SHA-256 en hexadecimal; vacio = sin PIN. */
+	pinHash: string;
+	activo: boolean;
+}
+
+/** Fila de la entidad Vendedor (YCOTIZ_VENDEDOR). Los nombres se confirman cuando se publique la entidad. */
+interface VendedorSap {
+	Pernr: string;
+	Nombre?: string;
+	TipoVenta?: string;
+	Vkorg?: string;
+	Vkbur?: string;
+	Werks?: string;
+	Lgort?: string;
+	Vtweg?: string;
+	Zterm?: string;
+	Vsbed?: string;
+	Waers?: string;
+	VigenciaDias?: number;
+	Rol?: string;
+	PinHash?: string;
+	Activo?: string;
+}
+
+const CLAVE_SESION = "cotizador.vendedor";
+
+/** SHA-256 en hexadecimal del PIN (el PIN nunca se guarda ni se envia en claro). */
+export async function hashPin(pin: string): Promise<string> {
+	const bytes = new TextEncoder().encode(pin);
+	const resumen = await crypto.subtle.digest("SHA-256", bytes);
+	return Array.from(new Uint8Array(resumen)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** Los PERNR son de 8 digitos; se aceptan sin ceros a la izquierda. */
+export function normalizarPernr(texto: string): string {
+	const t = texto.trim();
+	return /^\d+$/.test(t) ? t.padStart(8, "0") : t;
+}
+
+/** Lee los vendedores ACTIVOS de SAP. Sin modelo OData (modo prototipo) devuelve los del mock. */
+export async function cargarVendedores(modelo: ODataModel | undefined, prototipo: Vendedor[]): Promise<Vendedor[]> {
+	if (!modelo) {
+		return prototipo;
+	}
+	const binding = modelo.bindList("/Vendedor", undefined, undefined, undefined, { $filter: "Activo eq 'X'", $orderby: "Nombre" });
+	const contextos = await binding.requestContexts(0, 500);
+	return contextos.map((c) => {
+		const v = c.getObject() as VendedorSap;
+		return {
+			pernr: normalizarPernr(v.Pernr),
+			nombre: v.Nombre ?? v.Pernr,
+			tipo: v.TipoVenta === "V" ? "vehiculos" : "repuestos",
+			vkorg: v.Vkorg ?? "",
+			vkbur: v.Vkbur ?? "",
+			werks: v.Werks ?? "",
+			lgort: v.Lgort ?? "",
+			vtweg: v.Vtweg ?? "",
+			zterm: v.Zterm ?? "",
+			vsbed: v.Vsbed ?? "",
+			waers: v.Waers ?? "PEN",
+			vigenciaDias: v.VigenciaDias ?? 7,
+			rol: v.Rol ?? "V",
+			pinHash: v.PinHash ?? "",
+			activo: v.Activo === "X"
+		};
+	});
+}
+
+/** Busca por PERNR o por parte del nombre (sin distinguir mayusculas ni tildes). */
+export function buscarVendedores(lista: Vendedor[], texto: string): Vendedor[] {
+	const limpiar = (s: string): string => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+	const t = limpiar(texto.trim());
+	if (!t) {
+		return lista;
+	}
+	return lista.filter((v) => limpiar(v.nombre).includes(t) || v.pernr.includes(normalizarPernr(texto)) || v.pernr.endsWith(t));
+}
+
+/** Comprueba el PIN: sin PIN guardado se acepta; con PIN, debe coincidir el hash. */
+export async function pinCorrecto(vendedor: Vendedor, pin: string): Promise<boolean> {
+	if (!vendedor.pinHash) {
+		return true;
+	}
+	return (await hashPin(pin)) === vendedor.pinHash;
+}
+
+/**
+ * Carga el perfil del vendedor en el modelo de pantalla (/perfil). Solo toca los valores por defecto; los campos que el
+ * vendedor cambia en cada oferta siguen siendo editables. Los valores vacios del perfil no pisan los actuales.
+ */
+export function aplicarPerfil(mock: JSONModel, v: Vendedor): void {
+	const poner = (ruta: string, valor: string | number): void => {
+		if (valor !== "" && valor !== undefined) {
+			mock.setProperty(ruta, valor);
+		}
+	};
+	mock.setProperty("/perfil/pernr", v.pernr);
+	mock.setProperty("/perfil/vendedor", `${v.pernr} — ${v.nombre}`);
+	mock.setProperty("/perfil/rol", v.rol);
+	poner("/perfil/oficina", v.vkbur);
+	poner("/perfil/centro", v.werks);
+	poner("/perfil/canal", v.vtweg);
+	poner("/perfil/formaPago", v.zterm);
+	poner("/perfil/expedicion", v.vsbed);
+	poner("/perfil/moneda", v.waers);
+	poner("/perfil/vigenciaDias", v.vigenciaDias);
+	mock.setProperty("/perfil/busqueda/tipo", v.tipo);
+	if (v.vtweg) {
+		mock.setProperty("/perfil/busqueda/canal", v.vtweg);
+	}
+	if (v.vkorg) {
+		mock.setProperty(`/perfil/busqueda/orgs/${v.tipo}`, v.vkorg);
+	}
+}
+
+/** Recuerda al vendedor en la pestana (no entre sesiones): al recargar la pagina no pide el PERNR otra vez. */
+export function recordarVendedor(pernr: string | undefined): void {
+	try {
+		if (pernr) {
+			sessionStorage.setItem(CLAVE_SESION, pernr);
+		} else {
+			sessionStorage.removeItem(CLAVE_SESION);
+		}
+	} catch {
+		// sin almacenamiento: se vuelve a pedir en cada carga
+	}
+}
+
+export function vendedorRecordado(): string {
+	try {
+		return sessionStorage.getItem(CLAVE_SESION) ?? "";
+	} catch {
+		return "";
+	}
+}
