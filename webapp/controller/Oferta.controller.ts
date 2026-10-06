@@ -10,7 +10,7 @@ import { agruparVehiculos, buscarVehiculos, filtrarVehiculos } from "com/socopur
 import { almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, gruposParaGuardar, igvExonerado, modalidadPorDefecto, sectorDeCabecera, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
 import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type VinAsignado } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
-import { buscarRepuestosConStock, motivoVacio } from "com/socopur/cotizador/model/MaterialesService";
+import { buscarRepuestosConStock, disponibilidadPorAlmacen, motivoVacio } from "com/socopur/cotizador/model/MaterialesService";
 import { cargarPreciosLista, precioListaDisponible, textoPrecioLista } from "com/socopur/cotizador/model/PrecioListaService";
 import { listaDeSede } from "com/socopur/cotizador/model/Ciudades";
 import { ciudadPorClave, principalDe, sociedadDeCentro } from "com/socopur/cotizador/model/Ciudades";
@@ -670,6 +670,33 @@ export default class Oferta extends Controller {
 		return canalDe(modalidades.find((m) => m.key === elegida)?.canal) || canalPerfil;
 	}
 
+	/**
+	 * Avisa si el ALMACEN del perfil no tiene stock DISPONIBLE de un material elegido: SAP rechaza el pedido cuando el disponible (ATP) no
+	 * alcanza, aunque haya stock fisico (comprometido por otros documentos). Es un aviso, no un bloqueo: la cantidad se decide despues.
+	 */
+	private async avisarSinDisponibleEnAlmacen(elegidos: (Vehiculo & Repuesto & { tipo: string })[]): Promise<void> {
+		const oferta = this.modeloOferta();
+		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel | undefined;
+		if (!odata || !this.usarOData()) {
+			return;
+		}
+		const perfil = oferta.getProperty("/perfil") as Record<string, string>;
+		const almacen = almacenDeCentro(perfil.centro, this.modeloMock().getProperty("/opciones/almacenPorCentro") ?? {}, perfil.almacen, perfil.centro);
+		const canal = canalDe(String(oferta.getProperty("/perfil/busqueda/canal") ?? "11"));
+		for (const m of elegidos.filter((x) => x.origen === "sap")) {
+			try {
+				const almacenes = await disponibilidadPorAlmacen(odata, m.orgVentas, this.canalDeDocumento(m.orgVentas, m.sectorOferta, "repuestos") || canal, perfil.centro, m.material);
+				const delPerfil = almacenes.find((a) => a.lgort === almacen);
+				if (almacenes.length > 0 && (delPerfil?.disponible ?? 0) <= 0) {
+					const otros = almacenes.filter((a) => a.disponible > 0).map((a) => `${a.lgort} (${a.disponible})`);
+					MessageBox.warning(this.i18n().getText("sinDisponibleAlmacen", [almacen, m.material, otros.length ? otros.join(", ") : this.i18n().getText("ninguno") as string]) as string);
+				}
+			} catch {
+				// Si no se puede leer la disponibilidad no se avisa; SAP la comprobara al crear el pedido.
+			}
+		}
+	}
+
 	/** Cuantos precios se calculan de una vez en la lista (cada uno es una consulta a SAP; el resto sale "al elegir"). */
 	private static readonly PRECIOS_EN_LISTA = 20;
 	private busquedaPrecios = 0;
@@ -831,6 +858,9 @@ export default class Oferta extends Controller {
 		}
 		if (!(await this.completarPreciosSap(elegidos))) {
 			return;
+		}
+		if (elegidos[0].tipo === "repuestos") {
+			void this.avisarSinDisponibleEnAlmacen(elegidos);
 		}
 		if (elegidos[0].tipo === "vehiculos") {
 			oferta.setProperty("/elegidosLista", []);
@@ -2571,7 +2601,10 @@ export default class Oferta extends Controller {
 			if (error instanceof OfertaEnProcesoError) {
 				MessageBox.information(error.message);
 			} else {
-				MessageBox.error(i18n.getText("pedidoError", [this.motivoDeError(error)]) as string);
+				const motivo = this.motivoDeError(error);
+				// Sin stock disponible en el almacen: se explica la causa mas probable y que hacer.
+				const ayuda = /stock disponible/i.test(motivo) ? ` ${i18n.getText("pedidoSinStockAyuda") as string}` : "";
+				MessageBox.error(`${i18n.getText("pedidoError", [motivo]) as string}${ayuda}`);
 			}
 		} finally {
 			vista?.setBusy(false);

@@ -185,6 +185,15 @@ export interface PedidoGenerado {
  */
 export async function crearPedidoGrupo(modelo: ODataModel, cotizId: string, grupoNo: string, espera: EsperaOfertas = {}): Promise<PedidoGenerado> {
 	const ruta = `/Grupo(CotizId=${cotizId},GrupoNo='${grupoNo.replace(/'/g, "''")}',IsActiveEntity=true)`;
+	const leerComentario = async (): Promise<string> =>
+		(
+			(await modelo
+				.bindContext(`/Cotizacion(CotizId=${cotizId},IsActiveEntity=true)`, undefined, { $select: "Comentario", $$ownRequest: true })
+				.requestObject()) as Pick<Cotizacion, "Comentario">
+		).Comentario ?? "";
+	// El Estado del grupo queda en "P" tanto si el pedido se crea como si SAP lo rechaza: el fallo solo se ve en el Comentario de la cotizacion.
+	const marcador = `[Pedido grupo ${grupoNo}]`;
+	const comentarioAntes = await leerComentario().catch(() => "");
 	const operacion = modelo.bindContext(`${ruta}/${NS}.crearPedido(...)`);
 	// ui5lint-disable-next-line no-deprecated-api -- invoke() existe desde UI5 1.123; el servidor de Socopur y los tipos son 1.120
 	await operacion.execute("$auto", true);
@@ -194,11 +203,17 @@ export async function crearPedidoGrupo(modelo: ODataModel, cotizId: string, grup
 		const intervalo = espera.intervaloMs ?? 2500;
 		const maximo = espera.maximoMs ?? 60000;
 		const pausa = espera.pausa ?? pausaReal;
-		for (let transcurrido = 0; transcurrido < maximo; transcurrido += intervalo) {
+		for (let transcurrido = 0, vuelta = 0; transcurrido < maximo; transcurrido += intervalo, vuelta++) {
 			await pausa(intervalo);
 			grupo = (await modelo.bindContext(ruta, undefined, { $select: "GrupoNo,Estado,VbelnPedido,Liberacion", $$ownRequest: true }).requestObject()) as Grupo;
 			if (grupo.VbelnPedido || grupo.Estado !== ESTADO_PEDIDO_EN_PROCESO) {
 				break;
+			}
+			// Sin numero de pedido todavia: si SAP dejo un motivo de rechazo del pedido de ESTE grupo, no se espera mas. Si el comentario es
+			// el mismo de antes (un intento anterior del mismo grupo) se confirma tras dos vueltas, para no tomar un error viejo por nuevo.
+			const comentario = await leerComentario().catch(() => "");
+			if (comentario.includes(marcador) && (comentario !== comentarioAntes || vuelta >= 2)) {
+				throw new Error(comentario.slice(comentario.lastIndexOf(marcador)));
 			}
 		}
 		if (!grupo.VbelnPedido && grupo.Estado === ESTADO_PEDIDO_EN_PROCESO) {

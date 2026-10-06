@@ -351,3 +351,29 @@ export async function buscarRepuestosConStock(
 	}
 	return { filas: combinarStock(aMostrar, libreTotal, atp), coinciden, parcial };
 }
+
+export interface DisponibleAlmacen {
+	lgort: string;
+	libre: number;
+	disponible: number;
+}
+
+/** Filas de MaterialAtp a disponibilidad por almacen de un material; las filas que SAP no pudo calcular (Respuesta != 0) se omiten. */
+export function disponibilidadPorAlmacenDeFilas(
+	filas: { Matnr: string; Lgort?: string; StockLibre: number | string; Disponible: number | string; Respuesta?: number | string }[],
+	matnr: string
+): DisponibleAlmacen[] {
+	return filas
+		.filter((f) => f.Matnr === matnr && f.Lgort && Number(f.Respuesta ?? 0) === 0)
+		.map((f) => ({ lgort: f.Lgort as string, libre: Number(f.StockLibre), disponible: Number(f.Disponible) }))
+		.sort((a, b) => a.lgort.localeCompare(b.lgort));
+}
+
+/**
+ * Almacenes de un centro con su stock libre y DISPONIBLE (ATP) de un material. Un pedido solo se crea si el disponible del almacen alcanza:
+ * el stock fisico puede estar comprometido por otros documentos (visto en el 0004 del centro 2001: 1 fisico, 1.000 reservados).
+ */
+export async function disponibilidadPorAlmacen(modelo: ODataModel, vkorg: string, vtweg: string, werks: string, matnr: string): Promise<DisponibleAlmacen[]> {
+	const contextos = await modelo.bindList("/MaterialAtp", undefined, undefined, undefined, { $filter: filtroStock(vkorg, vtweg, werks, [matnr]) }).requestContexts(0, 50);
+	return disponibilidadPorAlmacenDeFilas(contextos.map((c) => c.getObject() as Parameters<typeof disponibilidadPorAlmacenDeFilas>[0][number]), matnr);
+}

@@ -208,3 +208,20 @@ test("sector de cabecera con la regla real en Promogesa y Selva: 1203/11/50 y 13
 	// Vehiculos y taller no cambian: el sector del material.
 	assert.equal(filaDeMaterial({ ...m, Spart: "16" }, "1101", "11", sectorDeCabecera).sectorOferta, "16");
 });
+
+test("disponibilidadPorAlmacenDeFilas: por almacen, solo el material pedido y sin las filas que SAP no pudo calcular (caso 2001: 0001 con 150 y 0004 con 1 fisico y 0 disponible)", async () => {
+	const { disponibilidadPorAlmacenDeFilas } = await import("../webapp/model/MaterialesService.ts");
+	const r = disponibilidadPorAlmacenDeFilas(
+		[
+			{ Matnr: "SFX-18X300-C051", Lgort: "0004", StockLibre: "1.000", Disponible: "0.000", Respuesta: 0 },
+			{ Matnr: "SFX-18X300-C051", Lgort: "0001", StockLibre: "150.000", Disponible: "149.000", Respuesta: 0 },
+			{ Matnr: "SFX-18X300-C051", Lgort: "0005", StockLibre: "0", Disponible: "0", Respuesta: 1 },
+			{ Matnr: "OTRO", Lgort: "0001", StockLibre: "9", Disponible: "9", Respuesta: 0 }
+		],
+		"SFX-18X300-C051"
+	);
+	assert.deepEqual(r, [
+		{ lgort: "0001", libre: 150, disponible: 149 },
+		{ lgort: "0004", libre: 1, disponible: 0 }
+	]);
+});

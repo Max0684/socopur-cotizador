@@ -107,7 +107,8 @@ test("guardarCotizacion: sin numero y sin comentario usa un mensaje generico, nu
 test("crearPedidoGrupo llama la accion sobre el grupo activo y devuelve el pedido real", async () => {
 	const { modelo, llamadas } = crearModeloFalso({ grupoDePedido: { VbelnPedido: "3300008230", Estado: "P", Liberacion: "" } });
 	const r = await crearPedidoGrupo(como(modelo), "COT-1", "01");
-	assert.match(llamadas[0], /^execute \/Grupo\(CotizId=COT-1,GrupoNo='01',IsActiveEntity=true\)\/.*crearPedido/);
+	// Antes de la accion se lee el comentario de la cotizacion (para distinguir un rechazo nuevo de uno viejo).
+	assert.match(llamadas.find((l) => l.startsWith("execute")) ?? "", /^execute \/Grupo\(CotizId=COT-1,GrupoNo='01',IsActiveEntity=true\)\/.*crearPedido/);
 	assert.deepEqual(r, { vbelnPedido: "3300008230", estado: "P", liberacion: "" });
 });
 
@@ -313,4 +314,18 @@ test("crearPedidoGrupo: si el pedido de vehiculo falla en segundo plano (vuelve 
 test("crearPedidoGrupo: si el pedido sigue en proceso al agotar la espera lo dice", async () => {
 	const { modelo } = crearModeloFalso({ grupoDePedido: { Estado: "P", VbelnPedido: "" }, secuenciaPedido: [{ Estado: "P", VbelnPedido: "" }] });
 	await assert.rejects(() => crearPedidoGrupo(como(modelo), "COT-1", "01", sinPausa), (e: Error) => e instanceof OfertaEnProcesoError);
+});
+
+test("crearPedidoGrupo: el Estado queda en P aunque SAP rechace el pedido; se detecta por el Comentario y no se espera el minuto (caso sin stock disponible en el almacen 0004)", async () => {
+	const { modelo } = crearModeloFalso({
+		grupoDePedido: { Estado: "P", VbelnPedido: "" },
+		secuenciaPedido: [{ Estado: "P", VbelnPedido: "" }],
+		comentario: "[Pedido grupo 01] Material SFX-18X300-C051 no tiene stock disponible"
+	});
+	let esperas = 0;
+	const contar = async (): Promise<void> => {
+		esperas++;
+	};
+	await assert.rejects(() => crearPedidoGrupo(como(modelo), "COT-1", "01", { ...sinPausa, pausa: contar }), (e: Error) => !(e instanceof OfertaEnProcesoError) && /no tiene stock disponible/.test(e.message));
+	assert.ok(esperas <= 4, `espero ${esperas} veces en vez de cortar`);
 });
