@@ -790,7 +790,7 @@ export default class Oferta extends Controller {
 		b.setProperty(
 			"/avisoVacio",
 			motivo === "sinStock"
-				? (i18n.getText("vacioSinStock", [String(coinciden), centro, sede]) as string)
+				? (i18n.getText("vacioSinStock", [String(coinciden), centro, sede, this.almacenDelPerfil()]) as string)
 				: motivo === "sinCoincidencias"
 					? (i18n.getText("vacioSinCoincidencias", [String(oferta.getProperty("/perfil/orgVentas") ?? ""), String(oferta.getProperty("/perfil/busqueda/canal") ?? "")]) as string)
 					: ""
