@@ -346,7 +346,7 @@ export async function buscarRepuestosConStock(
 			parcial = true;
 		}
 	}
-	const aMostrar = candidatas.slice(0, FILAS_POR_PAGINA);
+	let aMostrar = candidatas.slice(0, FILAS_POR_PAGINA);
 	let atp: Record<string, Disponibilidad> = {};
 	if (aMostrar.length > 0) {
 		try {
@@ -354,6 +354,11 @@ export async function buscarRepuestosConStock(
 		} catch {
 			// Sin ATP se muestra el stock libre; no se pierde el resultado.
 		}
+	}
+	// "Solo con stock" cuenta el DISPONIBLE (ATP), no el fisico: un almacen con 1 unidad ya comprometida por otro documento no tiene stock
+	// para vender (SAP rechaza el pedido). Si SAP no pudo calcular el ATP de un material, se conserva por su stock libre.
+	if (soloStock) {
+		aMostrar = aMostrar.filter((m) => (atp[m.material] ? atp[m.material].disponible : (libreTotal[m.material] ?? 0)) > 0);
 	}
 	return { filas: combinarStock(aMostrar, libreTotal, atp), coinciden, parcial };
 }

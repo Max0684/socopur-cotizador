@@ -238,3 +238,26 @@ test("disponibilidadDeFilas con almacen: solo cuenta el del perfil (0004 con 1 f
 	// Un almacen sin fila: el material no aparece (sin stock en ese almacen).
 	assert.equal(disponibilidadDeFilas(filas, "0009").M, undefined);
 });
+
+test("buscarRepuestosConStock con solo stock: un material con stock fisico pero disponible 0 no aparece (almacen con todo comprometido); sin el filtro si aparece", async () => {
+	const { buscarRepuestosConStock } = await import("../webapp/model/MaterialesService.ts");
+	const ctx = (o: unknown) => ({ getObject: () => o });
+	const modelo = {
+		bindList: (ruta: string, _a: unknown, _b: unknown, _c: unknown, p: { $filter: string }) => ({
+			requestContexts: async (desde = 0) => {
+				if (ruta === "/Material") {
+					return desde === 0 ? [ctx({ Matnr: "A", Maktx: "A", Meins: "UN", Spart: "50" }), ctx({ Matnr: "B", Maktx: "B", Meins: "UN", Spart: "50" })] : [];
+				}
+				const pedidos = [...p.$filter.matchAll(/Matnr eq '([^']+)'/g)].map((x) => x[1]);
+				if (ruta === "/MaterialCentro") {
+					return pedidos.map((m) => ctx({ Matnr: m, Lgort: "0004", StockLibre: "1.000" }));
+				}
+				return pedidos.map((m) => ctx({ Matnr: m, Lgort: "0004", StockLibre: "1.000", Disponible: m === "A" ? "0.000" : "1.000", Comprometido: m === "A" ? "1.000" : "0.000", Respuesta: 0 }));
+			}
+		})
+	} as never;
+	const con = await buscarRepuestosConStock(modelo, { vkorg: "1203", vtweg: "10" }, "2001", true, undefined, undefined, undefined, "0004");
+	assert.deepEqual(con.filas.map((f) => f.material), ["B"]);
+	const sin = await buscarRepuestosConStock(modelo, { vkorg: "1203", vtweg: "10" }, "2001", false, undefined, undefined, undefined, "0004");
+	assert.deepEqual(sin.filas.map((f) => f.material), ["A", "B"]);
+});
