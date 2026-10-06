@@ -160,7 +160,7 @@ export async function guardarCotizacion(modelo: ODataModel, datos: OfertaParaGua
 		leido = await leer();
 	}
 	if ((leido._Grupo ?? []).some((g) => g.Estado === ESTADO_EN_PROCESO)) {
-		throw new OfertaEnProcesoError("La oferta del vehiculo sigue en proceso en SAP. Revisala en unos minutos desde la lista de ofertas.");
+		throw new OfertaEnProcesoError("La oferta sigue en proceso en SAP. Revisala en unos minutos desde la lista de ofertas.");
 	}
 	const ofertas = (leido._Grupo ?? []).map((g) => ({ grupoNo: g.GrupoNo, vbelnOferta: g.VbelnOferta }));
 	// generarOfertas no falla cuando SAP rechaza la oferta: deja el motivo en Comentario y el grupo sin numero.
@@ -202,7 +202,7 @@ export async function crearPedidoGrupo(modelo: ODataModel, cotizId: string, grup
 			}
 		}
 		if (!grupo.VbelnPedido && grupo.Estado === ESTADO_PEDIDO_EN_PROCESO) {
-			throw new OfertaEnProcesoError("El pedido del vehiculo sigue en proceso en SAP. Revisalo en unos minutos desde la lista de ofertas.");
+			throw new OfertaEnProcesoError("El pedido sigue en proceso en SAP. Revisalo en unos minutos desde la lista de ofertas.");
 		}
 	}
 	if (!grupo?.VbelnPedido) {

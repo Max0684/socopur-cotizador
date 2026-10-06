@@ -294,6 +294,10 @@ interface Grupo {
 	nota?: string;
 	areaFalta?: boolean;
 	areaAviso?: string;
+	/** Impuestos del grupo (suma de sus lineas) cuando todas los traen: ISC, IGV y total con impuestos. */
+	isc?: number;
+	igv?: number;
+	totalConImp?: number;
 }
 
 /**
@@ -2546,6 +2550,8 @@ export default class Oferta extends Controller {
 		const numeros: string[] = [];
 		const estadosReales: (GrupoEstado | null)[] = [];
 		vista?.setBusy(true);
+		// SAP crea el pedido en segundo plano: puede tardar hasta un minuto; se avisa para que no parezca colgado.
+		MessageToast.show(i18n.getText("creandoPedidoEspera") as string, { duration: 6000 });
 		try {
 			for (const o of guardadas) {
 				const pedido = await crearPedidoGrupo(odata, o.cotizId as string, o.grupoNo as string);
@@ -3564,6 +3570,12 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 		});
 		const grupos = Array.from(mapa.values());
 		grupos.forEach((g) => this.aplicarModalidadGrupo(g));
+		grupos.forEach((g) => {
+			const conImpuesto = g.lineas.length > 0 && g.lineas.every((l) => l.isc !== undefined && l.igvImporte !== undefined);
+			g.isc = conImpuesto ? this.redondear(g.lineas.reduce((a, l) => a + (l.isc ?? 0), 0)) : undefined;
+			g.igv = conImpuesto ? this.redondear(g.lineas.reduce((a, l) => a + (l.igvImporte ?? 0), 0)) : undefined;
+			g.totalConImp = conImpuesto ? this.redondear(g.lineas.reduce((a, l) => a + (l.totalConImpuestos ?? l.total + (l.isc ?? 0) + (l.igvImporte ?? 0)), 0)) : undefined;
+		});
 		oferta.setProperty("/grupos", grupos);
 		oferta.setProperty("/faltaTalla", lineas.some((l) => l.bonificacion && !l.sinTalla && !l.talla));
 		oferta.setProperty("/hayVehiculos", grupos.some((g) => g.lineas.some((l) => l.unica)));

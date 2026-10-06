@@ -400,6 +400,7 @@
 											<Column width="8rem" hAlign="End" minScreenWidth="36rem" demandPopin="true"><Text text="{i18n>colPrecio}" /></Column>
 											<Column width="7rem" hAlign="End"><Text text="{i18n>colValorNeto}" tooltip="{i18n>colValorNetoTip}" /></Column>
 											<Column width="6rem" hAlign="End" minScreenWidth="64rem" demandPopin="true"><Text text="{i18n>colIsc}" /></Column>
+											<Column width="6rem" hAlign="End" minScreenWidth="64rem" demandPopin="true"><Text text="{i18n>colIgv}" tooltip="{i18n>colIgvTip}" /></Column>
 											<Column width="8rem" hAlign="End" minScreenWidth="64rem" demandPopin="true"><Text text="{i18n>colTotalConImp}" /></Column>
 											<Column width="3rem" hAlign="Center"><Text text="" /></Column>
 										</columns>
@@ -418,15 +419,22 @@
 													<ObjectNumber number="{path: 'oferta>precio', formatter: '.formatMonto'}" />
 													<ObjectNumber number="{path: 'oferta>totalMostrado', formatter: '.formatMonto'}" />
 													<ObjectNumber visible="{= ${oferta>isc} !== undefined }" number="{path: 'oferta>isc', formatter: '.formatMonto'}" />
+													<ObjectNumber visible="{= ${oferta>igvImporte} !== undefined }" number="{path: 'oferta>igvImporte', formatter: '.formatMonto'}" />
 													<ObjectNumber visible="{= ${oferta>totalConImpuestos} !== undefined }" number="{path: 'oferta>totalConImpuestos', formatter: '.formatMonto'}" emphasized="true" />
 													<Button icon="sap-icon://delete" type="Transparent" tooltip="{i18n>quitarLinea}" visible="{= !${oferta>bonificacion} }" enabled="{= ${oferta>/pedidos}.length === 0 }" press=".onQuitarLinea" />
 												</cells>
 											</ColumnListItem>
 										</items>
 									</Table>
-									<HBox justifyContent="End" class="sapUiSmallMarginTop">
+									<HBox justifyContent="End" wrap="Wrap" class="sapUiSmallMarginTop">
 										<Label text="{i18n>subtotal}:" class="sapUiTinyMarginEnd" />
-										<ObjectNumber number="{path: 'oferta>subtotal', formatter: '.formatMonto'}" unit="{oferta>/perfil/moneda}" />
+										<ObjectNumber number="{path: 'oferta>subtotal', formatter: '.formatMonto'}" unit="{oferta>/perfil/moneda}" class="sapUiSmallMarginEnd" />
+										<Label text="{i18n>isc}:" class="sapUiTinyMarginEnd" visible="{= ${oferta>isc} !== undefined }" />
+										<ObjectNumber visible="{= ${oferta>isc} !== undefined }" number="{path: 'oferta>isc', formatter: '.formatMonto'}" unit="{oferta>/perfil/moneda}" class="sapUiSmallMarginEnd" />
+										<Label text="{i18n>igv}:" class="sapUiTinyMarginEnd" visible="{= ${oferta>igv} !== undefined }" />
+										<ObjectNumber visible="{= ${oferta>igv} !== undefined }" number="{path: 'oferta>igv', formatter: '.formatMonto'}" unit="{oferta>/perfil/moneda}" class="sapUiSmallMarginEnd" />
+										<Label text="{i18n>totalConImpuestos}:" class="sapUiTinyMarginEnd" visible="{= ${oferta>totalConImp} !== undefined }" />
+										<ObjectNumber visible="{= ${oferta>totalConImp} !== undefined }" number="{path: 'oferta>totalConImp', formatter: '.formatMonto'}" unit="{oferta>/perfil/moneda}" emphasized="true" state="Success" />
 									</HBox>
 								</Panel>
 							</VBox>
