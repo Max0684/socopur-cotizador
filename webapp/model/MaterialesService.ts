@@ -190,14 +190,18 @@ export function filtroStock(vkorg: string, vtweg: string, werks: string, matnrs:
  * Stock libre por material en un centro (entidad MaterialCentro). Si hay varios almacenes se toma el de mayor stock
  * (hoy 0001, salvo el centro 1007 con 0008). No incluye comprometido ni ATP (segunda version del servicio).
  */
-export async function stockPorCentro(modelo: ODataModel, vkorg: string, vtweg: string, werks: string, matnrs: string[]): Promise<Record<string, number>> {
+export async function stockPorCentro(modelo: ODataModel, vkorg: string, vtweg: string, werks: string, matnrs: string[], lgort = ""): Promise<Record<string, number>> {
 	if (matnrs.length === 0) {
 		return {};
 	}
 	const contextos = await modelo.bindList("/MaterialCentro", undefined, undefined, undefined, { $filter: filtroStock(vkorg, vtweg, werks, matnrs) }).requestContexts(0, 500);
 	const res: Record<string, number> = {};
 	contextos.forEach((c) => {
-		const f = c.getObject() as { Matnr: string; StockLibre: number | string };
+		const f = c.getObject() as { Matnr: string; Lgort?: string; StockLibre: number | string };
+		// Con almacen, solo cuenta el stock de ESE almacen (el del perfil del vendedor): el pedido sale de el.
+		if (lgort && f.Lgort !== lgort) {
+			return;
+		}
 		res[f.Matnr] = Math.max(res[f.Matnr] ?? 0, Number(f.StockLibre));
 	});
 	return res;
@@ -211,10 +215,10 @@ export interface Disponibilidad {
 }
 
 /** Filas de MaterialAtp a disponibilidad por material: se toma el almacen de mayor stock; si SAP no pudo calcular alguna fila (Respuesta != 0) se omite. */
-export function disponibilidadDeFilas(filas: { Matnr: string; StockLibre: number | string; Disponible: number | string; Comprometido: number | string; Respuesta?: number | string }[]): Record<string, Disponibilidad> {
+export function disponibilidadDeFilas(filas: { Matnr: string; Lgort?: string; StockLibre: number | string; Disponible: number | string; Comprometido: number | string; Respuesta?: number | string }[], lgort = ""): Record<string, Disponibilidad> {
 	const res: Record<string, Disponibilidad> = {};
 	filas.forEach((f) => {
-		if (Number(f.Respuesta ?? 0) !== 0) {
+		if (Number(f.Respuesta ?? 0) !== 0 || (lgort && f.Lgort !== lgort)) {
 			return;
 		}
 		const fisico = Number(f.StockLibre);
@@ -226,12 +230,12 @@ export function disponibilidadDeFilas(filas: { Matnr: string; StockLibre: number
 }
 
 /** Disponibilidad (stock libre, ATP y comprometido) por material en un centro (entidad MaterialAtp, maximo 50 materiales). */
-export async function disponibilidadPorCentro(modelo: ODataModel, vkorg: string, vtweg: string, werks: string, matnrs: string[]): Promise<Record<string, Disponibilidad>> {
+export async function disponibilidadPorCentro(modelo: ODataModel, vkorg: string, vtweg: string, werks: string, matnrs: string[], lgort = ""): Promise<Record<string, Disponibilidad>> {
 	if (matnrs.length === 0) {
 		return {};
 	}
 	const contextos = await modelo.bindList("/MaterialAtp", undefined, undefined, undefined, { $filter: filtroStock(vkorg, vtweg, werks, matnrs.slice(0, 50)) }).requestContexts(0, 50);
-	return disponibilidadDeFilas(contextos.map((c) => c.getObject() as Parameters<typeof disponibilidadDeFilas>[0][number]));
+	return disponibilidadDeFilas(contextos.map((c) => c.getObject() as Parameters<typeof disponibilidadDeFilas>[0][number]), lgort);
 }
 
 export type MotivoVacio = "" | "sinCoincidencias" | "sinStock";
@@ -296,7 +300,9 @@ export async function buscarRepuestosConStock(
 	/** Medicion opcional: nombre de la fase y milisegundos (solo para diagnosticar lentitud). */
 	medir?: (fase: string, ms: number) => void,
 	/** Avance para mostrar al vendedor: materiales revisados y cuantos tienen stock hasta ahora. */
-	progreso?: (revisados: number, conStock: number) => void
+	progreso?: (revisados: number, conStock: number) => void,
+	/** Almacen del perfil: el stock y la disponibilidad se miden en ESE almacen (no en el mejor del centro). Vacio = el mejor del centro. */
+	lgort = ""
 ): Promise<ResultadoBusquedaStock> {
 	const cronometrar = async <T>(fase: string, tarea: () => Promise<T>): Promise<T> => {
 		const t0 = Date.now();
@@ -319,7 +325,7 @@ export async function buscarRepuestosConStock(
 			paginas.map(async (pagina) => {
 				const materiales = await cronometrar(`Material p${pagina}`, () => buscarMateriales(modelo, filtros, sectorCab, pagina, FILAS_POR_PAGINA));
 				const libre = materiales.length
-					? await cronometrar(`Stock p${pagina}`, () => stockPorCentro(modelo, filtros.vkorg, filtros.vtweg, werks, materiales.map((m) => m.material)))
+					? await cronometrar(`Stock p${pagina}`, () => stockPorCentro(modelo, filtros.vkorg, filtros.vtweg, werks, materiales.map((m) => m.material), lgort))
 					: {};
 				return { materiales, libre };
 			})
@@ -344,7 +350,7 @@ export async function buscarRepuestosConStock(
 	let atp: Record<string, Disponibilidad> = {};
 	if (aMostrar.length > 0) {
 		try {
-			atp = await cronometrar(`ATP (${aMostrar.length})`, () => disponibilidadPorCentro(modelo, filtros.vkorg, filtros.vtweg, werks, aMostrar.map((m) => m.material)));
+			atp = await cronometrar(`ATP (${aMostrar.length})`, () => disponibilidadPorCentro(modelo, filtros.vkorg, filtros.vtweg, werks, aMostrar.map((m) => m.material), lgort));
 		} catch {
 			// Sin ATP se muestra el stock libre; no se pierde el resultado.
 		}

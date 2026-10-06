@@ -225,3 +225,16 @@ test("disponibilidadPorAlmacenDeFilas: por almacen, solo el material pedido y si
 		{ lgort: "0004", libre: 1, disponible: 0 }
 	]);
 });
+
+test("disponibilidadDeFilas con almacen: solo cuenta el del perfil (0004 con 1 fisico y 0 disponible aunque el 0001 tenga 150)", () => {
+	const filas = [
+		{ Matnr: "M", Lgort: "0001", StockLibre: "150.000", Disponible: "149.000", Comprometido: "1.000", Respuesta: 0 },
+		{ Matnr: "M", Lgort: "0004", StockLibre: "1.000", Disponible: "0.000", Comprometido: "1.000", Respuesta: 0 }
+	];
+	assert.equal(disponibilidadDeFilas(filas, "0004").M.disponible, 0);
+	assert.equal(disponibilidadDeFilas(filas, "0001").M.disponible, 149);
+	// Sin almacen se toma el de mayor stock, como antes.
+	assert.equal(disponibilidadDeFilas(filas).M.disponible, 149);
+	// Un almacen sin fila: el material no aparece (sin stock en ese almacen).
+	assert.equal(disponibilidadDeFilas(filas, "0009").M, undefined);
+});

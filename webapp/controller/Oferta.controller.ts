@@ -593,7 +593,9 @@ export default class Oferta extends Controller {
 				soloStock,
 				sectorDeCabecera,
 				(fase, ms) => fases.push(`${fase}: ${ms} ms`),
-				(revisados, conStock) => b.setProperty("/progreso", this.i18n().getText("buscandoProgreso", [centro, String(revisados), String(conStock)]) as string)
+				(revisados, conStock) => b.setProperty("/progreso", this.i18n().getText("buscandoProgreso", [centro, String(revisados), String(conStock)]) as string),
+				// El stock se mide en el almacen del perfil: de ahi sale el pedido (si no, se ve stock que SAP luego rechaza como no disponible).
+				this.almacenDelPerfil()
 			);
 			// Diagnostico de lentitud (consola del navegador, F12): tiempo por fase y total hasta tener la lista.
 			console.info(`[Cotizador] busqueda de repuestos: ${Date.now() - t0} ms | ${fases.join(" | ")}`);
@@ -670,6 +672,43 @@ export default class Oferta extends Controller {
 		return canalDe(modalidades.find((m) => m.key === elegida)?.canal) || canalPerfil;
 	}
 
+	/** Almacen del que saldra el pedido: el del perfil en el centro del perfil; en otro centro, la regla practica. */
+	private almacenDelPerfil(): string {
+		const perfil = this.modeloOferta().getProperty("/perfil") as Record<string, string>;
+		return almacenDeCentro(perfil.centro, this.modeloMock().getProperty("/opciones/almacenPorCentro") ?? {}, perfil.almacen, perfil.centro);
+	}
+
+	/**
+	 * Antes de pedir el pedido a SAP: comprueba que el DISPONIBLE (ATP) del almacen alcance para la cantidad de cada linea de repuestos.
+	 * SAP rechaza el pedido si no alcanza, aunque haya stock fisico. Devuelve las lineas que no alcanzan; si no se puede leer, no bloquea.
+	 */
+	private async lineasSinDisponible(): Promise<string[]> {
+		const oferta = this.modeloOferta();
+		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel | undefined;
+		if (!odata || !this.usarOData()) {
+			return [];
+		}
+		const centro = String(oferta.getProperty("/perfil/centro") ?? "");
+		const almacen = this.almacenDelPerfil();
+		const lineas = ((oferta.getProperty("/lineas") as Linea[]) ?? []).filter((l) => l.precioPenSap !== undefined && !l.bonificacion && !l.variante);
+		const faltan: string[] = [];
+		await Promise.all(
+			lineas.map(async (l) => {
+				try {
+					const canal = this.canalDeDocumento(l.orgVentas, l.sector, "repuestos");
+					const almacenes = await disponibilidadPorAlmacen(odata, l.orgVentas, canal, centro, l.material);
+					const delAlmacen = almacenes.find((a) => a.lgort === almacen);
+					if (almacenes.length > 0 && (delAlmacen?.disponible ?? 0) < l.cantidad) {
+						faltan.push(`${l.material}: ${this.i18n().getText("pideDispone", [String(l.cantidad), almacen, String(delAlmacen?.disponible ?? 0)]) as string}`);
+					}
+				} catch {
+					// Sin lectura no se bloquea: SAP lo comprueba al crear el pedido.
+				}
+			})
+		);
+		return faltan;
+	}
+
 	/**
 	 * Avisa si el ALMACEN del perfil no tiene stock DISPONIBLE de un material elegido: SAP rechaza el pedido cuando el disponible (ATP) no
 	 * alcanza, aunque haya stock fisico (comprometido por otros documentos). Es un aviso, no un bloqueo: la cantidad se decide despues.
@@ -681,7 +720,7 @@ export default class Oferta extends Controller {
 			return;
 		}
 		const perfil = oferta.getProperty("/perfil") as Record<string, string>;
-		const almacen = almacenDeCentro(perfil.centro, this.modeloMock().getProperty("/opciones/almacenPorCentro") ?? {}, perfil.almacen, perfil.centro);
+		const almacen = this.almacenDelPerfil();
 		const canal = canalDe(String(oferta.getProperty("/perfil/busqueda/canal") ?? "11"));
 		for (const m of elegidos.filter((x) => x.origen === "sap")) {
 			try {
@@ -2580,6 +2619,13 @@ export default class Oferta extends Controller {
 		const numeros: string[] = [];
 		const estadosReales: (GrupoEstado | null)[] = [];
 		vista?.setBusy(true);
+		// Antes de llamar a SAP: si el disponible del almacen no alcanza, se dice aqui (SAP lo rechazaria igual) y no se crea nada.
+		const faltan = await this.lineasSinDisponible();
+		if (faltan.length > 0) {
+			vista?.setBusy(false);
+			MessageBox.error(i18n.getText("pedidoSinDisponible", [faltan.join("\n")]) as string);
+			return;
+		}
 		// SAP crea el pedido en segundo plano: puede tardar hasta un minuto; se avisa para que no parezca colgado.
 		MessageToast.show(i18n.getText("creandoPedidoEspera") as string, { duration: 6000 });
 		try {
