@@ -8,6 +8,8 @@ import type { GrupoParaGuardar } from "./CotizacionesService";
 export interface LineaCarrito {
 	orgVentas: string;
 	sector: string;
+	/** Sector propio del material (50-56, 90...); con el se recalcula el sector de cabecera segun el canal de la modalidad. */
+	sectorMaterial?: string;
 	material: string;
 	cantidad: number;
 	precio: number;
@@ -96,7 +98,7 @@ export function gruposParaGuardar(grupos: GrupoCarrito[], perfil: PerfilVenta, a
 		return {
 			vkorg: g.lineas[0]?.orgVentas ?? "",
 			vtweg: canal,
-			spart: sectorDeCabecera(canal, g.lineas[0]?.sector ?? "", g.lineas[0]?.orgVentas),
+			spart: sectorDeCabecera(canal, g.lineas[0]?.sectorMaterial ?? g.lineas[0]?.sector ?? "", g.lineas[0]?.orgVentas),
 			vkbur: oficinaDe(perfil.oficina),
 			claseOferta: g.claseOferta ?? "",
 			clasePedido: g.clasePedido ?? "",

@@ -74,6 +74,8 @@ interface LineaMock {
 	grupo: string;
 	orgVentas: string;
 	sector: string;
+	/** Sector propio del material, para recalcular el sector de cabecera si cambia el canal de la modalidad. */
+	sectorMaterial?: string;
 	material: string;
 	denominacion: string;
 	detalle: string;
@@ -646,6 +648,24 @@ export default class Oferta extends Controller {
 		}
 	}
 
+	/**
+	 * Canal con el que SAP creara el documento de una linea: el de la MODALIDAD de su grupo (organizacion + sector), no el del perfil.
+	 * El precio debe pedirse con ese mismo canal; si no (perfil en canal 10 y modalidad mostrador de canal 11), se ve un precio del canal 10
+	 * y el documento sale en cero porque el canal 11 no tiene precio.
+	 */
+	private canalDeDocumento(orgVentas: string, sector: string, tipo: "repuestos" | "vehiculos"): string {
+		const oferta = this.modeloOferta();
+		const canalPerfil = canalDe(String(oferta.getProperty("/perfil/busqueda/canal") ?? "11"));
+		const clave = `${orgVentas}/${sector}`;
+		const grupo = ((oferta.getProperty("/grupos") as Grupo[]) ?? []).find((g) => g.clave === clave);
+		if (grupo?.canal) {
+			return canalDe(grupo.canal) || canalPerfil;
+		}
+		const modalidades = (oferta.getProperty("/modalidades") as Modalidad[]) ?? [];
+		const elegida = ((oferta.getProperty("/modalidadesGrupo") as Record<string, string>) ?? {})[clave] ?? modalidadPorDefecto(tipo, canalDe(String(oferta.getProperty("/perfil/canal") ?? "")));
+		return canalDe(modalidades.find((m) => m.key === elegida)?.canal) || canalPerfil;
+	}
+
 	/** Cuantos precios se calculan de una vez en la lista (cada uno es una consulta a SAP; el resto sale "al elegir"). */
 	private static readonly PRECIOS_EN_LISTA = 20;
 	private busquedaPrecios = 0;
@@ -773,9 +793,10 @@ export default class Oferta extends Controller {
 			await Promise.all(
 				delSap.map(async (m) => {
 					// Vehiculo: Matnr = modelo, el precio sale de la variante y el centro es el del vehiculo.
+					const canalDoc = this.canalDeDocumento(m.orgVentas, m.sectorOferta, m.variante ? "vehiculos" : "repuestos") || canal;
 					const base = m.variante
-						? { kunnr, vkorg: m.orgVentas, vtweg: canal, spart: m.sectorOferta, auart: CLASE_OFERTA_PRECIO_VEH, matnr: m.material, werks: m.centro ?? centro, cantidad, varcond: m.variante }
-						: { kunnr, vkorg: m.orgVentas, vtweg: canal, spart: m.sectorOferta, auart: CLASE_OFERTA_PRECIO, matnr: m.material, werks: centro, cantidad };
+						? { kunnr, vkorg: m.orgVentas, vtweg: canalDoc, spart: m.sectorOferta, auart: CLASE_OFERTA_PRECIO_VEH, matnr: m.material, werks: m.centro ?? centro, cantidad, varcond: m.variante }
+						: { kunnr, vkorg: m.orgVentas, vtweg: canalDoc, spart: sectorDeCabecera(canalDoc, m.sector, m.orgVentas), auart: CLASE_OFERTA_PRECIO, matnr: m.material, werks: centro, cantidad };
 					const [pen, usd] = await Promise.all([consultarPrecio(odata, { ...base, waers: "PEN" }), consultarPrecio(odata, { ...base, waers: "USD" })]);
 					m.precioPenSap = pen.precioUnitario;
 					m.precioUsd = usd.precioUnitario;
@@ -1016,13 +1037,17 @@ export default class Oferta extends Controller {
 		try {
 			await Promise.all(
 				delSap.map(async (l) => {
-					const base = { kunnr, vkorg: l.orgVentas, vtweg: canal, spart: l.sector, auart: CLASE_OFERTA_PRECIO, matnr: l.material, werks: centro, cantidad: l.cantidad };
+					const canalDoc = this.canalDeDocumento(l.orgVentas, l.sector, "repuestos") || canal;
+					const base = { kunnr, vkorg: l.orgVentas, vtweg: canalDoc, spart: sectorDeCabecera(canalDoc, l.sectorMaterial ?? l.sector, l.orgVentas), auart: CLASE_OFERTA_PRECIO, matnr: l.material, werks: centro, cantidad: l.cantidad };
 					const monedaOferta = oferta.getProperty("/perfil/moneda") === "USD" ? "USD" : "PEN";
 					const [pen, usd, imp] = await Promise.all([
 						consultarPrecio(odata, { ...base, waers: "PEN" }),
 						consultarPrecio(odata, { ...base, waers: "USD" }),
 						// IGV e ISC estimados con la misma simulacion de SAP, en la moneda de la oferta; si fallan, el impuesto queda "—" y no se inventa.
-						consultarImpuestos(odata, { ...base, waers: monedaOferta }).catch(() => null)
+						consultarImpuestos(odata, { ...base, waers: monedaOferta }).catch((e: Error) => {
+							console.warn(`[Cotizador] impuestos de la linea ${l.material}: ${e.message}`);
+							return null;
+						})
 					]);
 					l.precioPenSap = pen.precioUnitario;
 					l.precioUsdSap = usd.precioUnitario;
@@ -1132,6 +1157,7 @@ export default class Oferta extends Controller {
 				grupo: m.grupo,
 				orgVentas: m.orgVentas,
 				sector: m.sectorOferta,
+				sectorMaterial: m.sector,
 				material: m.material,
 				denominacion: m.denominacion,
 				detalle: m.tipo === "vehiculos" ? (m.detalle ?? "") : "—",
@@ -1536,7 +1562,10 @@ export default class Oferta extends Controller {
 		const modalidades = oferta.getProperty("/modalidades") as Modalidad[];
 		const elegidas = oferta.getProperty("/modalidadesGrupo") as Record<string, string>;
 		const tipo = grupo.lineas.some((l) => l.unica) ? "vehiculos" : "repuestos";
-		const porDefecto = tipo === "vehiculos" ? "veh_retail" : "rep_mostrador";
+		// La modalidad por defecto sigue el canal del perfil del vendedor (canal 10 -> mayorista, 11 -> mostrador/retail); si el perfil no
+		// tiene un canal conocido, la de siempre. Antes era siempre mostrador (canal 11) y el documento salia en otro canal que el del perfil.
+		const canalPerfil = canalDe(String(oferta.getProperty("/perfil/canal") ?? ""));
+		const porDefecto = modalidadPorDefecto(tipo, canalPerfil) ?? (tipo === "vehiculos" ? "veh_retail" : "rep_mostrador");
 		const opciones = modalidades.filter((m) => m.tipo === tipo || m.tipo === "ambos");
 		let clave = elegidas[grupo.clave] ?? porDefecto;
 		if (!opciones.some((m) => m.key === clave)) {
@@ -1583,7 +1612,8 @@ export default class Oferta extends Controller {
 			oferta.setProperty("/entrega", m.expedicion);
 		}
 		oferta.setProperty("/guardado", { visible: false, texto: "" });
-		this.recalcular();
+		this.recalcular();		// La modalidad define el canal del documento y con el el precio: se vuelve a pedir a SAP.
+		void this.repreciarLineasSap();
 	}
 
 

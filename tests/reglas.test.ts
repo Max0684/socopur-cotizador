@@ -295,3 +295,11 @@ test("totalesDeOferta de un documento SAP guardado (sin impuesto incluido) sigue
 	assert.equal(t.total, 65.3);
 	assert.equal(t.neto, 55.34);
 });
+
+test("gruposParaGuardar: el sector de cabecera se recalcula con el sector del material y el canal de la modalidad (canal 10 -> 50, canal 11 -> 99)", () => {
+	const linea = { orgVentas: "1203", sector: "99", sectorMaterial: "50", material: "SFX-18X300-C051", cantidad: 1, precio: 65.3 };
+	const mayorista = gruposParaGuardar([{ canal: "10 Mayorista", claseOferta: "Z300", clasePedido: "Z323", modalidad: "rep_mayorista", lineas: [linea] }], { oficina: "2001", centro: "2001" }, () => "0004");
+	const mostrador = gruposParaGuardar([{ canal: "11 Retail", claseOferta: "Z300", clasePedido: "Z311", modalidad: "rep_mostrador", lineas: [linea] }], { oficina: "2001", centro: "2001" }, () => "0004");
+	assert.equal(mayorista[0].spart, "50");
+	assert.equal(mostrador[0].spart, "99");
+});
