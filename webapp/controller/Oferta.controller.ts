@@ -11,7 +11,7 @@ import { consultarCondiciones, consultarPrecio, impuestosDeCondiciones } from "c
 import { type CondicionServicio, type FilaCondicion, descuentosAplicados, filasDeCondiciones } from "com/socopur/cotizador/model/Condiciones";
 import { agruparVehiculos, buscarVehiculos, filtrarVehiculos, textoDetalleVehiculo } from "com/socopur/cotizador/model/VehiculosService";
 import { almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, faltaSectorDeVentas, gruposParaGuardar, igvExonerado, modalidadPorDefecto, oficinaDe, orgVehiculosDe, puedeVenderOtroCentro, sectorDeCabecera, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
-import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type VinAsignado, esperarVinculos, leerMotivoVinculo } from "com/socopur/cotizador/model/CotizacionesService";
+import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type VinAsignado, esperarVinculos, leerMotivoVinculo, anularGrupo } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
 import { buscarRepuestosConStock, disponibilidadPorAlmacen, motivoVacio } from "com/socopur/cotizador/model/MaterialesService";
 import { cargarPreciosLista, precioListaDisponible, textoPrecioLista } from "com/socopur/cotizador/model/PrecioListaService";
@@ -30,6 +30,8 @@ import SearchField from "sap/m/SearchField";
 import Event from "sap/ui/base/Event";
 import Control from "sap/ui/core/Control";
 import Dialog from "sap/m/Dialog";
+import TextArea from "sap/m/TextArea";
+import Text from "sap/m/Text";
 import Table from "sap/m/Table";
 import Button from "sap/m/Button";
 import Device from "sap/ui/Device";
@@ -2700,8 +2702,8 @@ export default class Oferta extends Controller {
 			vin: "\u2014",
 			bloqueo: "\u2014",
 			clasePedido,
-			estado: !real ? (i18n.getText("pedidoPendiente") as string) : liberado ? (i18n.getText("pedidoLiberado") as string) : (i18n.getText("pedidoBloqueado") as string),
-			estadoState: liberado ? "Success" : "Warning",
+			estado: real?.Rechazado === "X" ? (i18n.getText("pedidoRechazado") as string) : !real ? (i18n.getText("pedidoPendiente") as string) : liberado ? (i18n.getText("pedidoLiberado") as string) : (i18n.getText("pedidoBloqueado") as string),
+			estadoState: real?.Rechazado === "X" ? "Error" : liberado ? "Success" : "Warning",
 			liberacion: [credito, ...bloqueos].join(" \u00b7 "),
 			liberacionState: !real ? "Warning" : liberado ? "Success" : "Warning",
 			totalSap: real && real.TotalPedido !== undefined && real.TotalPedido !== "" ? this.textoTotalSap(real, impuestos) : "\u2014"
@@ -2779,6 +2781,66 @@ export default class Oferta extends Controller {
 		}
 	}
 
+	/** Muestra el boton "Anular pedido" solo si el grupo tiene pedido y no esta ya por anular (Y) ni anulado (X). */
+	private mostrarAnulacion(grupo: { cotizId: string; grupoNo: string; estado: string; hayPedido: boolean } | null): void {
+		const puede = !!grupo && grupo.hayPedido && grupo.estado !== "Y" && grupo.estado !== "X";
+		this.modeloOferta().setProperty("/anulacion", { visible: puede && this.usarOData(), cotizId: grupo?.cotizId ?? "", grupoNo: grupo?.grupoNo ?? "" });
+	}
+
+	/** Pide el motivo y anula el pedido del grupo (SAP lo hace en segundo plano: devuelve el VIN, rechaza pedido y oferta). */
+	public onAnularPedido(): void {
+		const oferta = this.modeloOferta();
+		const datos = oferta.getProperty("/anulacion") as { cotizId: string; grupoNo: string };
+		const numero = (oferta.getProperty("/pedidos/0/numero") as string) ?? "";
+		const i18n = this.i18n();
+		const motivo = new TextArea({ width: "100%", rows: 3, maxLength: 200, placeholder: i18n.getText("anularMotivo") as string, liveChange: () => confirmar.setEnabled(motivo.getValue().trim().length > 0) });
+		const confirmar = new Button({
+			text: i18n.getText("anularConfirmar") as string,
+			type: "Reject",
+			enabled: false,
+			press: () => {
+				const texto = motivo.getValue().trim();
+				dialogo.close();
+				void this.anularPedidoSap(datos.cotizId, datos.grupoNo, texto);
+			}
+		});
+		const dialogo: Dialog = new Dialog({
+			title: i18n.getText("anularTitulo", [numero]) as string,
+			type: "Message",
+			content: [new Text({ text: i18n.getText("anularExplicacion") as string }), motivo],
+			beginButton: confirmar,
+			endButton: new Button({ text: i18n.getText("cancelar") as string, press: () => dialogo.close() }),
+			afterClose: () => dialogo.destroy()
+		});
+		this.getView()?.addDependent(dialogo);
+		dialogo.open();
+	}
+
+	private async anularPedidoSap(cotizId: string, grupoNo: string, motivo: string): Promise<void> {
+		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel;
+		const i18n = this.i18n();
+		const vista = this.getView();
+		vista?.setBusy(true);
+		MessageToast.show(i18n.getText("anularEnCurso") as string, { duration: 6000 });
+		try {
+			const r = await anularGrupo(odata, cotizId, grupoNo, motivo);
+			const numeroOferta = (this.modeloOferta().getProperty("/pedidos/0/oferta") as string) ?? "";
+			if (r.estado === "X") {
+				MessageToast.show(i18n.getText("anularOk") as string);
+			} else if (r.estado === "R") {
+				MessageBox.error(i18n.getText("anularRevisar", [r.mensaje || "—"]) as string);
+			} else {
+				MessageBox.warning(i18n.getText("anularPendiente") as string);
+			}
+			// Se vuelve a leer el estado real: anulado (X) o con el aviso de revision (R).
+			await this.cargarPedidoReal(cotizId, numeroOferta);
+		} catch (error) {
+			MessageBox.error((error as Error).message);
+		} finally {
+			vista?.setBusy(false);
+		}
+	}
+
 	/** Al abrir una oferta que ya tiene pedido, muestra el pedido REAL (antes salia un numero de ejemplo). */
 	private async cargarPedidoReal(cotizId: string, numeroOferta: string): Promise<void> {
 		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel | undefined;
@@ -2789,11 +2851,20 @@ export default class Oferta extends Controller {
 			const cot = (await odata
 				.bindContext(`/Cotizacion(CotizId=${cotizId},IsActiveEntity=true)`, undefined, {
 					$select: "CotizId",
-					$expand: { _Grupo: { $select: "GrupoNo,VbelnOferta,VbelnPedido,AuartPedido" } },
+					$expand: { _Grupo: { $select: "GrupoNo,VbelnOferta,VbelnPedido,AuartPedido,Estado" } },
 					$$ownRequest: true
 				})
-				.requestObject()) as { _Grupo?: { GrupoNo: string; VbelnOferta: string; VbelnPedido: string; AuartPedido: string }[] };
-			const g = (cot._Grupo ?? []).find((x) => sinCeros(x.VbelnOferta) === sinCeros(numeroOferta) && x.VbelnPedido);
+				.requestObject()) as { _Grupo?: { GrupoNo: string; VbelnOferta: string; VbelnPedido: string; AuartPedido: string; Estado: string }[] };
+			const delGrupo = (cot._Grupo ?? []).find((x) => sinCeros(x.VbelnOferta) === sinCeros(numeroOferta) && (x.VbelnPedido || x.Estado === "X"));
+			this.mostrarAnulacion(delGrupo ? { cotizId, grupoNo: delGrupo.GrupoNo, estado: delGrupo.Estado, hayPedido: !!delGrupo.VbelnPedido } : null);
+			if (delGrupo?.Estado === "X") {
+				// Anulado: el grupo ya no tiene numero de pedido; se deja una fila que lo diga y el aviso.
+				const i18n = this.i18n();
+				this.modeloOferta().setProperty("/avisoPedido", { texto: i18n.getText("anularAviso") as string, tipo: "Warning" });
+				this.modeloOferta().setProperty("/pedidos", [{ numero: "—", oferta: numeroOferta, detalle: "—", vin: "—", bloqueo: "—", clasePedido: delGrupo.AuartPedido ?? "", estado: i18n.getText("pedidoRechazado") as string, estadoState: "Error", liberacion: "—", liberacionState: "None", totalSap: "—" }]);
+				return;
+			}
+			const g = delGrupo;
 			if (!g) {
 				return;
 			}

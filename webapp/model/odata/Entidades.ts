@@ -175,6 +175,8 @@ export interface GrupoEstado {
 	NetoPedido: string;
 	ImpuestoPedido: string;
 	TotalPedido: string;
+	/** 'X' si el pedido esta rechazado en SAP (VBAK-ABSTK = C); vacio en un grupo ya anulado (Estado X), que no tiene pedido. */
+	Rechazado?: string;
 }
 
 /** Claves: Vkorg, Vtweg, Matnr, Werks, Lgort */

@@ -258,6 +258,49 @@ export async function leerEstadoPedido(modelo: ODataModel, cotizId: string, grup
 	}
 }
 
+/** Estados del grupo que deja la anulacion: Y = por anular (job en curso), X = anulado, R = revisar (el job se detuvo). */
+export type EstadoAnulacion = "Y" | "X" | "R";
+
+export interface ResultadoAnulacion {
+	estado: EstadoAnulacion;
+	/** Motivo del fallo que el job deja en el Comentario de la cotizacion ("[Anular grupo NN] ..."); vacio si no hay. */
+	mensaje: string;
+}
+
+/**
+ * Anula el pedido de un grupo y rechaza su oferta (accion anularGrupo). SAP lo hace en segundo plano: la accion deja el grupo en Y
+ * y el job lo pasa a X (listo) o R (revisar). Se sondea el Estado hasta que cambie o se agote la espera.
+ * SIN PROBAR contra SAP desde el front.
+ */
+export async function anularGrupo(modelo: ODataModel, cotizId: string, grupoNo: string, motivo: string, espera: EsperaOfertas = {}): Promise<ResultadoAnulacion> {
+	const ruta = `/Grupo(CotizId=${cotizId},GrupoNo='${grupoNo.replace(/'/g, "''")}',IsActiveEntity=true)`;
+	const operacion = modelo.bindContext(`${ruta}/${NS}.anularGrupo(...)`);
+	operacion.setParameter("Motivo", motivo.slice(0, 200));
+	// ui5lint-disable-next-line no-deprecated-api -- invoke() existe desde UI5 1.123; el servidor de Socopur y los tipos son 1.120
+	await operacion.execute("$auto", true);
+	const intervalo = espera.intervaloMs ?? 3000;
+	// El job puede esperar ~1 min en la cola del planificador y despues revertir VELO (hasta 30 s) y rechazar pedido y oferta.
+	const maximo = espera.maximoMs ?? 180000;
+	const pausa = espera.pausa ?? pausaReal;
+	let estado = (operacion.getBoundContext().getObject() as Grupo | undefined)?.Estado ?? "Y";
+	for (let transcurrido = 0; estado === "Y" && transcurrido < maximo; transcurrido += intervalo) {
+		await pausa(intervalo);
+		estado = ((await modelo.bindContext(ruta, undefined, { $select: "GrupoNo,Estado", $$ownRequest: true }).requestObject()) as Grupo).Estado;
+	}
+	let mensaje = "";
+	if (estado === "R") {
+		try {
+			const c = (await modelo.bindContext(`/Cotizacion(CotizId=${cotizId},IsActiveEntity=true)`, undefined, { $select: "Comentario", $$ownRequest: true }).requestObject()) as Pick<Cotizacion, "Comentario">;
+			const texto = c.Comentario ?? "";
+			const desde = texto.lastIndexOf(`[Anular grupo ${grupoNo}]`);
+			mensaje = desde >= 0 ? texto.slice(desde).trim() : "";
+		} catch {
+			mensaje = "";
+		}
+	}
+	return { estado: estado === "X" ? "X" : estado === "R" ? "R" : "Y", mensaje };
+}
+
 /** Mejor esfuerzo: si el descarte falla se deja el error original, que es el que importa al usuario. */
 async function descartarBorrador(modelo: ODataModel, cabecera: Context): Promise<void> {
 	try {
