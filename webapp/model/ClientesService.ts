@@ -1,7 +1,8 @@
 import type ODataModel from "sap/ui/model/odata/v4/ODataModel";
 import { filtroClientes } from "./FiltrosCliente";
 import { ordenarPorTexto } from "./Orden";
-import { unirAreas } from "./Reglas";
+import { entidadTieneCampo } from "./CamposServicio";
+import { type CondicionArea, unirAreas } from "./Reglas";
 
 /** Fila de la vista YI_COTIZ_CLIENTE (cliente por area de ventas). */
 interface ClienteSapFila {
@@ -13,6 +14,8 @@ interface ClienteSapFila {
 	KdgrpTexto?: string;
 	Zterm?: string;
 	ZtermTexto?: string;
+	/** Moneda del area (KNVV-WAERS); solo si el servicio ya la publica. */
+	Waers?: string;
 	Vsbed?: string;
 	Aufsd?: string;
 	Name1?: string;
@@ -43,6 +46,13 @@ export interface ClienteSap {
 	bloqueado: boolean;
 	/** Areas de venta (org/canal/sector) en las que el cliente esta dado de alta. */
 	areas: string[];
+	/** Condicion comercial de cada area (condicion de pago, moneda, grupo): varia por canal y sector, no es un dato del cliente. */
+	condicionesAreas: CondicionArea[];
+}
+
+/** Pasa una fila de la vista de clientes a la condicion de su area. */
+function condicionDeFila(f: ClienteSapFila): CondicionArea {
+	return { vkorg: f.Vkorg, vtweg: f.Vtweg, spart: f.Spart, zterm: f.Zterm ?? "", ztermTexto: f.ZtermTexto ?? "", waers: f.Waers ?? "", grupo: f.Kdgrp ?? "", grupoTexto: f.KdgrpTexto ?? "" };
 }
 
 const comillas = (texto: string): string => texto.replace(/'/g, "''");
@@ -57,8 +67,10 @@ export async function buscarClientes(modelo: ODataModel, texto: string, vkorg: s
 	if (!filtro) {
 		return [];
 	}
+	// La moneda del area solo se pide si el $metadata ya la trae: un campo desconocido en $select hace fallar toda la lectura.
+	const conWaers = await entidadTieneCampo(modelo, "Cliente", "Waers");
 	const binding = modelo.bindList("/Cliente", undefined, undefined, undefined, {
-		$select: "Kunnr,Vkorg,Vtweg,Spart,Kdgrp,KdgrpTexto,Zterm,ZtermTexto,Aufsd,Name1,Name2,Stcd1,Stcd2,Stras,Ort01,Sperr,Loevm",
+		$select: `Kunnr,Vkorg,Vtweg,Spart,Kdgrp,KdgrpTexto,Zterm,ZtermTexto,${conWaers ? "Waers," : ""}Aufsd,Name1,Name2,Stcd1,Stcd2,Stras,Ort01,Sperr,Loevm`,
 		$filter: filtro,
 		$orderby: "Name1",
 		$count: false
@@ -72,6 +84,7 @@ export async function buscarClientes(modelo: ODataModel, texto: string, vkorg: s
 		const existente = porCliente.get(f.Kunnr);
 		if (existente) {
 			existente.areas.push(area);
+			existente.condicionesAreas.push(condicionDeFila(f));
 			continue;
 		}
 		const doc = f.Stcd1 || f.Stcd2 || "";
@@ -86,14 +99,15 @@ export async function buscarClientes(modelo: ODataModel, texto: string, vkorg: s
 			ztermTexto: f.ZtermTexto ?? "",
 			direccion: [f.Stras, f.Ort01].filter(Boolean).join(", "),
 			bloqueado: Boolean(f.Sperr) || Boolean(f.Loevm) || Boolean(f.Aufsd),
-			areas: [area]
+			areas: [area],
+			condicionesAreas: [condicionDeFila(f)]
 		});
 		if (porCliente.size >= maximo) {
 			break;
 		}
 	}
 	const clientes = Array.from(porCliente.values());
-	await completarAreas(modelo, clientes);
+	await completarAreas(modelo, clientes, conWaers);
 	return ordenarPorTexto(clientes, (c) => c.nombre);
 }
 
@@ -102,15 +116,19 @@ export async function buscarClientes(modelo: ODataModel, texto: string, vkorg: s
  * (1103) tambien puede vender vehiculos (1101): se leen todas sus areas para no avisar "no esta dado de alta" por error.
  * Si la lectura falla se dejan las areas que ya se tenian.
  */
-async function completarAreas(modelo: ODataModel, clientes: ClienteSap[]): Promise<void> {
+async function completarAreas(modelo: ODataModel, clientes: ClienteSap[], conWaers: boolean): Promise<void> {
 	if (clientes.length === 0) {
 		return;
 	}
 	try {
 		const filtro = clientes.map((c) => `Kunnr eq '${comillas(c.kunnr)}'`).join(" or ");
-		const filas = await modelo.bindList("/Cliente", undefined, undefined, undefined, { $select: "Kunnr,Vkorg,Vtweg,Spart", $filter: filtro, $count: false }).requestContexts(0, 2000);
+		const filas = await modelo.bindList("/Cliente", undefined, undefined, undefined, { $select: `Kunnr,Vkorg,Vtweg,Spart,Kdgrp,KdgrpTexto,Zterm,ZtermTexto${conWaers ? ",Waers" : ""}`, $filter: filtro, $count: false }).requestContexts(0, 2000);
 		const leidas = filas.map((c) => c.getObject() as ClienteSapFila);
-		clientes.forEach((c) => (c.areas = unirAreas(c.areas, leidas.filter((f) => f.Kunnr === c.kunnr))));
+		clientes.forEach((c) => {
+			const filasCliente = leidas.filter((f) => f.Kunnr === c.kunnr);
+			c.areas = unirAreas(c.areas, filasCliente);
+			c.condicionesAreas = filasCliente.map(condicionDeFila);
+		});
 	} catch {
 		// se conservan las areas de la organizacion buscada
 	}

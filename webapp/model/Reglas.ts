@@ -72,6 +72,31 @@ export function unirAreas(actuales: string[], filas: { Vkorg: string; Vtweg: str
 	return [...new Set([...actuales, ...filas.map((f) => `${f.Vkorg}/${f.Vtweg}/${f.Spart}`)])];
 }
 
+/** Condicion comercial de un cliente en UN area de ventas (fila de KNVV): puede cambiar por canal y por sector. */
+export interface CondicionArea {
+	vkorg: string;
+	vtweg: string;
+	spart: string;
+	/** Condicion de pago y su texto. */
+	zterm: string;
+	ztermTexto: string;
+	/** Moneda del area; vacia si el servicio aun no la publica. */
+	waers: string;
+	/** Grupo de clientes (Mayorista / Retail) y su texto. */
+	grupo: string;
+	grupoTexto: string;
+}
+
+/** Condicion del area exacta (organizacion, canal y sector); undefined si el cliente no esta dado de alta en esa area. */
+export function condicionDeArea(condiciones: CondicionArea[] | undefined, vkorg: string, vtweg: string, spart: string): CondicionArea | undefined {
+	return (condiciones ?? []).find((c) => c.vkorg === vkorg && c.vtweg === vtweg && c.spart === spart);
+}
+
+/** Valores distintos de una condicion entre las areas dadas, para avisar cuando un carrito mezcla monedas o condiciones de pago. */
+export function valoresDistintos(condiciones: (CondicionArea | undefined)[], campo: "zterm" | "waers"): string[] {
+	return [...new Set(condiciones.filter((c): c is CondicionArea => !!c).map((c) => c[campo]).filter(Boolean))];
+}
+
 /** Los clientes de SAP traen sus areas como organizacion/canal/sector; para comparar se usa organizacion/canal. */
 export function areasOrgCanal(areas: string[]): string[] {
 	return areas.map((a) => a.split("/").slice(0, 2).join("/"));

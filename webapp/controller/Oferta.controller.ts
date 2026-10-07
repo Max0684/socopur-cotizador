@@ -10,7 +10,7 @@ import { cargarFormasPago } from "com/socopur/cotizador/model/FormasPagoService"
 import { consultarCondiciones, consultarPrecio, impuestosDeCondiciones } from "com/socopur/cotizador/model/PreciosService";
 import { type CondicionServicio, type FilaCondicion, descuentosAplicados, filasDeCondiciones } from "com/socopur/cotizador/model/Condiciones";
 import { agruparVehiculos, buscarVehiculos, filtrarVehiculos, textoDetalleVehiculo } from "com/socopur/cotizador/model/VehiculosService";
-import { almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, faltaSectorDeVentas, gruposParaGuardar, igvExonerado, modalidadPorDefecto, oficinaDe, orgVehiculosDe, puedeVenderOtroCentro, sectorDeCabecera, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
+import { type CondicionArea, almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, faltaSectorDeVentas, gruposParaGuardar, igvExonerado, modalidadPorDefecto, oficinaDe, orgVehiculosDe, puedeVenderOtroCentro, sectorDeCabecera, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
 import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type VinAsignado, esperarVinculos, leerMotivoVinculo, anularGrupo } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
 import { buscarRepuestosConStock, disponibilidadPorAlmacen, motivoVacio } from "com/socopur/cotizador/model/MaterialesService";
@@ -67,6 +67,8 @@ interface Cliente {
 	direccion: string;
 	lineaCredito?: number;
 	areas?: string[];
+	/** Condicion de pago, moneda y grupo de cada area de ventas del cliente (solo clientes leidos del servicio). */
+	condicionesAreas?: CondicionArea[];
 	direcciones?: Direccion[];
 	estadoCuenta?: { saldo: number; vencido: number; movimientos: Record<string, string>[] };
 	/** Credito y saldo reales de SAP (solo clientes leidos del servicio). */
@@ -3148,7 +3150,8 @@ export default class Oferta extends Controller {
 			correo: "",
 			direccion: elegido.direccion,
 			// Sin esto el cliente de SAP caia en las areas de ejemplo y siempre faltaba el area de ventas (p. ej. 1103/10).
-			areas: elegido.areas
+			areas: elegido.areas,
+			condicionesAreas: elegido.condicionesAreas
 		};
 		oferta.setProperty("/cliente", cliente);
 		oferta.setProperty("/clienteNoEncontrado", false);

@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+	condicionDeArea,
+	valoresDistintos,
 	unirAreas,
 	orgVehiculosDe,
 	puedeVenderOtroCentro,
@@ -336,4 +338,16 @@ test("faltaSectorDeVentas no decide sin datos y trata el area sin sector como va
 	assert.equal(faltaSectorDeVentas(["1201/10/10"], "1201", "10", undefined), false);
 	// Sin el area org/canal el aviso es el de area completa (faltaAreaDeVentas), no este.
 	assert.equal(faltaSectorDeVentas(["1103/11/10"], "1201", "10", "16"), false);
+});
+
+test("condicionDeArea toma la fila exacta (organizacion, canal y sector); valoresDistintos detecta monedas mezcladas", () => {
+	const fila = (vkorg: string, vtweg: string, spart: string, zterm: string, waers: string) => ({ vkorg, vtweg, spart, zterm, ztermTexto: "", waers, grupo: "", grupoTexto: "" });
+	// BM3 IMPORT (leido en el 130): en 1201 los sectores 10 y 11 van en USD y el 15 en PEN con otra condicion de pago.
+	const areas = [fila("1201", "10", "10", "C000", "USD"), fila("1201", "10", "15", "C030", "PEN"), fila("1201", "11", "15", "C030", "PEN")];
+	assert.equal(condicionDeArea(areas, "1201", "10", "10")?.waers, "USD");
+	assert.equal(condicionDeArea(areas, "1201", "10", "15")?.zterm, "C030");
+	assert.equal(condicionDeArea(areas, "1201", "10", "99"), undefined);
+	assert.equal(condicionDeArea(undefined, "1201", "10", "10"), undefined);
+	assert.deepEqual(valoresDistintos([areas[0], areas[1], undefined], "waers"), ["USD", "PEN"]);
+	assert.deepEqual(valoresDistintos([areas[1], areas[2]], "waers"), ["PEN"]);
 });
