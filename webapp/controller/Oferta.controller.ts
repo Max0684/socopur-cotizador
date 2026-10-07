@@ -10,7 +10,7 @@ import { cargarFormasPago } from "com/socopur/cotizador/model/FormasPagoService"
 import { consultarCondiciones, consultarPrecio, impuestosDeCondiciones } from "com/socopur/cotizador/model/PreciosService";
 import { type CondicionServicio, type FilaCondicion, descuentosAplicados, filasDeCondiciones } from "com/socopur/cotizador/model/Condiciones";
 import { agruparVehiculos, buscarVehiculos, filtrarVehiculos, textoDetalleVehiculo } from "com/socopur/cotizador/model/VehiculosService";
-import { areasOrgCanal, type CondicionArea, type OpcionAreaCliente, condicionDeArea, opcionesAreaCliente, almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, faltaSectorDeVentas, gruposParaGuardar, igvExonerado, modalidadPorDefecto, oficinaDe, orgVehiculosDe, puedeVenderOtroCentro, sectorDeCabecera, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
+import { areasOrgCanal, textoSolicitudAmpliacion, type CondicionArea, type OpcionAreaCliente, condicionDeArea, opcionesAreaCliente, almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, faltaSectorDeVentas, gruposParaGuardar, igvExonerado, modalidadPorDefecto, oficinaDe, orgVehiculosDe, puedeVenderOtroCentro, sectorDeCabecera, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
 import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type VinAsignado, esperarVinculos, leerMotivoVinculo, anularGrupo } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
 import { buscarRepuestosConStock, disponibilidadPorAlmacen, motivoVacio } from "com/socopur/cotizador/model/MaterialesService";
@@ -1694,7 +1694,10 @@ export default class Oferta extends Controller {
 		});
 	}
 
-	/** SIMULADO: en SAP se amplia el Business Partner al area de ventas (org. + canal) elegida. */
+	/**
+	 * El vendedor NO amplia el cliente: arma la solicitud para quien administra los datos maestros (condiciones de pago y credito del area nueva).
+	 * Se copia al portapapeles y, si el manifest trae un correo (config/ampliacionCorreo), se abre el correo ya redactado.
+	 */
 	public onAmpliarArea(): void {
 		const modelo = this.dialogoClienteActual?.getModel("cli") as JSONModel;
 		const cl = this.clienteActual();
@@ -1702,12 +1705,25 @@ export default class Oferta extends Controller {
 		if (!cl || !clave) {
 			return;
 		}
-		const nuevas = [...(cl.areas ?? []), clave];
-		this.modeloOferta().setProperty("/cliente/areas", nuevas);
-		this.modeloMock().setProperty(`/clientes/${cl.doc}/areas`, nuevas);
-		this.recalcular();
+		const oferta = this.modeloOferta();
+		const nueva = (modelo.getProperty("/disponibles") as { key: string; text: string }[]).find((a) => a.key === clave);
+		const referencia = ((oferta.getProperty("/areasCliente") as { key: string; text: string }[]) ?? []).find((o) => o.key !== "" && o.key === oferta.getProperty("/areaClienteSel"));
+		const { asunto, cuerpo } = textoSolicitudAmpliacion({
+			cliente: cl.nombre,
+			kunnr: cl.kunnr ?? "",
+			documento: `${cl.tipoDoc} ${cl.doc}`.trim(),
+			areaNueva: nueva?.text ?? clave,
+			areaReferencia: referencia?.text,
+			vendedor: String(oferta.getProperty("/perfil/vendedor") ?? ""),
+			motivo: ""
+		});
+		const correo = String((this.getOwnerComponent() as UIComponent).getManifestEntry("/sap.ui5/config/ampliacionCorreo") ?? "");
+		void navigator.clipboard?.writeText(`${asunto}\n\n${cuerpo}`).catch(() => undefined);
+		if (correo) {
+			window.open(`mailto:${correo}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`, "_self");
+		}
 		this.dialogoClienteActual?.close();
-		MessageToast.show(`${this.i18n().getText("ampliarOk")} (${this.i18n().getText("simulacion")})`);
+		MessageToast.show(this.i18n().getText(correo ? "ampliarSolicitudCorreo" : "ampliarSolicitudCopiada") as string, { duration: 6000 });
 	}
 
 	public onCerrarCliente(): void {

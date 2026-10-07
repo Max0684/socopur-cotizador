@@ -35,6 +35,9 @@
 			"id": "app",
 			"async": true
 		},
+		"config": {
+			"ampliacionCorreo": ""
+		},
 		"dependencies": {
 			"minUI5Version": "1.120.0",
 			"libs": {

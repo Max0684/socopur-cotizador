@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
 	condicionDeArea,
 	opcionesAreaCliente,
+	textoSolicitudAmpliacion,
 	valoresDistintos,
 	unirAreas,
 	orgVehiculosDe,
@@ -362,4 +363,13 @@ test("opcionesAreaCliente junta los sectores con la misma condicion y separa los
 	assert.deepEqual([r[0].waers, r[1].waers, r[2].waers], ["USD", "PEN", "PEN"]);
 	assert.deepEqual(opcionesAreaCliente(areas, []), []);
 	assert.deepEqual(opcionesAreaCliente(undefined, ["1201"]), []);
+});
+
+test("textoSolicitudAmpliacion arma el asunto y el cuerpo con cliente, area pedida, referencia y solicitante", () => {
+	const r = textoSolicitudAmpliacion({ cliente: "LUPITA DE ORO E.I.R.L.", kunnr: "0100025753", documento: "RUC 20608598970", areaNueva: "1203 Repuestos Promogesa · 10 Mayorista", areaReferencia: "1101 · pago C030", vendedor: "99000258 — INCA", motivo: "" });
+	assert.equal(r.asunto, "Ampliar cliente 0100025753 a 1203 Repuestos Promogesa · 10 Mayorista");
+	assert.ok(r.cuerpo.includes("Cliente: LUPITA DE ORO E.I.R.L. (N° 0100025753, RUC 20608598970)"));
+	assert.ok(r.cuerpo.includes("Copiar condiciones de: 1101 · pago C030"));
+	assert.ok(r.cuerpo.includes("Solicitante: 99000258"));
+	assert.ok(!textoSolicitudAmpliacion({ cliente: "X", kunnr: "1", documento: "", areaNueva: "A", vendedor: "V", motivo: "" }).cuerpo.includes("Copiar condiciones"));
 });

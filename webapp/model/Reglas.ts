@@ -133,6 +133,31 @@ export function opcionesAreaCliente(condiciones: CondicionArea[] | undefined, or
 		.sort((a, b) => a.vkorg.localeCompare(b.vkorg) || a.vtweg.localeCompare(b.vtweg) || a.sectores[0].localeCompare(b.sectores[0]));
 }
 
+export interface SolicitudAmpliacion {
+	cliente: string;
+	kunnr: string;
+	documento: string;
+	/** Area que se pide (organizacion y canal, ya con sus nombres) y, si se conoce, de cual copiar las condiciones. */
+	areaNueva: string;
+	areaReferencia?: string;
+	vendedor: string;
+	motivo: string;
+}
+
+/** Texto de la solicitud de ampliacion de un cliente a una area de ventas, para quien administra los datos maestros. */
+export function textoSolicitudAmpliacion(s: SolicitudAmpliacion): { asunto: string; cuerpo: string } {
+	const lineas = [
+		"Solicitud de ampliación de cliente a un área de ventas",
+		"",
+		`Cliente: ${s.cliente} (N° ${s.kunnr}${s.documento ? `, ${s.documento}` : ""})`,
+		`Área de ventas solicitada: ${s.areaNueva}`,
+		...(s.areaReferencia ? [`Copiar condiciones de: ${s.areaReferencia}`] : []),
+		`Motivo: ${s.motivo || "cotización en el Cotizador"}`,
+		`Solicitante: ${s.vendedor}`
+	];
+	return { asunto: `Ampliar cliente ${s.kunnr} a ${s.areaNueva}`, cuerpo: lineas.join("\n") };
+}
+
 /** Los clientes de SAP traen sus areas como organizacion/canal/sector; para comparar se usa organizacion/canal. */
 export function areasOrgCanal(areas: string[]): string[] {
 	return areas.map((a) => a.split("/").slice(0, 2).join("/"));
