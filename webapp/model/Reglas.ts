@@ -210,3 +210,38 @@ export function totalesDeOferta(lineas: LineaTotales[]): TotalesOferta {
 	const igv = igvConocido ? redondear(lineas.reduce((acc, l) => acc + (l.impuesto ?? 0), 0)) : 0;
 	return { subtotal, neto: redondear(subtotal - isc), isc, hayIsc: isc > 0, igv, igvConocido, total: redondear(subtotal + igv), desglose: false };
 }
+
+/**
+ * Organizacion de ventas de VEHICULOS que corresponde a la de repuestos de un perfil: la de la misma sociedad (11xx SOCOPUR, 12xx PROMOTORA
+ * GENESIS, 13xx SOCOPUR SELVA). Verificado en DS4/130: comparten centros y sus oficinas estan asignadas tambien a la org de vehiculos
+ * (excepcion: una oficina de 1303 no esta en 1301). 1102/1202/1302 no venden vehiculos (o solo en el canal 11 de 3101/3201), por eso van a su org de vehiculos.
+ */
+const ORG_VEHICULOS_DE: Record<string, string> = { "1102": "1101", "1103": "1101", "1202": "1201", "1203": "1201", "1302": "1301", "1303": "1301" };
+
+export function orgVehiculosDe(orgRepuestos: string): string | undefined {
+	return ORG_VEHICULOS_DE[orgRepuestos];
+}
+
+/**
+ * Permiso para vender vehiculos de un centro distinto al del perfil (la factura y la salida de mercancia saldrian de otro centro y afectan su stock).
+ * Por ahora solo el rol administrador (A) de YCOTIZ_VENDEDOR; un permiso propio por vendedor queda pendiente de definir con Socopur.
+ */
+export function puedeVenderOtroCentro(rol?: string): boolean {
+	return rol === "A";
+}
+
+/**
+ * true si el cliente SI esta dado de alta en la organizacion y el canal pero NO en el sector de la cabecera de la oferta (SAP rechaza el documento:
+ * "No se ha creado el solicitante para area de ventas org canal sector"). Las areas de SAP vienen como organizacion/canal/sector; una area sin
+ * sector (la que agrega "ampliar area") vale para cualquier sector. Sin sector o sin areas conocidas no se puede decidir y devuelve false.
+ */
+export function faltaSectorDeVentas(areasCliente: string[] | undefined, orgVentas: string | undefined, canal: string, sector: string | undefined): boolean {
+	if (!areasCliente?.length || !orgVentas || !canal || !sector) {
+		return false;
+	}
+	const delArea = areasCliente.map((a) => a.split("/")).filter((p) => p[0] === orgVentas && p[1] === canal);
+	if (delArea.length === 0 || delArea.some((p) => p.length < 3)) {
+		return false;
+	}
+	return !delArea.some((p) => p[2] === sector);
+}

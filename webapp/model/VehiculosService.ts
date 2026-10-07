@@ -82,6 +82,10 @@ export interface VehiculoSap {
 	/** Almacen donde esta el stock del vehiculo. */
 	almacen: string;
 	disponibilidad: string;
+	/** Centro y almacen del stock, para mostrarlos. */
+	centroTxt?: string;
+	/** true si el vehiculo esta en un centro distinto al del perfil del vendedor. */
+	otroCentro?: boolean;
 }
 
 const comillas = (texto: string): string => texto.replace(/'/g, "''");
@@ -176,4 +180,13 @@ export function agruparVehiculos(filas: VehiculoSap[]): VehiculoSap[] {
 		}
 	});
 	return [...grupos.values()];
+}
+
+/**
+ * Texto de la columna "Detalle" de un vehiculo: color, ano, condicion y VIN, SOLO los que existen. Algunos modelos (p. ej. motos Lifan) no traen
+ * color ni ano: antes salia "· 0 · CBU".
+ */
+export function textoDetalleVehiculo(v: { colorTxt?: string; color?: string; anio?: number | string; condicion?: string; vin?: string }): string {
+	const anio = Number(v.anio) > 0 ? String(v.anio) : "";
+	return [v.colorTxt || v.color || "", anio, v.condicion || "", v.vin || ""].filter((p) => p.trim() !== "").join(" \u00b7 ");
 }

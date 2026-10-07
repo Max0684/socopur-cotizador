@@ -21,6 +21,8 @@ export interface OpcionesModeloFalso {
 	estado?: Record<string, unknown> | null;
 	/** Filas que devuelve la entidad Precio. */
 	precios?: Record<string, unknown>[];
+	/** Campos que el $metadata "publica", como "Precio/Vkbur" o "Cotizacion/Pernr"; por defecto ninguno. */
+	camposPublicados?: string[];
 }
 
 export interface Creada {
@@ -35,6 +37,13 @@ export function crearModeloFalso(opciones: OpcionesModeloFalso = {}) {
 	let contadorItem = 0;
 
 	const modelo = {
+		getMetaModel() {
+			return {
+				async requestObject(ruta: string) {
+					return opciones.camposPublicados?.includes(ruta.replace(/^\//, "")) ? {} : undefined;
+				}
+			};
+		},
 		bindList(ruta: string, _padre?: unknown, _a?: unknown, _b?: unknown, parametros?: { $filter?: string }) {
 			return {
 				async requestContexts() {

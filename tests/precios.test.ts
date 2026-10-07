@@ -86,3 +86,28 @@ test("impuestosDeCondiciones: sin condiciones de impuesto (cliente exonerado o s
 	assert.deepEqual(impuestosDeCondiciones([{ CondType: "ZIGV", Total: "1.10" }, { CondType: "ZIGV", Total: 2.2 }, { CondType: "ZISC", Total: "5" }]), { igv: 3.3, isc: 5 });
 	assert.deepEqual(impuestosDeCondiciones([]), { igv: 0, isc: 0 });
 });
+
+test("filtroPrecio agrega oficina y forma de pago cuando vienen", () => {
+	const f = filtroPrecio({ ...consulta, vkbur: "2001", zterm: "C000" });
+	assert.match(f, / and Vkbur eq '2001' and Zterm eq 'C000'$/);
+	assert.doesNotMatch(filtroPrecio(consulta), /Vkbur|Zterm/);
+});
+
+const fila = [{ Moneda: "PEN", PrecioLista: "65.30", PrecioUnitario: "58.77", Neto: "49.81", Impuestos: "8.96", Respuesta: 0, Mensaje: "" }];
+
+test("consultarPrecio manda oficina y forma de pago solo si el servicio ya publica esos campos", async () => {
+	const publicado = crearModeloFalso({ precios: fila, camposPublicados: ["Precio/Vkbur", "Precio/Zterm"] });
+	await consultarPrecio(como(publicado.modelo), { ...consulta, vkbur: "2001", zterm: "C000" });
+	assert.match(publicado.llamadas[0], /Vkbur eq '2001' and Zterm eq 'C000'/);
+
+	const antiguo = crearModeloFalso({ precios: fila });
+	await consultarPrecio(como(antiguo.modelo), { ...consulta, vkbur: "2001", zterm: "C000" });
+	assert.doesNotMatch(antiguo.llamadas[0], /Vkbur|Zterm/);
+});
+
+test("consultarPrecio manda solo el campo que el servicio publica", async () => {
+	const { modelo, llamadas } = crearModeloFalso({ precios: fila, camposPublicados: ["Precio/Vkbur"] });
+	await consultarPrecio(como(modelo), { ...consulta, vkbur: "2001", zterm: "C000" });
+	assert.match(llamadas[0], /Vkbur eq '2001'/);
+	assert.doesNotMatch(llamadas[0], /Zterm/);
+});

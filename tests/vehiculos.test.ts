@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buscarVehiculos, filaDeVehiculo, filtrarVehiculos, filtroVehiculos, agruparVehiculos, type FilaVehiculoSap } from "../webapp/model/VehiculosService.ts";
+import { buscarVehiculos, filaDeVehiculo, filtrarVehiculos, filtroVehiculos, agruparVehiculos, type FilaVehiculoSap , textoDetalleVehiculo } from "../webapp/model/VehiculosService.ts";
 
 const fila = (extra: Partial<FilaVehiculoSap> = {}): FilaVehiculoSap => ({
 	Vkorg: "1101", Vtweg: "10", Vhcle: "1000006683", Vhvin: "LF3HCM0X9SG004459", Matnr: "CAR200B", Maktx: "LF200ZH-X", Werks: "1101",
@@ -70,4 +70,10 @@ test("filaDeVehiculo guarda el nombre del color y la busqueda libre lo encuentra
 	assert.equal(v.colorTxt, "AZUL");
 	assert.equal(filtrarVehiculos([v], { texto: "azul" }).length, 1);
 	assert.equal(filaDeVehiculo(fila()).colorTxt, "");
+});
+
+test("textoDetalleVehiculo omite color, ano y VIN que no existen (antes salia \"· 0 · CBU\")", () => {
+	assert.equal(textoDetalleVehiculo({ colorTxt: "", color: "", anio: 0, condicion: "CBU" }), "CBU");
+	assert.equal(textoDetalleVehiculo({ colorTxt: "AZUL", anio: 2025, condicion: "CBU", vin: "VBKJ" }), "AZUL \u00b7 2025 \u00b7 CBU \u00b7 VBKJ");
+	assert.equal(textoDetalleVehiculo({ color: "NEG", anio: "2024", condicion: "CKD" }), "NEG \u00b7 2024 \u00b7 CKD");
 });

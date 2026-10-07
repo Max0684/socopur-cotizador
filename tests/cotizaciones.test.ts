@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { asignarVinItem, ATNAM_VARIANTE, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, OfertaEnProcesoError, liberarVinItem, renovarCotizacion, type GrupoParaGuardar, type OfertaParaGuardar } from "../webapp/model/CotizacionesService.ts";
+import { asignarVinItem, ATNAM_VARIANTE, crearPedidoGrupo, esperarVinculos, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, OfertaEnProcesoError, liberarVinItem, renovarCotizacion, type GrupoParaGuardar, type OfertaParaGuardar } from "../webapp/model/CotizacionesService.ts";
 import { crearModeloFalso } from "./helpers/modeloFalso.ts";
 
 function grupo(extra: Partial<GrupoParaGuardar> = {}): GrupoParaGuardar {
@@ -328,4 +328,64 @@ test("crearPedidoGrupo: el Estado queda en P aunque SAP rechace el pedido; se de
 	};
 	await assert.rejects(() => crearPedidoGrupo(como(modelo), "COT-1", "01", { ...sinPausa, pausa: contar }), (e: Error) => !(e instanceof OfertaEnProcesoError) && /no tiene stock disponible/.test(e.message));
 	assert.ok(esperas <= 4, `espero ${esperas} veces en vez de cortar`);
+});
+
+test("guardarCotizacion envia el PERNR del vendedor si el servicio ya publica Cotizacion/Pernr", async () => {
+	const { modelo, creadas } = crearModeloFalso({ gruposLeidos: [{ GrupoNo: "01", VbelnOferta: "3100007390" }], camposPublicados: ["Cotizacion/Pernr"] });
+	await guardarCotizacion(como(modelo), { ...oferta(), pernr: "99000103" });
+	assert.equal(creadas[0].datos.Pernr, "99000103");
+});
+
+test("guardarCotizacion no envia Pernr si el servicio no lo publica o no hay vendedor", async () => {
+	const sinCampo = crearModeloFalso({ gruposLeidos: [{ GrupoNo: "01", VbelnOferta: "3100007390" }] });
+	await guardarCotizacion(como(sinCampo.modelo), { ...oferta(), pernr: "99000103" });
+	assert.equal("Pernr" in sinCampo.creadas[0].datos, false);
+
+	const sinVendedor = crearModeloFalso({ gruposLeidos: [{ GrupoNo: "01", VbelnOferta: "3100007390" }], camposPublicados: ["Cotizacion/Pernr"] });
+	await guardarCotizacion(como(sinVendedor.modelo), { ...oferta(), pernr: "" });
+	assert.equal("Pernr" in sinVendedor.creadas[0].datos, false);
+});
+
+test("guardarCotizacion envia la condicion de expedicion (Vsbed) elegida si el servicio la publica", async () => {
+	const { modelo, creadas } = crearModeloFalso({ gruposLeidos: [{ GrupoNo: "01", VbelnOferta: "3100007390" }], camposPublicados: ["Cotizacion/Vsbed"] });
+	await guardarCotizacion(como(modelo), { ...oferta(), vsbed: "01" });
+	assert.equal(creadas[0].datos.Vsbed, "01");
+});
+
+test("guardarCotizacion no envia Vsbed si esta vacia o el servicio no la publica", async () => {
+	const vacia = crearModeloFalso({ gruposLeidos: [{ GrupoNo: "01", VbelnOferta: "3100007390" }], camposPublicados: ["Cotizacion/Vsbed"] });
+	await guardarCotizacion(como(vacia.modelo), { ...oferta(), vsbed: "" });
+	assert.equal("Vsbed" in vacia.creadas[0].datos, false);
+
+	const sinCampo = crearModeloFalso({ gruposLeidos: [{ GrupoNo: "01", VbelnOferta: "3100007390" }] });
+	await guardarCotizacion(como(sinCampo.modelo), { ...oferta(), vsbed: "01" });
+	assert.equal("Vsbed" in sinCampo.creadas[0].datos, false);
+});
+
+const vin = (posnr: string, vinculo?: string) => ({ posnr, material: "AD250Z0", vhcle: "1000000134", vin: "VBKJ", color: "", variante: "", ...(vinculo === undefined ? {} : { vinculo }) });
+
+test("esperarVinculos espera a que el VIN pase de pendiente a vinculado", async () => {
+	const lecturas = [[vin("000010", "P")], [vin("000010", "")], [vin("000010", "V")]];
+	let n = 0;
+	const pausas: number[] = [];
+	const r = await esperarVinculos(async () => lecturas[Math.min(n++, lecturas.length - 1)], { intervaloMs: 10, pausa: async (ms) => void pausas.push(ms) });
+	assert.equal(r.get("000010"), "V");
+	assert.equal(n, 3);
+	assert.equal(pausas.length, 2);
+});
+
+test("esperarVinculos devuelve el error sin seguir esperando y trata el vinculo vacio como pendiente", async () => {
+	const error = await esperarVinculos(async () => [vin("000010", "E"), vin("000020", "V")], { pausa: async () => undefined });
+	assert.equal(error.get("000010"), "E");
+	assert.equal(error.get("000020"), "V");
+	const pendiente = await esperarVinculos(async () => [vin("000010", "")], { intervaloMs: 10, maximoMs: 20, pausa: async () => undefined });
+	assert.equal(pendiente.get("000010"), "P");
+});
+
+test("esperarVinculos sin VIN o sin el campo del servicio no espera", async () => {
+	assert.equal((await esperarVinculos(async () => [], { pausa: async () => undefined })).size, 0);
+	let veces = 0;
+	const sinCampo = await esperarVinculos(async () => { veces++; return [{ ...vin("000010"), vhcle: "" }]; }, { pausa: async () => undefined });
+	assert.equal(sinCampo.size, 0);
+	assert.equal(veces, 1);
 });

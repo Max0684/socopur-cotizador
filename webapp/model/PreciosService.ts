@@ -1,4 +1,6 @@
 import type ODataModel from "sap/ui/model/odata/v4/ODataModel";
+import { entidadTieneCampo } from "./CamposServicio";
+import type { CondicionServicio } from "./Condiciones";
 import type { Precio } from "./odata/Entidades";
 
 /** Lo que se pregunta al servicio de precios (entidad Precio de YUI_COTIZ_SRV, que llama a Z_FM_SD_GET_CONDICIONES). */
@@ -14,6 +16,13 @@ export interface ConsultaPrecio {
 	waers: "PEN" | "USD";
 	/** aaaa-mm-dd; vacia = hoy. */
 	fecha?: string;
+	/**
+	 * Oficina de ventas y forma de pago del documento. Sin ellas SAP no encuentra condiciones cuya clave las incluye (p. ej. el
+	 * descuento Z320 por oficina + grupo de clientes + grupo de materiales, o las escalas Z323/Z324 por forma de pago) y el precio
+	 * sale distinto al del pedido. Solo se envian si el servicio las publica (ver quitarNoPublicados).
+	 */
+	vkbur?: string;
+	zterm?: string;
 	/** Solo vehiculos: variante (modelo + condicion + ano + color); el precio sale de ella, con Matnr = el modelo. */
 	varcond?: string;
 }
@@ -50,7 +59,25 @@ export function filtroPrecio(c: ConsultaPrecio): string {
 	if (c.varcond) {
 		partes.push(`Varcond eq '${comillas(c.varcond)}'`);
 	}
+	if (c.vkbur) {
+		partes.push(`Vkbur eq '${comillas(c.vkbur)}'`);
+	}
+	if (c.zterm) {
+		partes.push(`Zterm eq '${comillas(c.zterm)}'`);
+	}
 	return partes.join(" and ");
+}
+
+/** Quita oficina y forma de pago si la entidad aun no tiene esos campos: un filtro desconocido haria fallar toda la consulta. */
+async function quitarNoPublicados(modelo: ODataModel, entidad: string, c: ConsultaPrecio): Promise<ConsultaPrecio> {
+	const salida = { ...c };
+	if (salida.vkbur && !(await entidadTieneCampo(modelo, entidad, "Vkbur"))) {
+		delete salida.vkbur;
+	}
+	if (salida.zterm && !(await entidadTieneCampo(modelo, entidad, "Zterm"))) {
+		delete salida.zterm;
+	}
+	return salida;
 }
 
 /**
@@ -59,7 +86,7 @@ export function filtroPrecio(c: ConsultaPrecio): string {
  * Verificado por OData en DS4/130: SFX428H-150-MTK x100, canal 10 -> PEN 17.50 y USD 5.14 por unidad.
  */
 export async function consultarPrecio(modelo: ODataModel, consulta: ConsultaPrecio): Promise<PrecioSap> {
-	const lista = modelo.bindList("/Precio", undefined, undefined, undefined, { $filter: filtroPrecio(consulta) });
+	const lista = modelo.bindList("/Precio", undefined, undefined, undefined, { $filter: filtroPrecio(await quitarNoPublicados(modelo, "Precio", consulta)) });
 	const contextos = await lista.requestContexts(0, 1);
 	const fila = contextos[0]?.getObject() as Precio | undefined;
 	if (!fila) {
@@ -110,6 +137,17 @@ export function impuestosDeCondiciones(condiciones: CondicionSap[]): ImpuestosLi
  * centro, organizacion, canal, clase y cantidad). Es una estimacion; el valor final es el del documento.
  */
 export async function consultarImpuestos(modelo: ODataModel, consulta: ConsultaPrecio): Promise<ImpuestosLinea> {
-	const filas = await modelo.bindList("/PrecioCond", undefined, undefined, undefined, { $filter: filtroPrecio(consulta) }).requestContexts(0, 100);
+	const filtro = filtroPrecio(await quitarNoPublicados(modelo, "PrecioCond", consulta));
+	const filas = await modelo.bindList("/PrecioCond", undefined, undefined, undefined, { $filter: filtro }).requestContexts(0, 100);
 	return impuestosDeCondiciones(filas.map((c) => c.getObject() as CondicionSap));
+}
+
+/**
+ * Todas las condiciones de la linea (precio, descuentos, impuestos, subtotales) segun la simulacion de SAP, para mostrarlas como lista.
+ * Es la misma simulacion que el precio y los impuestos; no se calcula nada en el front.
+ */
+export async function consultarCondiciones(modelo: ODataModel, consulta: ConsultaPrecio): Promise<CondicionServicio[]> {
+	const filtro = filtroPrecio(await quitarNoPublicados(modelo, "PrecioCond", consulta));
+	const filas = await modelo.bindList("/PrecioCond", undefined, undefined, undefined, { $filter: filtro }).requestContexts(0, 100);
+	return filas.map((c) => c.getObject() as CondicionServicio);
 }

@@ -1,0 +1,29 @@
+<core:FragmentDefinition
+	xmlns="sap.m"
+	xmlns:core="sap.ui.core">
+	<!-- Elementos de precio de una linea (como la pantalla de SAP): una fila por condicion. Se usa dentro de una lista cuyo contexto tiene "condiciones". -->
+	<Table items="{oferta>condiciones}" contextualWidth="Auto" noDataText="{i18n>sinCondiciones}">
+		<columns>
+			<Column width="7rem"><Text text="{i18n>condTipo}" /></Column>
+			<Column><Text text="{i18n>colDescripcion}" /></Column>
+			<Column hAlign="End"><Text text="{i18n>condImporteRatio}" /></Column>
+			<Column width="9rem" minScreenWidth="48rem" demandPopin="true"><Text text="{i18n>condUmPrecio}" /></Column>
+			<Column hAlign="End"><Text text="{i18n>condValor}" /></Column>
+			<Column width="6rem" hAlign="Center" minScreenWidth="60rem" demandPopin="true"><Text text="{i18n>condEstadistica}" /></Column>
+			<Column width="6rem" hAlign="Center" minScreenWidth="60rem" demandPopin="true"><Text text="{i18n>condManual}" /></Column>
+		</columns>
+		<items>
+			<ColumnListItem>
+				<cells>
+					<Text text="{= ${oferta>subtotal} ? '' : ${oferta>tipo} }" class="sapUiTinyMarginBegin" wrapping="false" />
+					<Text text="{oferta>descripcion}" />
+					<ObjectNumber number="{oferta>importeNum}" unit="{oferta>importeUnidad}" />
+					<Text text="{oferta>umPrecioTxt}" />
+					<ObjectNumber number="{oferta>valor}" unit="{oferta>valorMoneda}" state="{= ${oferta>valorNum} &lt; 0 ? 'Success' : 'None' }" />
+					<Text text="{= ${oferta>estadistica} ? ${i18n>si} : '' }" />
+					<Text text="{= ${oferta>manual} ? ${i18n>si} : '' }" />
+				</cells>
+			</ColumnListItem>
+		</items>
+	</Table>
+</core:FragmentDefinition>

@@ -27,6 +27,16 @@ export interface PrecioCond {
 	Base: string;
 	Total: string;
 	Escala: string;
+	/** Campos agregados el 06/10/2026 (pueden faltar en un servicio anterior). */
+	Descripcion?: string;
+	UmPrecio?: string;
+	MonedaDoc?: string;
+	Manual?: string;
+	Paso?: string;
+	Contador?: string;
+	TipoCalculo?: string;
+	Inactiva?: string;
+	Estadistica?: string;
 }
 
 /** Claves: Vkorg, Vtweg, Matnr, Werks, Lgort */
@@ -400,6 +410,8 @@ export interface Item {
 	Color: string;
 	ColorTxt: string;
 	Variante: string;
+	/** Solo lectura (publicado el 06/10/2026): P pendiente, V vinculado en VELO, E error, vacio sin VIN. Puede faltar en un servicio anterior. */
+	VinculoEstado?: string;
 	PrecioLista: string;
 	Waers: string;
 	HasDraftEntity: boolean;

@@ -1,6 +1,7 @@
 import type ODataModel from "sap/ui/model/odata/v4/ODataModel";
 import type Context from "sap/ui/model/odata/v4/Context";
 import type { Cotizacion, Grupo, GrupoEstado, Item, ItemCar, Material } from "./odata/Entidades";
+import { entidadTieneCampo } from "./CamposServicio";
 
 const NS = "com.sap.gateway.srvd_a2x.yui_cotiz_srv.v0001";
 
@@ -33,6 +34,10 @@ export interface OfertaParaGuardar {
 	moneda: string;
 	/** Forma de pago elegida (p. ej. C000 contado, C030 credito). Vacia = SAP usa la del maestro del cliente. */
 	zterm?: string;
+	/** Vendedor responsable (PERNR): SAP lo guarda como interlocutor VE del documento. Solo se envia si el servicio publica el campo. */
+	pernr?: string;
+	/** Condicion de expedicion (VSBED: 01 envio, 02 recojo) elegida en la pantalla; con ella SAP determina el punto de expedicion. */
+	vsbed?: string;
 	comentario: string;
 	grupos: GrupoParaGuardar[];
 }
@@ -97,8 +102,18 @@ const pausaReal = (ms: number): Promise<void> => new Promise((resolver) => setTi
 
 export async function guardarCotizacion(modelo: ODataModel, datos: OfertaParaGuardar, espera: EsperaOfertas = {}): Promise<ResultadoGuardado> {
 	const raiz = modelo.bindList("/Cotizacion");
+	// Un campo desconocido en el create hace que SAP rechace toda la oferta: el PERNR viaja solo si el $metadata ya lo trae.
+	const conPernr = !!datos.pernr && (await entidadTieneCampo(modelo, "Cotizacion", "Pernr"));
+	const conVsbed = !!datos.vsbed && (await entidadTieneCampo(modelo, "Cotizacion", "Vsbed"));
 	const cabecera = raiz.create(
-		{ Kunnr: datos.kunnr, Waers: datos.moneda, Comentario: datos.comentario, ...(datos.zterm ? { Zterm: datos.zterm } : {}) },
+		{
+			Kunnr: datos.kunnr,
+			Waers: datos.moneda,
+			Comentario: datos.comentario,
+			...(datos.zterm ? { Zterm: datos.zterm } : {}),
+			...(conPernr ? { Pernr: datos.pernr } : {}),
+			...(conVsbed ? { Vsbed: datos.vsbed } : {})
+		},
 		true
 	);
 	await cabecera.created();
@@ -266,6 +281,8 @@ export interface VinAsignado {
 	vkorg?: string;
 	vtweg?: string;
 	cantidad?: number;
+	/** Estado del vinculo con VELO (Item.VinculoEstado): P, V, E o vacio; undefined si el servicio aun no lo publica. */
+	vinculo?: string;
 }
 
 /** VIN libre que SAP ofrece para un vehiculo (entidad Vehiculo). */
@@ -318,6 +335,7 @@ const claveItem = (cotizId: string, posnr: string): string => `/Item(CotizId=${c
 
 function vinDeItem(i: Partial<Item> & { Vhvin?: string; ColorTxt?: string; Color?: string; Variante?: string }): VinAsignado {
 	return {
+		...(i.VinculoEstado === undefined ? {} : { vinculo: String(i.VinculoEstado).trim() }),
 		posnr: String(i.Posnr ?? ""),
 		material: String(i.Matnr ?? ""),
 		vhcle: String(i.Vhcle ?? ""),
@@ -334,11 +352,13 @@ function vinDeItem(i: Partial<Item> & { Vhvin?: string; ColorTxt?: string; Color
 export async function leerVinsGrupo(modelo: ODataModel, cotizId: string, grupoNo: string): Promise<VinAsignado[]> {
 	const cotizacion = `/Cotizacion(CotizId=${cotizId},IsActiveEntity=true)`;
 	const filtro = `GrupoNo eq '${grupoNo.replace(/'/g, "''")}'`;
+	// VinculoEstado se pide solo si el $metadata ya lo publica: un campo desconocido en $select haria fallar toda la lectura.
+	const conVinculo = await entidadTieneCampo(modelo, "Item", "VinculoEstado");
 	const items = (
 		await modelo
 			.bindList(`${cotizacion}/_Item`, undefined, undefined, undefined, {
 				$filter: filtro,
-				$select: "Posnr,Matnr,Cantidad,Werks,Vhcle,Vhvin,Color,ColorTxt,Variante",
+				$select: `Posnr,Matnr,Cantidad,Werks,Vhcle,Vhvin,Color,ColorTxt,Variante${conVinculo ? ",VinculoEstado" : ""}`,
 				$orderby: "Posnr"
 			})
 			.requestContexts(0, 200)
@@ -416,4 +436,43 @@ export async function renovarCotizacion(modelo: ODataModel, cotizId: string): Pr
 		grupos: (leido._Grupo ?? []).map((g) => ({ grupoNo: g.GrupoNo, vbelnOferta: g.VbelnOferta, vigenciaHasta: g.VigenciaHasta ?? "" })),
 		error: /\[Renovar grupo/.test(comentario) ? comentario : ""
 	};
+}
+
+/** Estado final del vinculo de un VIN con VELO: V vinculado, E error, P todavia en proceso. */
+export type EstadoVinculo = "V" | "E" | "P";
+
+/**
+ * Espera a que el proceso de fondo termine de vincular cada VIN del grupo con VELO (acciones ZLOR + ZTIR). `leer` devuelve los VIN del grupo con
+ * su Item.VinculoEstado. Un VIN con vinculo vacio se trata como pendiente: entre asignarVin y su guardado hay una ventana en que aun no esta
+ * registrado. Si se acaba el tiempo, los que sigan en proceso quedan como "P" (no es un error: el proceso puede estar terminando).
+ * Devuelve el estado por posicion (solo las que tienen VIN).
+ */
+export async function esperarVinculos(leer: () => Promise<VinAsignado[]>, espera: EsperaOfertas = {}): Promise<Map<string, EstadoVinculo>> {
+	const intervalo = espera.intervaloMs ?? 3000;
+	// El proceso de fondo puede esperar ~1 min en la cola del planificador antes de arrancar (visto en la prueba real: 53 s).
+	const maximo = espera.maximoMs ?? 120000;
+	const pausa = espera.pausa ?? pausaReal;
+	const resultado = new Map<string, EstadoVinculo>();
+	for (let transcurrido = 0; ; transcurrido += intervalo) {
+		resultado.clear();
+		for (const i of (await leer()).filter((x) => x.vhcle)) {
+			resultado.set(i.posnr, i.vinculo === "V" ? "V" : i.vinculo === "E" ? "E" : "P");
+		}
+		if (resultado.size === 0 || [...resultado.values()].every((e) => e !== "P") || transcurrido >= maximo) {
+			return resultado;
+		}
+		await pausa(intervalo);
+	}
+}
+
+/** Motivo del fallo de vinculo o de Z1 que el proceso de fondo deja en el Comentario de la cotizacion; vacio si no hay. */
+export async function leerMotivoVinculo(modelo: ODataModel, cotizId: string): Promise<string> {
+	try {
+		const c = (await modelo.bindContext(`/Cotizacion(CotizId=${cotizId},IsActiveEntity=true)`, undefined, { $select: "Comentario", $$ownRequest: true }).requestObject()) as Pick<Cotizacion, "Comentario">;
+		const texto = c.Comentario ?? "";
+		const desde = texto.indexOf("[Vinculo VIN");
+		return desde >= 0 ? texto.slice(desde).trim() : "";
+	} catch {
+		return "";
+	}
 }

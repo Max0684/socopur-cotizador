@@ -194,6 +194,8 @@
 								<Select selectedKey="{oferta>/perfil/oficina}" forceSelection="false" items="{oferta>/oficinasSede}"><core:Item key="{oferta>key}" text="{oferta>text}" /></Select>
 								<Label text="{i18n>centro}" />
 								<Select selectedKey="{oferta>/perfil/centro}" forceSelection="false" items="{oferta>/opcionesCentro}"><core:Item key="{oferta>key}" text="{oferta>text}" /></Select>
+								<Label text="{i18n>almacenPerfil}" />
+								<Input value="{parts: ['oferta>/perfil/centro', 'oferta>/perfil/almacen'], formatter: '.formatAlmacenPerfil'}" editable="false" description="{i18n>almacenPerfilNota}" />
 								<Label text="{i18n>moneda}" />
 								<Select selectedKey="{oferta>/perfil/moneda}" change=".onCambiaMoneda"><core:Item key="PEN" text="{i18n>monedaSoles}" /><core:Item key="USD" text="{i18n>monedaDolares}" /></Select>
 								<Label text="{i18n>formaPago}" />
@@ -255,7 +257,7 @@
 										<Column width="8rem" hAlign="End"><Text text="{i18n>colPrecioFinal}" /></Column>
 										<Column width="9rem" hAlign="Center"><Text text="{i18n>cantidad}" /></Column>
 										<Column width="8rem" hAlign="End"><Text text="{i18n>colTotalLinea}" /></Column>
-										<Column width="4rem" hAlign="Center"><Text text="" /></Column>
+										<Column width="7rem" hAlign="Center"><Text text="" /></Column>
 									</columns>
 									<items>
 										<ColumnListItem>
@@ -270,13 +272,30 @@
 												</VBox>
 												<Text text="{oferta>promoTxt}" />
 												<ObjectNumber number="{oferta>finalTxt}" unit="{oferta>/perfil/moneda}" />
-												<StepInput value="{oferta>cantidad}" min="1" width="7rem" change=".onCambiaCantidadFila" />
+												<StepInput value="{oferta>cantidad}" min="1" max="{oferta>maxCantidad}" width="7rem" change=".onCambiaCantidadFila" />
 												<ObjectNumber number="{oferta>totalTxt}" unit="{oferta>/perfil/moneda}" emphasized="true" />
-												<Button icon="sap-icon://inventory" type="Transparent" tooltip="{i18n>verStock}" press=".onVerStock" />
+												<HBox justifyContent="Center">
+													<Button icon="sap-icon://detail-view" type="Transparent" tooltip="{i18n>detalleVer}" press=".onVerDetalle" />
+													<Button icon="sap-icon://inventory" type="Transparent" tooltip="{i18n>verStock}" press=".onVerStock" />
+												</HBox>
 											</cells>
 										</ColumnListItem>
 									</items>
 								</Table>
+								<!-- Determinacion de precio: una linea por condicion de SAP (precio, descuentos, impuestos, subtotales) de cada material elegido -->
+								<HBox alignItems="Center" justifyContent="SpaceBetween" class="sapUiSmallMarginTop">
+									<Title text="{i18n>determinacionPrecio}" level="H4" />
+									<Select selectedKey="{oferta>/filtroCondiciones}" change=".onCambiaFiltroCondiciones" width="18rem">
+										<core:Item key="todos" text="{i18n>condTodos}" />
+										<core:Item key="relevantes" text="{i18n>condRelevantes}" />
+									</Select>
+								</HBox>
+								<VBox items="{oferta>/elegidosLista}">
+									<VBox class="sapUiTinyMarginTop">
+										<ObjectStatus text="{oferta>material} · {oferta>denominacion}" state="Information" />
+										<core:Fragment fragmentName="com.socopur.cotizador.view.fragment.CondicionesTabla" type="XML" />
+									</VBox>
+								</VBox>
 								<HBox class="sapUiSmallMarginTop">
 									<Button text="{i18n>agregarTodos}" press=".onAgregarLista" />
 								</HBox>
@@ -426,6 +445,19 @@
 											</ColumnListItem>
 										</items>
 									</Table>
+									<!-- Determinacion de precio de cada linea (condiciones de SAP: precio, descuentos, ISC, IGV, totales), como en repuestos -->
+									<Panel headerText="{i18n>determinacionPrecio}" expandable="true" expanded="true" class="sapUiSmallMarginTop" visible="{= ${oferta>/hayCondiciones} }">
+										<Select selectedKey="{oferta>/filtroCondiciones}" change=".onCambiaFiltroCondiciones" width="18rem" class="sapUiTinyMarginBottom">
+											<core:Item key="todos" text="{i18n>condTodos}" />
+											<core:Item key="relevantes" text="{i18n>condRelevantes}" />
+										</Select>
+										<VBox items="{oferta>lineas}">
+											<VBox class="sapUiTinyMarginTop" visible="{= !${oferta>bonificacion} }">
+												<ObjectStatus text="{oferta>material} · {oferta>denominacion}" state="Information" />
+												<core:Fragment fragmentName="com.socopur.cotizador.view.fragment.CondicionesTabla" type="XML" />
+											</VBox>
+										</VBox>
+									</Panel>
 									<HBox justifyContent="End" wrap="Wrap" class="sapUiSmallMarginTop">
 										<Label text="{i18n>subtotal}:" class="sapUiTinyMarginEnd" />
 										<ObjectNumber number="{path: 'oferta>subtotal', formatter: '.formatMonto'}" unit="{oferta>/perfil/moneda}" class="sapUiSmallMarginEnd" />
@@ -448,7 +480,7 @@
 				<uxap:subSections>
 					<uxap:ObjectPageSubSection>
 						<VBox>
-							<SegmentedButton selectedKey="{oferta>/entrega}" class="sapUiSmallMarginBottom">
+							<SegmentedButton selectedKey="{oferta>/entrega}" selectionChange=".onCambiaEntrega" class="sapUiSmallMarginBottom">
 								<items>
 									<SegmentedButtonItem key="recojo" text="{i18n>entregaRecojo}" />
 									<SegmentedButtonItem key="envio" text="{i18n>entregaEnvio}" />
@@ -457,7 +489,7 @@
 							<VBox visible="{= ${oferta>/entrega} === 'recojo' }">
 								<form:SimpleForm editable="false" layout="ColumnLayout" columnsM="1" columnsL="1" columnsXL="2">
 									<Label text="{i18n>puntoRecojo}" />
-									<Text text="{i18n>recojoTexto}" />
+									<Text text="{i18n>centro} {oferta>/perfil/centro} · {oferta>/perfil/sede}" />
 									<Label text="{i18n>direccionFactura}" />
 									<Text text="{oferta>/cliente/direccion}" />
 								</form:SimpleForm>

@@ -2,6 +2,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
 	unirAreas,
+	orgVehiculosDe,
+	puedeVenderOtroCentro,
+	faltaSectorDeVentas,
 	almacenDeCentro,
 	areasOrgCanal,
 	canalDe,
@@ -302,4 +305,35 @@ test("gruposParaGuardar: el sector de cabecera se recalcula con el sector del ma
 	const mostrador = gruposParaGuardar([{ canal: "11 Retail", claseOferta: "Z300", clasePedido: "Z311", modalidad: "rep_mostrador", lineas: [linea] }], { oficina: "2001", centro: "2001" }, () => "0004");
 	assert.equal(mayorista[0].spart, "50");
 	assert.equal(mostrador[0].spart, "99");
+});
+
+test("orgVehiculosDe lleva la org de repuestos a la de vehiculos de la misma sede", () => {
+	assert.equal(orgVehiculosDe("1103"), "1101");
+	assert.equal(orgVehiculosDe("1203"), "1201");
+	assert.equal(orgVehiculosDe("1303"), "1301");
+	assert.equal(orgVehiculosDe("1102"), "1101");
+	assert.equal(orgVehiculosDe("1202"), "1201");
+	assert.equal(orgVehiculosDe("1302"), "1301");
+	assert.equal(orgVehiculosDe("9999"), undefined);
+});
+
+test("puedeVenderOtroCentro solo para el rol administrador", () => {
+	assert.equal(puedeVenderOtroCentro("A"), true);
+	assert.equal(puedeVenderOtroCentro("V"), false);
+	assert.equal(puedeVenderOtroCentro(undefined), false);
+});
+
+test("faltaSectorDeVentas avisa si el cliente esta en la organizacion y el canal pero no en el sector de la cabecera", () => {
+	const areas = ["1201/10/10", "1201/11/10"];
+	assert.equal(faltaSectorDeVentas(areas, "1201", "10", "16"), true);
+	assert.equal(faltaSectorDeVentas(areas, "1201", "10", "10"), false);
+	assert.equal(faltaSectorDeVentas(["1201/10/10", "1201/10/16"], "1201", "10", "16"), false);
+});
+
+test("faltaSectorDeVentas no decide sin datos y trata el area sin sector como valida para cualquier sector", () => {
+	assert.equal(faltaSectorDeVentas(undefined, "1201", "10", "16"), false);
+	assert.equal(faltaSectorDeVentas(["1201/10"], "1201", "10", "16"), false);
+	assert.equal(faltaSectorDeVentas(["1201/10/10"], "1201", "10", undefined), false);
+	// Sin el area org/canal el aviso es el de area completa (faltaAreaDeVentas), no este.
+	assert.equal(faltaSectorDeVentas(["1103/11/10"], "1201", "10", "16"), false);
 });

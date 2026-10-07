@@ -1,0 +1,141 @@
+<core:FragmentDefinition
+	xmlns="sap.m"
+	xmlns:core="sap.ui.core">
+	<Dialog
+		id="dlgDetalleMaterial"
+		title="{i18n>detalleMaterial}"
+		contentWidth="64rem"
+		draggable="true"
+		resizable="true">
+		<content>
+			<VBox class="sapUiSmallMargin">
+				<!-- Cabecera: codigo, descripcion y precios de lista de referencia -->
+				<HBox wrap="Wrap" class="sapUiSmallMarginBottom">
+					<VBox class="sapUiSmallMarginEnd sapUiTinyMarginBottom">
+						<ObjectNumber number="{detalle>/material}" emphasized="true" />
+						<Label text="{i18n>colMaterial}" />
+					</VBox>
+					<VBox class="sapUiMediumMarginEnd sapUiTinyMarginBottom">
+						<Text text="{detalle>/denominacion}" />
+						<Label text="{i18n>colDescripcion}" />
+					</VBox>
+					<VBox class="sapUiSmallMarginEnd sapUiTinyMarginBottom" visible="{detalle>/esRepuesto}">
+						<ObjectNumber number="{detalle>/precioRet}" emphasized="true" />
+						<Label text="{i18n>detallePLista}" />
+					</VBox>
+					<VBox class="sapUiTinyMarginBottom" visible="{detalle>/esRepuesto}">
+						<ObjectNumber number="{detalle>/precioMay}" emphasized="true" />
+						<Label text="{i18n>detallePMayor}" />
+					</VBox>
+				</HBox>
+
+				<HBox wrap="Wrap" alignItems="Start">
+					<VBox class="sapUiSmallMarginEnd sapUiSmallMarginBottom" width="30rem">
+						<Title text="{i18n>detalleListaPrecios}" level="H5" class="sapUiTinyMarginBottom" />
+						<Table items="{detalle>/precios}" noDataText="{i18n>detalleSinDatos}">
+							<columns>
+								<Column><Text text="{i18n>detalleNombre}" /></Column>
+								<Column hAlign="End"><Text text="{i18n>condImporte}" /></Column>
+							</columns>
+							<items>
+								<ColumnListItem highlight="{= ${detalle>resaltado} ? 'Success' : 'None' }">
+									<cells>
+										<Text text="{detalle>nombre}" />
+										<Text text="{detalle>importe}" />
+									</cells>
+								</ColumnListItem>
+							</items>
+						</Table>
+					</VBox>
+					<VBox class="sapUiSmallMarginBottom" width="30rem">
+						<Title text="{i18n>detalleDescuentos}" level="H5" class="sapUiTinyMarginBottom" />
+						<Table items="{detalle>/descuentos}" noDataText="{i18n>detalleSinDescuentos}">
+							<columns>
+								<Column><Text text="{i18n>detalleCondicion}" /></Column>
+								<Column hAlign="End"><Text text="{i18n>detalleBeneficio}" /></Column>
+								<Column hAlign="End"><Text text="{i18n>detalleMonto}" /></Column>
+							</columns>
+							<items>
+								<ColumnListItem>
+									<cells>
+										<Text text="{detalle>nombre}" />
+										<Text text="{detalle>beneficio}" />
+										<ObjectNumber number="{detalle>monto}" state="Success" />
+									</cells>
+								</ColumnListItem>
+							</items>
+						</Table>
+					</VBox>
+				</HBox>
+
+				<HBox wrap="Wrap" alignItems="Start">
+					<VBox class="sapUiSmallMarginEnd sapUiSmallMarginBottom" width="30rem">
+						<Title text="{i18n>detalleEscalas}" level="H5" class="sapUiTinyMarginBottom" />
+						<Table items="{detalle>/escalas}" noDataText="{i18n>detalleSinEscalas}">
+							<columns>
+								<Column><Text text="{i18n>detalleNombre}" /></Column>
+								<Column hAlign="End"><Text text="{i18n>detalleDesde}" /></Column>
+								<Column hAlign="End"><Text text="{i18n>detalleDscto}" /></Column>
+							</columns>
+							<items>
+								<ColumnListItem>
+									<cells>
+										<Text text="{detalle>nombre}" />
+										<Text text="{detalle>desde}" />
+										<Text text="{detalle>descuento}" />
+									</cells>
+								</ColumnListItem>
+							</items>
+						</Table>
+					</VBox>
+					<VBox class="sapUiSmallMarginBottom" width="30rem">
+						<Title text="{i18n>detalleRegalos}" level="H5" class="sapUiTinyMarginBottom" />
+						<Table items="{detalle>/regalos}" noDataText="{i18n>detalleSinRegalos}">
+							<columns>
+								<Column width="5rem" hAlign="End"><Text text="{i18n>detalleMinimo}" /></Column>
+								<Column><Text text="{i18n>detalleArticuloGratis}" /></Column>
+								<Column width="5rem" hAlign="End"><Text text="{i18n>cantidad}" /></Column>
+							</columns>
+							<items>
+								<ColumnListItem>
+									<cells>
+										<Text text="{detalle>minimo}" />
+										<Text text="{detalle>articulo}" />
+										<Text text="{detalle>cantidad}" />
+									</cells>
+								</ColumnListItem>
+							</items>
+						</Table>
+					</VBox>
+				</HBox>
+
+				<Panel headerText="{i18n>detalleStock}" expandable="true" expanded="false">
+					<Table items="{detalle>/stock}" noDataText="{i18n>detalleSinDatos}">
+						<columns>
+							<Column><Text text="{i18n>ubicacion}" /></Column>
+							<Column width="8rem" hAlign="End"><Text text="{i18n>colDisponible}" /></Column>
+						</columns>
+						<items>
+							<ColumnListItem highlight="{= ${detalle>esMio} ? 'Information' : 'None' }">
+								<cells>
+									<ObjectIdentifier title="{detalle>ubicacion}" text="{= ${detalle>esMio} ? ${i18n>tuAlmacen} : '' }" />
+									<ObjectStatus text="{= ${detalle>disponible} > 0 ? ${detalle>disponible} : ${i18n>sinStock} }" state="{= ${detalle>disponible} > 0 ? 'Success' : 'Error' }" />
+								</cells>
+							</ColumnListItem>
+						</items>
+					</Table>
+				</Panel>
+			</VBox>
+		</content>
+		<footer>
+			<OverflowToolbar>
+				<Label text="{i18n>cantidad}" />
+				<StepInput value="{detalle>/cantidad}" min="1" max="{detalle>/maxCantidad}" width="8rem" change=".onDetalleCantidad" />
+				<Text text="{i18n>detalleTotal}: {detalle>/totalTxt} {oferta>/perfil/moneda}" />
+				<ToolbarSpacer />
+				<Button text="{i18n>detalleAgregar}" icon="sap-icon://add" type="Emphasized" press=".onDetalleAgregar" />
+				<Button text="{i18n>detalleCerrar}" press=".onDetalleCerrar" />
+			</OverflowToolbar>
+		</footer>
+	</Dialog>
+</core:FragmentDefinition>

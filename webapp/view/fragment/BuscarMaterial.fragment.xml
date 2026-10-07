@@ -157,6 +157,7 @@
 						<Column width="8rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colColor}" /></Column>
 						<Column width="3.5rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colAnio}" /></Column>
 						<Column width="6rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colCondicion}" /></Column>
+						<Column width="9rem"><Text text="{i18n>colCentroAlmacen}" /></Column>
 						<Column width="6rem" hAlign="End"><Text text="{i18n>colStockMio}" /></Column>
 						<Column width="9rem" hAlign="End"><Text text="{i18n>colPrecioLista}" /></Column>
 						<Column width="3rem" hAlign="Center"><Text text="" /></Column>
@@ -171,6 +172,10 @@
 								<Text text="{= ${busqueda>colorTxt} || ${busqueda>color} }" />
 								<Text text="{busqueda>anio}" />
 								<Text text="{busqueda>condicion}" tooltip="{= ${busqueda>condicion} === 'CBU' ? ${i18n>condicionCBU} : ${busqueda>condicion} === 'CKD' ? ${i18n>condicionCKD} : '' }" />
+								<ObjectStatus
+									text="{busqueda>centroTxt}"
+									state="{= ${busqueda>otroCentro} ? 'Warning' : 'None' }"
+									tooltip="{= ${busqueda>otroCentro} ? ${i18n>otroCentro} : '' }" />
 								<ObjectStatus
 									text="{= ${busqueda>stockMio} > 0 ? ${busqueda>stockMio} : ${i18n>sinStock} }"
 									state="{= ${busqueda>stockMio} > 0 ? 'Success' : 'Error' }" />
