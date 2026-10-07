@@ -3280,6 +3280,11 @@ export default class Oferta extends Controller {
 	/** El area elegida fija el canal, la forma de pago y la moneda del perfil con lo que SAP tiene para ese cliente en esa area. */
 	private aplicarAreaCliente(o: OpcionAreaCliente): void {
 		const oferta = this.modeloOferta();
+		// La ficha del cliente mostraba la primera fila de SAP; ahora muestra la condicion y el grupo del area elegida.
+		if (oferta.getProperty("/cliente")) {
+			oferta.setProperty("/cliente/condicion", o.ztermTexto || o.zterm);
+			oferta.setProperty("/cliente/grupo", o.grupoTexto || o.grupo);
+		}
 		const canales = (oferta.getProperty("/opciones/canales") as { key: string }[]) ?? [];
 		if (canales.some((c) => c.key === o.vtweg) && oferta.getProperty("/perfil/canal") !== o.vtweg) {
 			oferta.setProperty("/perfil/canal", o.vtweg);
