@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
 	condicionDeArea,
+	opcionesAreaCliente,
 	valoresDistintos,
 	unirAreas,
 	orgVehiculosDe,
@@ -350,4 +351,15 @@ test("condicionDeArea toma la fila exacta (organizacion, canal y sector); valore
 	assert.equal(condicionDeArea(undefined, "1201", "10", "10"), undefined);
 	assert.deepEqual(valoresDistintos([areas[0], areas[1], undefined], "waers"), ["USD", "PEN"]);
 	assert.deepEqual(valoresDistintos([areas[1], areas[2]], "waers"), ["PEN"]);
+});
+
+test("opcionesAreaCliente junta los sectores con la misma condicion y separa los que cambian de moneda o pago", () => {
+	const fila = (vkorg: string, vtweg: string, spart: string, zterm: string, waers: string) => ({ vkorg, vtweg, spart, zterm, ztermTexto: "", waers, grupo: "03", grupoTexto: "" });
+	const areas = [fila("1201", "10", "10", "C000", "USD"), fila("1201", "10", "11", "C000", "USD"), fila("1201", "10", "15", "C030", "PEN"), fila("1201", "11", "15", "C030", "PEN"), fila("1103", "11", "50", "C000", "PEN")];
+	const r = opcionesAreaCliente(areas, ["1201"]);
+	assert.equal(r.length, 3);
+	assert.deepEqual(r[0].sectores, ["10", "11"]);
+	assert.deepEqual([r[0].waers, r[1].waers, r[2].waers], ["USD", "PEN", "PEN"]);
+	assert.deepEqual(opcionesAreaCliente(areas, []), []);
+	assert.deepEqual(opcionesAreaCliente(undefined, ["1201"]), []);
 });

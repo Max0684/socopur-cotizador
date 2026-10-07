@@ -97,6 +97,42 @@ export function valoresDistintos(condiciones: (CondicionArea | undefined)[], cam
 	return [...new Set(condiciones.filter((c): c is CondicionArea => !!c).map((c) => c[campo]).filter(Boolean))];
 }
 
+/** Area de ventas del cliente para elegir en el perfil: organizacion + canal con las mismas condiciones, agrupando los sectores que las comparten. */
+export interface OpcionAreaCliente {
+	key: string;
+	vkorg: string;
+	vtweg: string;
+	sectores: string[];
+	zterm: string;
+	ztermTexto: string;
+	waers: string;
+	grupo: string;
+	grupoTexto: string;
+}
+
+/**
+ * Areas del cliente que puede usar el vendedor (las de sus organizaciones). Las filas de un mismo canal con la misma condicion de pago, moneda
+ * y grupo de clientes se juntan en una sola opcion; si cambian por sector (p. ej. USD en el sector 10 y PEN en el 15) quedan opciones separadas.
+ */
+export function opcionesAreaCliente(condiciones: CondicionArea[] | undefined, orgs: string[]): OpcionAreaCliente[] {
+	const grupos = new Map<string, OpcionAreaCliente>();
+	for (const c of condiciones ?? []) {
+		if (!orgs.includes(c.vkorg)) {
+			continue;
+		}
+		const clave = [c.vkorg, c.vtweg, c.zterm, c.waers, c.grupo].join("|");
+		const existente = grupos.get(clave);
+		if (existente) {
+			existente.sectores.push(c.spart);
+		} else {
+			grupos.set(clave, { key: clave, vkorg: c.vkorg, vtweg: c.vtweg, sectores: [c.spart], zterm: c.zterm, ztermTexto: c.ztermTexto, waers: c.waers, grupo: c.grupo, grupoTexto: c.grupoTexto });
+		}
+	}
+	return [...grupos.values()]
+		.map((o) => ({ ...o, sectores: [...o.sectores].sort() }))
+		.sort((a, b) => a.vkorg.localeCompare(b.vkorg) || a.vtweg.localeCompare(b.vtweg) || a.sectores[0].localeCompare(b.sectores[0]));
+}
+
 /** Los clientes de SAP traen sus areas como organizacion/canal/sector; para comparar se usa organizacion/canal. */
 export function areasOrgCanal(areas: string[]): string[] {
 	return areas.map((a) => a.split("/").slice(0, 2).join("/"));

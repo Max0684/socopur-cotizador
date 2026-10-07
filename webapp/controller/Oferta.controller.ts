@@ -10,7 +10,7 @@ import { cargarFormasPago } from "com/socopur/cotizador/model/FormasPagoService"
 import { consultarCondiciones, consultarPrecio, impuestosDeCondiciones } from "com/socopur/cotizador/model/PreciosService";
 import { type CondicionServicio, type FilaCondicion, descuentosAplicados, filasDeCondiciones } from "com/socopur/cotizador/model/Condiciones";
 import { agruparVehiculos, buscarVehiculos, filtrarVehiculos, textoDetalleVehiculo } from "com/socopur/cotizador/model/VehiculosService";
-import { type CondicionArea, condicionDeArea, almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, faltaSectorDeVentas, gruposParaGuardar, igvExonerado, modalidadPorDefecto, oficinaDe, orgVehiculosDe, puedeVenderOtroCentro, sectorDeCabecera, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
+import { type CondicionArea, type OpcionAreaCliente, condicionDeArea, opcionesAreaCliente, almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, faltaSectorDeVentas, gruposParaGuardar, igvExonerado, modalidadPorDefecto, oficinaDe, orgVehiculosDe, puedeVenderOtroCentro, sectorDeCabecera, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
 import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type VinAsignado, esperarVinculos, leerMotivoVinculo, anularGrupo } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
 import { buscarRepuestosConStock, disponibilidadPorAlmacen, motivoVacio } from "com/socopur/cotizador/model/MaterialesService";
@@ -3242,9 +3242,63 @@ export default class Oferta extends Controller {
 		}
 	}
 
+	/**
+	 * Areas de ventas del cliente (de las organizaciones del vendedor) para elegir en el perfil. Un cliente puede tener condiciones distintas
+	 * por canal y por sector; con una sola opcion se aplica sola, con varias el vendedor elige.
+	 */
+	private cargarAreasCliente(): void {
+		const oferta = this.modeloOferta();
+		const cliente = oferta.getProperty("/cliente") as Cliente | null;
+		const org = String(oferta.getProperty("/perfil/orgVentas") ?? "");
+		const orgs = [org, orgVehiculosDe(org) ?? ""].filter(Boolean);
+		const mock = this.modeloMock();
+		const canales = (mock.getProperty("/canales") as { key: string; text: string }[]) ?? [];
+		const opciones = opcionesAreaCliente(cliente?.condicionesAreas, orgs).map((o) => ({
+			...o,
+			text: this.textoAreaCliente(o, canales.find((c) => c.key === o.vtweg)?.text ?? `canal ${o.vtweg}`)
+		}));
+		oferta.setProperty("/areasCliente", opciones);
+		oferta.setProperty("/areaClienteSel", opciones.length === 1 ? opciones[0].key : "");
+		if (opciones.length === 1) {
+			this.aplicarAreaCliente(opciones[0]);
+		}
+	}
+
+	private textoAreaCliente(o: OpcionAreaCliente, canal: string): string {
+		const sectores = o.sectores.length > 3 ? `${o.sectores[0]}-${o.sectores[o.sectores.length - 1]}` : o.sectores.join(", ");
+		return this.i18n().getText("areaClienteOpcion", [o.vkorg, canal, sectores, o.zterm || "—", o.waers || "—"]) as string;
+	}
+
+	public onCambiaAreaCliente(): void {
+		const oferta = this.modeloOferta();
+		const elegida = ((oferta.getProperty("/areasCliente") as OpcionAreaCliente[]) ?? []).find((o) => o.key === oferta.getProperty("/areaClienteSel"));
+		if (elegida) {
+			this.aplicarAreaCliente(elegida);
+		}
+	}
+
+	/** El area elegida fija el canal, la forma de pago y la moneda del perfil con lo que SAP tiene para ese cliente en esa area. */
+	private aplicarAreaCliente(o: OpcionAreaCliente): void {
+		const oferta = this.modeloOferta();
+		const canales = (oferta.getProperty("/opciones/canales") as { key: string }[]) ?? [];
+		if (canales.some((c) => c.key === o.vtweg) && oferta.getProperty("/perfil/canal") !== o.vtweg) {
+			oferta.setProperty("/perfil/canal", o.vtweg);
+			void this.onCambiaCanal();
+		}
+		const formas = (oferta.getProperty("/formasPago") as { key: string }[]) ?? [];
+		if (o.zterm && formas.some((f) => f.key === o.zterm)) {
+			oferta.setProperty("/perfil/formaPago", o.zterm);
+		}
+		if ((o.waers === "PEN" || o.waers === "USD") && oferta.getProperty("/perfil/moneda") !== o.waers) {
+			oferta.setProperty("/perfil/moneda", o.waers);
+			this.onCambiaMoneda();
+		}
+	}
+
 	private refrescarTrasCliente(): void {
 		const oferta = this.modeloOferta();
 		oferta.setProperty("/entregaDatos/direccionId", "");
+		this.cargarAreasCliente();
 		this.aplicarDireccionEnvio();
 		this.recalcular();
 		// El precio de SAP depende del cliente: las lineas ya agregadas se vuelven a preciar con el cliente nuevo.
