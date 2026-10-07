@@ -10,7 +10,7 @@ import { cargarFormasPago } from "com/socopur/cotizador/model/FormasPagoService"
 import { consultarCondiciones, consultarPrecio, impuestosDeCondiciones } from "com/socopur/cotizador/model/PreciosService";
 import { type CondicionServicio, type FilaCondicion, descuentosAplicados, filasDeCondiciones } from "com/socopur/cotizador/model/Condiciones";
 import { agruparVehiculos, buscarVehiculos, filtrarVehiculos, textoDetalleVehiculo } from "com/socopur/cotizador/model/VehiculosService";
-import { type CondicionArea, type OpcionAreaCliente, condicionDeArea, opcionesAreaCliente, almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, faltaSectorDeVentas, gruposParaGuardar, igvExonerado, modalidadPorDefecto, oficinaDe, orgVehiculosDe, puedeVenderOtroCentro, sectorDeCabecera, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
+import { areasOrgCanal, type CondicionArea, type OpcionAreaCliente, condicionDeArea, opcionesAreaCliente, almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, faltaSectorDeVentas, gruposParaGuardar, igvExonerado, modalidadPorDefecto, oficinaDe, orgVehiculosDe, puedeVenderOtroCentro, sectorDeCabecera, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
 import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type VinAsignado, esperarVinculos, leerMotivoVinculo, anularGrupo } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
 import { buscarRepuestosConStock, disponibilidadPorAlmacen, motivoVacio } from "com/socopur/cotizador/model/MaterialesService";
@@ -1679,9 +1679,17 @@ export default class Oferta extends Controller {
 		}
 		const todas = this.modeloMock().getProperty("/canalesArea") as { key: string; text: string }[];
 		const actuales = cl.areas ?? [];
+		// Las areas de SAP vienen como organizacion/canal/sector: se comparan por organizacion/canal con la lista de areas que se pueden pedir.
+		const actualesOrgCanal = areasOrgCanal(actuales);
+		const canales = (this.modeloOferta().getProperty("/opciones/canales") as { key: string; text: string }[]) ?? [];
+		// Con clientes de SAP se listan sus areas reales (todas, no solo las del vendedor) con la condicion de cada una.
+		const reales = (cl.condicionesAreas ?? []).map((c) => ({
+			key: `${c.vkorg}/${c.vtweg}/${c.spart}`,
+			text: this.i18n().getText("areaClienteFila", [textoOrganizacion(c.vkorg), canales.find((x) => x.key === c.vtweg)?.text ?? c.vtweg, c.spart, c.zterm || "—", c.waers || "—"]) as string
+		}));
 		await this.abrirCliente("AmpliarArea", {
-			areas: this.areasTexto(actuales),
-			disponibles: todas.filter((a) => !actuales.includes(a.key)),
+			areas: reales.length > 0 ? reales : this.areasTexto(actuales),
+			disponibles: todas.filter((a) => !actualesOrgCanal.includes(a.key)),
 			nueva: ""
 		});
 	}
