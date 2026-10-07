@@ -15,6 +15,7 @@ import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, 
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
 import { buscarRepuestosConStock, disponibilidadPorAlmacen, motivoVacio } from "com/socopur/cotizador/model/MaterialesService";
 import { cargarPreciosLista, precioListaDisponible, textoPrecioLista } from "com/socopur/cotizador/model/PrecioListaService";
+import { textoOrganizacion } from "com/socopur/cotizador/model/VendedoresService";
 import { listaDeSede } from "com/socopur/cotizador/model/Ciudades";
 import { ciudadPorClave, principalDe, sociedadDeCentro } from "com/socopur/cotizador/model/Ciudades";
 import { cargarContacto, cargarDirecciones, cargarMovimientos, type Movimiento } from "com/socopur/cotizador/model/ClienteDetalleService";
@@ -3251,13 +3252,13 @@ export default class Oferta extends Controller {
 		const cliente = oferta.getProperty("/cliente") as Cliente | null;
 		const org = String(oferta.getProperty("/perfil/orgVentas") ?? "");
 		const orgs = [org, orgVehiculosDe(org) ?? ""].filter(Boolean);
-		const mock = this.modeloMock();
-		const canales = (mock.getProperty("/canales") as { key: string; text: string }[]) ?? [];
+		const canales = (oferta.getProperty("/opciones/canales") as { key: string; text: string }[]) ?? [];
 		const opciones = opcionesAreaCliente(cliente?.condicionesAreas, orgs).map((o) => ({
 			...o,
 			text: this.textoAreaCliente(o, canales.find((c) => c.key === o.vtweg)?.text ?? `canal ${o.vtweg}`)
 		}));
-		oferta.setProperty("/areasCliente", opciones);
+		// Con varias opciones se agrega una vacia al inicio: sin ella el desplegable parece tener una elegida y no aplica nada.
+		oferta.setProperty("/areasCliente", opciones.length > 1 ? [{ key: "", text: this.i18n().getText("areaClienteElegir") as string }, ...opciones] : opciones);
 		oferta.setProperty("/areaClienteSel", opciones.length === 1 ? opciones[0].key : "");
 		if (opciones.length === 1) {
 			this.aplicarAreaCliente(opciones[0]);
@@ -3266,12 +3267,12 @@ export default class Oferta extends Controller {
 
 	private textoAreaCliente(o: OpcionAreaCliente, canal: string): string {
 		const sectores = o.sectores.length > 3 ? `${o.sectores[0]}-${o.sectores[o.sectores.length - 1]}` : o.sectores.join(", ");
-		return this.i18n().getText("areaClienteOpcion", [o.vkorg, canal, sectores, o.zterm || "—", o.waers || "—"]) as string;
+		return this.i18n().getText("areaClienteOpcion", [textoOrganizacion(o.vkorg), canal, sectores, o.zterm || "—", o.waers || "—"]) as string;
 	}
 
 	public onCambiaAreaCliente(): void {
 		const oferta = this.modeloOferta();
-		const elegida = ((oferta.getProperty("/areasCliente") as OpcionAreaCliente[]) ?? []).find((o) => o.key === oferta.getProperty("/areaClienteSel"));
+		const elegida = ((oferta.getProperty("/areasCliente") as OpcionAreaCliente[]) ?? []).find((o) => o.key !== "" && o.key === oferta.getProperty("/areaClienteSel"));
 		if (elegida) {
 			this.aplicarAreaCliente(elegida);
 		}
