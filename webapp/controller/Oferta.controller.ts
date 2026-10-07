@@ -3715,7 +3715,10 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 			} else {
 				oferta.setProperty("/cliente", { kunnr: detalle.kunnr, doc: "", tipoDoc: "", nombre: detalle.cliente, estado: "", estadoState: "None", condicion: "", grupo: "", telefono: "", correo: "", direccion: "" });
 			}
-			oferta.setProperty("/lineas", detalle.lineas.map((l) => ({ ...l })));
+			oferta.setProperty(
+				"/lineas",
+				detalle.lineas.map((l) => ({ ...l, condiciones: l.condicionesSap ? filasDeCondiciones(l.condicionesSap, this.verTodasCondiciones()) : undefined }))
+			);
 			this.recalcular();
 			this.instantanea = JSON.stringify(oferta.getProperty("/lineas") ?? []);
 		} catch (error) {

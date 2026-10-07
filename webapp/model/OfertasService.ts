@@ -1,5 +1,6 @@
 import ODataModel from "sap/ui/model/odata/v4/ODataModel";
 import type { Cotizacion, Item } from "./odata/Entidades";
+import type { CondicionServicio } from "./Condiciones";
 
 /** Forma que usa hoy la lista de ofertas del prototipo (mock.json: /ofertas). */
 export interface OfertaLista {
@@ -31,16 +32,18 @@ function sumarTotal(lineas: CotizacionConLineas["_Item"]): number {
 }
 
 /**
- * Lee las cotizaciones ACTIVAS (no borradores) del servicio YUI_COTIZ_SRV y las adapta a la lista del prototipo.
+ * Lee las cotizaciones ACTIVAS (no borradores) del vendedor indicado del servicio YUI_COTIZ_SRV y las adapta a la lista del prototipo.
  * - "numero" es el de la primera oferta SAP (grupo 01); si todavia no se genero, queda vacio.
  * - El total se suma aqui con las lineas ($expand), porque el servicio no lo entrega.
  * - "doc" usa STCD1 y, si esta vacio, STCD2 (por confirmar cual guarda DNI y cual RUC en Socopur).
  */
-export async function cargarOfertas(modelo: ODataModel, textoPedido: string): Promise<OfertaLista[]> {
+export async function cargarOfertas(modelo: ODataModel, textoPedido: string, pernr?: string): Promise<OfertaLista[]> {
+	// Solo las del vendedor identificado (PERNR de 8 digitos, como lo guarda el servicio); sin vendedor no se filtra.
+	const deVendedor = pernr ? ` and Pernr eq '${pernr.replace(/'/g, "''")}'` : "";
 	const binding = modelo.bindList("/Cotizacion", undefined, undefined, undefined, {
 		$select: "CotizId,Estado,LocalCreatedAt,ClienteNombre,ClienteStcd1,ClienteStcd2,NumeroOferta,NumeroPedido,VigenciaHasta",
 		$expand: { _Item: { $select: "Cantidad,PrecioLista" } },
-		$filter: "IsActiveEntity eq true",
+		$filter: `IsActiveEntity eq true${deVendedor}`,
 		$orderby: "LocalCreatedAt desc"
 	});
 	const contextos = await binding.requestContexts(0, 200);
@@ -83,6 +86,51 @@ interface OfertaPosSap {
 	/** ISC (ZISC) e IGV (ZIGV) de la posicion, por separado; Mwsbp es la suma de ambos. */
 	Isc?: string | number;
 	Igv?: string | number;
+	_Cond?: CondicionPosSap[];
+}
+
+/** Condicion de precio guardada en el documento (entidad OfertaPosCond: VBAP + PRCD_ELEMENTS). */
+interface CondicionPosSap {
+	Stunr: string;
+	Zaehk: string;
+	Kschl: string;
+	Descripcion?: string;
+	Krech?: string;
+	Kbetr?: string | number;
+	Waers?: string;
+	Kpein?: string | number;
+	Kmein?: string;
+	Kwert?: string | number;
+	Waerk?: string;
+	Kstat?: string;
+	Kinak?: string;
+	Kherk?: string;
+}
+
+/**
+ * Pasa una condicion del documento al formato de la simulacion (PrecioCond) para reutilizar la misma tabla.
+ * La vista entrega el porcentaje directo (18 % = 18.0, descuentos con signo negativo) y la simulacion lo entrega dividido por 10 (1.8):
+ * se deja en esa escala para reutilizar Condiciones.ts. El importe de las demas condiciones se copia tal cual.
+ * En los porcentajes Waers viene vacio: la moneda es la del documento (Waerk). Manual = origen 'C'.
+ */
+function condicionDeDocumento(c: CondicionPosSap): CondicionServicio {
+	const porcentaje = c.Krech === "A";
+	return {
+		CondType: c.Kschl,
+		Descripcion: c.Descripcion,
+		Valor: porcentaje ? Number(c.Kbetr ?? 0) / 10 : c.Kbetr,
+		Moneda: c.Waers,
+		UmPrecio: c.Kpein,
+		Unidad: c.Kmein,
+		Total: c.Kwert,
+		MonedaDoc: c.Waerk,
+		Manual: c.Kherk === "C" ? "X" : "",
+		Estadistica: c.Kstat,
+		Paso: c.Stunr,
+		Contador: c.Zaehk,
+		TipoCalculo: c.Krech,
+		Inactiva: c.Kinak
+	};
 }
 
 interface OfertaSap {
@@ -124,6 +172,8 @@ export interface LineaDetalle {
 	igvImporte?: number;
 	/** Valor neto + ISC + IGV de la linea; sin valor si el servicio no trae el desglose. */
 	totalConImpuestos?: number;
+	/** Condiciones de precio guardadas en SAP para la posicion; sin valor si el servicio aun no publica OfertaPosCond. */
+	condicionesSap?: CondicionServicio[];
 }
 
 export interface DetalleOferta {
@@ -146,8 +196,17 @@ export interface DetalleOferta {
  */
 export async function cargarDetalleOferta(modelo: ODataModel, numeroOferta: string): Promise<DetalleOferta> {
 	const clave = numeroOferta.replace(/'/g, "''");
-	const contexto = modelo.bindContext(`/Oferta('${clave}')`, undefined, { $expand: { _Pos: { $orderby: "Posnr" } } });
-	const o = (await contexto.requestObject()) as OfertaSap;
+	// Las condiciones son informativas: si el servicio no publica _Cond (o falla), se lee la oferta sin ellas.
+	const leer = async (conCondiciones: boolean): Promise<OfertaSap> => {
+		const contexto = modelo.bindContext(`/Oferta('${clave}')`, undefined, {
+			$expand: { _Pos: conCondiciones ? { $orderby: "Posnr", $expand: { _Cond: {} } } : { $orderby: "Posnr" } }
+		});
+		return (await contexto.requestObject()) as OfertaSap;
+	};
+	const o = await leer(true).catch((error: Error) => {
+		console.warn(`[Cotizador] condiciones de la oferta ${numeroOferta}: ${error.message}`);
+		return leer(false);
+	});
 	const lineas = (o._Pos ?? []).map((p): LineaDetalle => {
 		const esRegalo = Boolean(p.Uepos) && Number(p.Uepos) !== 0 && Number(p.Netwr ?? 0) === 0;
 		return {
@@ -167,6 +226,7 @@ export async function cargarDetalleOferta(modelo: ODataModel, numeroOferta: stri
 			tasaIgv: Number(p.TasaIgv ?? 0),
 			isc: p.Isc === undefined || p.Isc === null ? undefined : Number(p.Isc),
 			igvImporte: p.Igv === undefined || p.Igv === null ? undefined : Number(p.Igv),
+			condicionesSap: p._Cond?.map(condicionDeDocumento),
 			totalConImpuestos: p.Isc === undefined || p.Isc === null || p.Igv === undefined || p.Igv === null ? undefined : Math.round((Number(p.Netwr ?? 0) + Number(p.Isc) + Number(p.Igv)) * 100) / 100
 		};
 	});

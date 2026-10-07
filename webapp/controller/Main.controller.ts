@@ -61,7 +61,7 @@ export default class Main extends Controller {
 			return;
 		}
 		try {
-			const ofertas = await cargarOfertas(odata, textos.getText("estadoPedido"));
+			const ofertas = await cargarOfertas(odata, textos.getText("estadoPedido"), (mock.getProperty("/perfil/pernr") as string) || undefined);
 			mock.setProperty("/ofertas", ofertas);
 		} catch (error) {
 			// Si el servicio falla se conservan los datos simulados y se avisa; no se bloquea la pantalla.
@@ -108,9 +108,15 @@ export default class Main extends Controller {
 		return `N° ${numero} · ${this.formatFecha(fecha)}`;
 	}
 
-	public onVerMisOfertas(): void {
+	public async onVerMisOfertas(): Promise<void> {
 		(this.getView()?.getModel("vista") as JSONModel).setProperty("/consultado", true);
 		this.forzado = true;
+		// El vendedor se identifica despues de abrir la pantalla: se vuelve a leer con su PERNR antes de mostrar.
+		if (this.usarOData()) {
+			const mock = (this.getOwnerComponent() as UIComponent).getModel("mock") as JSONModel;
+			await this.cargarDesdeOData(mock);
+			this.actualizarVigencias(mock);
+		}
 		this.onFiltrar();
 	}
 
