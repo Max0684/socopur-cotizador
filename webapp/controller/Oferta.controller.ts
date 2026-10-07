@@ -10,7 +10,7 @@ import { cargarFormasPago } from "com/socopur/cotizador/model/FormasPagoService"
 import { consultarCondiciones, consultarPrecio, impuestosDeCondiciones } from "com/socopur/cotizador/model/PreciosService";
 import { type CondicionServicio, type FilaCondicion, descuentosAplicados, filasDeCondiciones } from "com/socopur/cotizador/model/Condiciones";
 import { agruparVehiculos, buscarVehiculos, filtrarVehiculos, textoDetalleVehiculo } from "com/socopur/cotizador/model/VehiculosService";
-import { type CondicionArea, almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, faltaSectorDeVentas, gruposParaGuardar, igvExonerado, modalidadPorDefecto, oficinaDe, orgVehiculosDe, puedeVenderOtroCentro, sectorDeCabecera, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
+import { type CondicionArea, condicionDeArea, almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, faltaSectorDeVentas, gruposParaGuardar, igvExonerado, modalidadPorDefecto, oficinaDe, orgVehiculosDe, puedeVenderOtroCentro, sectorDeCabecera, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
 import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type VinAsignado, esperarVinculos, leerMotivoVinculo, anularGrupo } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
 import { buscarRepuestosConStock, disponibilidadPorAlmacen, motivoVacio } from "com/socopur/cotizador/model/MaterialesService";
@@ -307,6 +307,10 @@ interface Grupo {
 	nota?: string;
 	areaFalta?: boolean;
 	areaAviso?: string;
+	/** Condicion comercial del cliente en el area (organizacion/canal/sector) de este grupo, tal como esta en SAP (KNVV). */
+	condicionArea?: string;
+	/** Aviso cuando la moneda del area no es la de la oferta. */
+	condicionAviso?: string;
 	/** Impuestos del grupo (suma de sus lineas) cuando todas los traen: ISC, IGV y total con impuestos. */
 	isc?: number;
 	igv?: number;
@@ -1787,6 +1791,11 @@ export default class Oferta extends Controller {
 			grupo.areaFalta = true;
 			grupo.areaAviso = i18n.getText("sectorFalta", [`${area}/${sectorCabecera}`]) as string;
 		}
+		// Condicion de pago, moneda y grupo de clientes del area de ESTE grupo: cambian por canal y sector, no son un dato del cliente.
+		const cond = !grupo.areaFalta ? condicionDeArea(cliente?.condicionesAreas, grupo.lineas[0]?.orgVentas ?? "", canalNum, sectorCabecera) : undefined;
+		grupo.condicionArea = cond ? (i18n.getText("condicionArea", [[cond.zterm, cond.ztermTexto].filter(Boolean).join(" ") || "—", cond.waers || "—", cond.grupoTexto || cond.grupo || "—"]) as string) : "";
+		const monedaOferta = oferta.getProperty("/perfil/moneda") === "USD" ? "USD" : "PEN";
+		grupo.condicionAviso = cond?.waers && cond.waers !== monedaOferta ? (i18n.getText("monedaAreaDistinta", [cond.waers, monedaOferta]) as string) : "";
 		grupo.nota = m.nota;
 	}
 

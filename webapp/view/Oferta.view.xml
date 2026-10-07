@@ -406,6 +406,8 @@
 										<ObjectStatus title="{i18n>clasePedido}" text="{oferta>clasePedido}" class="sapUiMediumMarginEnd" />
 										<Text text="{oferta>nota}" />
 									</HBox>
+									<ObjectStatus visible="{= !!${oferta>condicionArea} }" text="{oferta>condicionArea}" class="sapUiTinyMarginBottom" />
+									<MessageStrip visible="{= !!${oferta>condicionAviso} }" text="{oferta>condicionAviso}" type="Warning" showIcon="true" class="sapUiTinyMarginBottom" />
 									<HBox visible="{oferta>areaFalta}" alignItems="Center" wrap="Wrap" class="sapUiTinyMarginBottom">
 										<MessageStrip text="{oferta>areaAviso}" type="Warning" showIcon="true" class="sapUiSmallMarginEnd" />
 										<Button text="{i18n>ampliarArea}" press=".onAmpliarAbrir" />
