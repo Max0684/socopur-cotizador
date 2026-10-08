@@ -2817,6 +2817,15 @@ export default class Oferta extends Controller {
 		}
 	}
 
+	/** Oferta anulada o rechazada: aviso, una fila "Rechazado" y la pantalla queda en solo lectura (la bloquea que haya filas en /pedidos). */
+	private marcarOfertaAnulada(numeroOferta: string, clasePedido = ""): void {
+		const i18n = this.i18n();
+		const oferta = this.modeloOferta();
+		oferta.setProperty("/avisoPedido", { texto: i18n.getText("anularAviso") as string, tipo: "Warning" });
+		oferta.setProperty("/pedidos", [{ numero: "—", oferta: numeroOferta, detalle: "—", vin: "—", bloqueo: "—", clasePedido, estado: i18n.getText("pedidoRechazado") as string, estadoState: "Error", liberacion: "—", liberacionState: "None", totalSap: "—" }]);
+		oferta.setProperty("/anulacion", { visible: false, cotizId: "", grupoNo: "" });
+	}
+
 	/** Muestra el boton "Anular pedido" solo si el grupo tiene pedido y no esta ya por anular (Y) ni anulado (X). */
 	private mostrarAnulacion(grupo: { cotizId: string; grupoNo: string; estado: string; hayPedido: boolean } | null): void {
 		const puede = !!grupo && grupo.hayPedido && grupo.estado !== "Y" && grupo.estado !== "X";
@@ -2895,9 +2904,7 @@ export default class Oferta extends Controller {
 			this.mostrarAnulacion(delGrupo ? { cotizId, grupoNo: delGrupo.GrupoNo, estado: delGrupo.Estado, hayPedido: !!delGrupo.VbelnPedido } : null);
 			if (delGrupo?.Estado === "X") {
 				// Anulado: el grupo ya no tiene numero de pedido; se deja una fila que lo diga y el aviso.
-				const i18n = this.i18n();
-				this.modeloOferta().setProperty("/avisoPedido", { texto: i18n.getText("anularAviso") as string, tipo: "Warning" });
-				this.modeloOferta().setProperty("/pedidos", [{ numero: "—", oferta: numeroOferta, detalle: "—", vin: "—", bloqueo: "—", clasePedido: delGrupo.AuartPedido ?? "", estado: i18n.getText("pedidoRechazado") as string, estadoState: "Error", liberacion: "—", liberacionState: "None", totalSap: "—" }]);
+				this.marcarOfertaAnulada(numeroOferta, delGrupo.AuartPedido ?? "");
 				return;
 			}
 			const g = delGrupo;
@@ -3913,6 +3920,10 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 			);
 			this.recalcular();
 			this.instantanea = JSON.stringify(oferta.getProperty("/lineas") ?? []);
+			// Rechazada en SAP (por el flujo de anulacion o a mano): solo lectura y sin Copiar a pedido.
+			if (detalle.rechazada && ((oferta.getProperty("/pedidos") as unknown[]) ?? []).length === 0) {
+				this.marcarOfertaAnulada(numeroOferta);
+			}
 			await this.completarClienteDeDocumento(detalle.kunnr);
 		} catch (error) {
 			MessageToast.show(this.i18n().getText("odataDetalleError", [(error as Error).message]) as string);

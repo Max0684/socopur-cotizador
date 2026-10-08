@@ -62,6 +62,7 @@
 							<core:Item key="Vigente" text="{i18n>estadoVigente}" />
 							<core:Item key="Vencida" text="{i18n>estadoVencida}" />
 							<core:Item key="Pedido generado" text="{i18n>estadoPedido}" />
+							<core:Item key="Anulada" text="{i18n>estadoAnulada}" />
 						</Select>
 					</VBox>
 				</HBox>

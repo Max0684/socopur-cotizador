@@ -74,12 +74,15 @@ export default class Main extends Controller {
 		const dias = Number(mock.getProperty("/perfil/vigenciaDias")) || 7;
 		const hoy = new Date().toISOString().slice(0, 10);
 		const i18n = (this.getOwnerComponent() as UIComponent).getModel("i18n") as unknown as { getResourceBundle(): { getText(k: string): string } };
-		const ofertas = (mock.getProperty("/ofertas") as { fecha: string; estado: string; estadoState: string; vence?: string }[]) ?? [];
+		const ofertas = (mock.getProperty("/ofertas") as { fecha: string; estado: string; estadoState: string; vence?: string; anulada?: boolean }[]) ?? [];
 		ofertas.forEach((o) => {
 			const vence = new Date(o.fecha);
 			vence.setDate(vence.getDate() + dias);
 			o.vence = vence.toISOString().slice(0, 10);
-			if (o.estado !== i18n.getResourceBundle().getText("estadoPedido")) {
+			if (o.anulada) {
+				o.estado = i18n.getResourceBundle().getText("estadoAnulada");
+				o.estadoState = "Error";
+			} else if (o.estado !== i18n.getResourceBundle().getText("estadoPedido")) {
 				const vencida = o.vence < hoy;
 				o.estado = i18n.getResourceBundle().getText(vencida ? "estadoVencida" : "estadoVigente");
 				o.estadoState = vencida ? "Warning" : "Success";

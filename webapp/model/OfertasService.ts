@@ -1,6 +1,7 @@
 import ODataModel from "sap/ui/model/odata/v4/ODataModel";
 import type { Cotizacion, Item } from "./odata/Entidades";
 import type { CondicionServicio } from "./Condiciones";
+import { entidadTieneCampo } from "./CamposServicio";
 
 /** Forma que usa hoy la lista de ofertas del prototipo (mock.json: /ofertas). */
 export interface OfertaLista {
@@ -15,9 +16,11 @@ export interface OfertaLista {
 	vence?: string;
 	/** Clave real de la cotizacion en el servicio (UUID). */
 	cotizId: string;
+	/** La oferta esta anulada: el flujo de anulacion dejo su grupo en X o SAP la tiene rechazada (Abstk = C). */
+	anulada: boolean;
 }
 
-type CotizacionConLineas = Cotizacion & { _Item?: Pick<Item, "Cantidad" | "PrecioLista">[] };
+type CotizacionConLineas = Cotizacion & { _Item?: Pick<Item, "Cantidad" | "PrecioLista">[]; _Grupo?: { GrupoNo: string; VbelnOferta: string; Estado: string }[] };
 
 const formatoImporte = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -31,6 +34,26 @@ function sumarTotal(lineas: CotizacionConLineas["_Item"]): number {
 	return (lineas ?? []).reduce((suma, l) => suma + Number(l.Cantidad ?? 0) * Number(l.PrecioLista ?? 0), 0);
 }
 
+/** Numeros de oferta que SAP tiene rechazadas por completo (Oferta.Rechazada = X). Si el servicio aun no publica el campo o falla, queda vacio. */
+async function ofertasRechazadasEnSap(modelo: ODataModel, numeros: string[]): Promise<Set<string>> {
+	const rechazadas = new Set<string>();
+	if (numeros.length === 0 || !(await entidadTieneCampo(modelo, "Oferta", "Rechazada"))) {
+		return rechazadas;
+	}
+	const unicos = [...new Set(numeros)];
+	try {
+		// Por tandas: un filtro con 200 numeros haria la URL demasiado larga.
+		for (let i = 0; i < unicos.length; i += 30) {
+			const filtro = `Rechazada eq 'X' and (${unicos.slice(i, i + 30).map((n) => `Vbeln eq '${n.replace(/'/g, "''")}'`).join(" or ")})`;
+			const filas = await modelo.bindList("/Oferta", undefined, undefined, undefined, { $select: "Vbeln,Rechazada", $filter: filtro }).requestContexts(0, 30);
+			filas.forEach((f) => rechazadas.add(numeroSap((f.getObject() as { Vbeln: string }).Vbeln)));
+		}
+	} catch {
+		// informativo: sin esto la oferta se ve como antes
+	}
+	return rechazadas;
+}
+
 /**
  * Lee las cotizaciones ACTIVAS (no borradores) del vendedor indicado del servicio YUI_COTIZ_SRV y las adapta a la lista del prototipo.
  * - "numero" es el de la primera oferta SAP (grupo 01); si todavia no se genero, queda vacio.
@@ -42,15 +65,19 @@ export async function cargarOfertas(modelo: ODataModel, textoPedido: string, per
 	const deVendedor = pernr ? ` and Pernr eq '${pernr.replace(/'/g, "''")}'` : "";
 	const binding = modelo.bindList("/Cotizacion", undefined, undefined, undefined, {
 		$select: "CotizId,Estado,LocalCreatedAt,ClienteNombre,ClienteStcd1,ClienteStcd2,NumeroOferta,NumeroPedido,VigenciaHasta",
-		$expand: { _Item: { $select: "Cantidad,PrecioLista" } },
+		$expand: { _Item: { $select: "Cantidad,PrecioLista" }, _Grupo: { $select: "GrupoNo,VbelnOferta,Estado" } },
 		$filter: `IsActiveEntity eq true${deVendedor}`,
 		$orderby: "LocalCreatedAt desc"
 	});
 	const contextos = await binding.requestContexts(0, 200);
-	return contextos.map((contexto) => {
-		const c = contexto.getObject() as CotizacionConLineas;
+	const cotizaciones = contextos.map((contexto) => contexto.getObject() as CotizacionConLineas);
+	const rechazadasSap = await ofertasRechazadasEnSap(modelo, cotizaciones.map((c) => numeroSap(c.NumeroOferta)).filter(Boolean));
+	return cotizaciones.map((c) => {
 		const conPedido = Boolean(c.NumeroPedido);
+		// Anulada por el flujo del Cotizador (grupo en X, que conserva el numero de oferta) o rechazada directamente en SAP.
+		const anulada = (c._Grupo ?? []).some((g) => g.Estado === "X" && numeroSap(g.VbelnOferta) === numeroSap(c.NumeroOferta)) || rechazadasSap.has(numeroSap(c.NumeroOferta));
 		return {
+			anulada,
 			cotizId: c.CotizId,
 			numero: numeroSap(c.NumeroOferta),
 			cliente: c.ClienteNombre ?? "",
@@ -152,6 +179,8 @@ interface OfertaSap {
 	Vkbur: string;
 	Netwr: string | number;
 	Waerk: string;
+	/** "X" si SAP tiene la oferta rechazada por completo (Abstk = C). */
+	Rechazada?: string;
 	_Pos?: OfertaPosSap[];
 }
 
@@ -192,6 +221,8 @@ export interface DetalleOferta {
 	total: number;
 	orgVentas: string;
 	sector: string;
+	/** La oferta esta rechazada en SAP. */
+	rechazada: boolean;
 	lineas: LineaDetalle[];
 }
 
@@ -246,6 +277,7 @@ export async function cargarDetalleOferta(modelo: ODataModel, numeroOferta: stri
 		total: Number(o.Netwr ?? 0),
 		orgVentas: o.Vkorg,
 		sector: o.Spart,
+		rechazada: o.Rechazada === "X",
 		lineas
 	};
 }
