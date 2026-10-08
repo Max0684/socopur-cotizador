@@ -18,12 +18,12 @@ export interface CondicionServicio {
 	/** Importe de la condicion para TODA la linea. */
 	Total?: string | number;
 	MonedaDoc?: string;
-	Manual?: string;
-	Estadistica?: string;
+	Manual?: string | boolean;
+	Estadistica?: string | boolean;
 	Paso?: string;
 	Contador?: string;
 	TipoCalculo?: string;
-	Inactiva?: string;
+	Inactiva?: string | boolean;
 }
 
 export interface FilaCondicion {
@@ -51,6 +51,9 @@ export interface FilaCondicion {
 	subtotal: boolean;
 }
 
+/** Un indicador de SAP esta puesto si es verdadero o trae texto (el servicio lo entrega como "X" o como booleano). */
+const marcado = (v: unknown): boolean => v === true || (typeof v === "string" && v.trim() !== "");
+
 const num = (v: unknown): number => {
 	const n = Number(v);
 	return Number.isFinite(n) ? n : 0;
@@ -69,7 +72,7 @@ export function importeVisible(c: CondicionServicio): string {
 
 export function filaDeCondicion(c: CondicionServicio): FilaCondicion {
 	const total = num(c.Total);
-	const inactiva = !!c.Inactiva?.trim();
+	const inactiva = marcado(c.Inactiva);
 	return {
 		tipo: c.CondType,
 		descripcion: c.Descripcion?.trim() || c.CondType,
@@ -80,14 +83,14 @@ export function filaDeCondicion(c: CondicionServicio): FilaCondicion {
 		base: num(c.Base) ? formato(num(c.Base)) : "",
 		valor: formato(total),
 		monedaDoc: c.MonedaDoc ?? "",
-		manual: !!c.Manual?.trim(),
+		manual: marcado(c.Manual),
 		relevante: !inactiva && (total !== 0 || num(c.Valor) !== 0),
 		valorNum: total,
 		importeNum: formato(c.TipoCalculo === "A" ? num(c.Valor) * FACTOR_PORCENTAJE : num(c.Valor)),
 		importeUnidad: c.TipoCalculo === "A" ? "%" : (c.Moneda || c.MonedaDoc || ""),
 		umPrecioTxt: num(c.UmPrecio) ? `${num(c.UmPrecio)} ${c.Unidad ?? ""}`.trim() : "",
 		valorMoneda: c.MonedaDoc || c.Moneda || "",
-		estadistica: !!c.Estadistica?.trim(),
+		estadistica: marcado(c.Estadistica),
 		subtotal: c.TipoCalculo === "G"
 	};
 }

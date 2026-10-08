@@ -47,6 +47,7 @@
 						value="{oferta>/fechaEntrega}"
 						valueFormat="yyyy-MM-dd"
 						displayFormat="dd/MM/yyyy"
+						enabled="{= ${oferta>/pedidos}.length === 0 }"
 						width="9rem" />
 				</VBox>
 				<VBox class="sapUiMediumMarginEnd sapUiTinyMarginBottom">
@@ -56,7 +57,7 @@
 				<VBox class="sapUiMediumMarginEnd sapUiTinyMarginBottom">
 					<Label text="{i18n>hdrVigencia}" />
 					<ObjectStatus text="{oferta>/vigencia/texto}" state="{oferta>/vigencia/estado}" />
-					<Button text="{i18n>renovar}" icon="sap-icon://refresh" type="Transparent" visible="{oferta>/vigencia/vencida}" press=".onRenovar" />
+					<Button text="{i18n>renovar}" icon="sap-icon://refresh" type="Transparent" visible="{= ${oferta>/vigencia/vencida} &amp;&amp; ${oferta>/pedidos}.length === 0 }" press=".onRenovar" />
 				</VBox>
 								<VBox class="sapUiTinyMarginBottom">
 					<Label text="{i18n>hdrTotal}" />
@@ -65,7 +66,7 @@
 						unit="{oferta>/perfil/moneda}"
 						emphasized="true"
 						state="Success" />
-					<Select selectedKey="{oferta>/perfil/moneda}" change=".onCambiaMoneda" width="9rem" tooltip="{i18n>moneda}">
+					<Select selectedKey="{oferta>/perfil/moneda}" change=".onCambiaMoneda" width="9rem" tooltip="{i18n>moneda}" enabled="{= ${oferta>/pedidos}.length === 0 }">
 						<core:Item key="PEN" text="{i18n>monedaSoles}" />
 						<core:Item key="USD" text="{i18n>monedaDolares}" />
 					</Select>
@@ -84,11 +85,11 @@
 									id="buscarCliente"
 									width="16rem"
 									placeholder="{i18n>buscarPlaceholder}"
-									search=".onBuscarCliente" />
+									search=".onBuscarCliente" enabled="{= ${oferta>/pedidos}.length === 0 }" />
 								<Button
 									text="{i18n>buscar}"
 									class="sapUiTinyMarginBegin"
-									press=".onBuscarCliente" />
+									press=".onBuscarCliente" enabled="{= ${oferta>/pedidos}.length === 0 }" />
 							</HBox>
 
 							<MessageStrip
@@ -103,37 +104,37 @@
 								<MessageStrip visible="{= !!${oferta>/alta/errores} }" text="{oferta>/alta/errores}" type="Error" showIcon="true" class="sapUiSmallMarginBottom" />
 								<form:SimpleForm editable="true" layout="ColumnLayout" columnsM="2" columnsL="2" columnsXL="3">
 									<Label text="{i18n>altaTipoCliente}" />
-									<Select selectedKey="{oferta>/alta/tipoCliente}" items="{oferta>/tiposCliente}"><core:Item key="{oferta>key}" text="{oferta>text}" /></Select>
+									<Select selectedKey="{oferta>/alta/tipoCliente}" items="{oferta>/tiposCliente}" enabled="{= ${oferta>/pedidos}.length === 0 }"><core:Item key="{oferta>key}" text="{oferta>text}" /></Select>
 									<Label text="{i18n>altaTipoDoc}" />
-									<Select selectedKey="{oferta>/alta/tipoDoc}"><core:Item key="DNI" text="DNI" /><core:Item key="RUC" text="RUC" /></Select>
+									<Select selectedKey="{oferta>/alta/tipoDoc}" enabled="{= ${oferta>/pedidos}.length === 0 }"><core:Item key="DNI" text="DNI" /><core:Item key="RUC" text="RUC" /></Select>
 									<Label text="{i18n>altaNroDoc}" />
-									<Input value="{oferta>/alta/doc}" maxLength="11" />
+									<Input value="{oferta>/alta/doc}" maxLength="11" enabled="{= ${oferta>/pedidos}.length === 0 }" />
 									<Label text="" />
-									<Button text="{i18n>altaConsultarApi}" icon="sap-icon://search" press=".onConsultarApi" width="14rem" />
+									<Button text="{i18n>altaConsultarApi}" icon="sap-icon://search" press=".onConsultarApi" width="14rem" enabled="{= ${oferta>/pedidos}.length === 0 }" />
 									<Label text="{i18n>altaRazon}" required="true" />
-									<Input value="{oferta>/alta/razon1}" maxLength="35" />
-									<Input value="{oferta>/alta/razon2}" maxLength="35" />
-									<Input value="{oferta>/alta/razon3}" maxLength="35" />
+									<Input value="{oferta>/alta/razon1}" maxLength="35" enabled="{= ${oferta>/pedidos}.length === 0 }" />
+									<Input value="{oferta>/alta/razon2}" maxLength="35" enabled="{= ${oferta>/pedidos}.length === 0 }" />
+									<Input value="{oferta>/alta/razon3}" maxLength="35" enabled="{= ${oferta>/pedidos}.length === 0 }" />
 									<Label text="{i18n>altaPais}" />
 									<Input value="Perú" editable="false" />
 									<Label text="{i18n>altaDepartamento}" required="true" />
-									<Select selectedKey="{oferta>/alta/dep}" forceSelection="false" change=".onCambiaDpto" items="{oferta>/ubigeo}"><core:Item key="{oferta>dep}" text="{oferta>dep}" /></Select>
+									<Select selectedKey="{oferta>/alta/dep}" forceSelection="false" change=".onCambiaDpto" items="{oferta>/ubigeo}" enabled="{= ${oferta>/pedidos}.length === 0 }"><core:Item key="{oferta>dep}" text="{oferta>dep}" /></Select>
 									<Label text="{i18n>altaProvincia}" required="true" />
-									<Select selectedKey="{oferta>/alta/prov}" forceSelection="false" change=".onCambiaProv" items="{oferta>/alta/provincias}"><core:Item key="{oferta>prov}" text="{oferta>prov}" /></Select>
+									<Select selectedKey="{oferta>/alta/prov}" forceSelection="false" change=".onCambiaProv" items="{oferta>/alta/provincias}" enabled="{= ${oferta>/pedidos}.length === 0 }"><core:Item key="{oferta>prov}" text="{oferta>prov}" /></Select>
 									<Label text="{i18n>altaDistrito}" required="true" />
-									<Select selectedKey="{oferta>/alta/dist}" forceSelection="false" items="{oferta>/alta/distritos}"><core:Item key="{oferta>}" text="{oferta>}" /></Select>
+									<Select selectedKey="{oferta>/alta/dist}" forceSelection="false" items="{oferta>/alta/distritos}" enabled="{= ${oferta>/pedidos}.length === 0 }"><core:Item key="{oferta>}" text="{oferta>}" /></Select>
 									<Label text="{i18n>altaDireccion}" required="true" />
-									<Input value="{oferta>/alta/dir1}" maxLength="35" />
-									<Input value="{oferta>/alta/dir2}" maxLength="35" />
-									<Input value="{oferta>/alta/dir3}" maxLength="35" />
+									<Input value="{oferta>/alta/dir1}" maxLength="35" enabled="{= ${oferta>/pedidos}.length === 0 }" />
+									<Input value="{oferta>/alta/dir2}" maxLength="35" enabled="{= ${oferta>/pedidos}.length === 0 }" />
+									<Input value="{oferta>/alta/dir3}" maxLength="35" enabled="{= ${oferta>/pedidos}.length === 0 }" />
 									<Label text="{i18n>altaCelular}" required="true" />
-									<Input value="{oferta>/alta/celular}" type="Tel" maxLength="9" />
+									<Input value="{oferta>/alta/celular}" type="Tel" maxLength="9" enabled="{= ${oferta>/pedidos}.length === 0 }" />
 									<Label text="{i18n>altaEmail}" required="true" />
-									<Input value="{oferta>/alta/email}" type="Email" />
+									<Input value="{oferta>/alta/email}" type="Email" enabled="{= ${oferta>/pedidos}.length === 0 }" />
 								</form:SimpleForm>
 								<HBox>
-									<Button text="{i18n>altaCrear}" type="Emphasized" press=".onCrearCliente" class="sapUiSmallMarginEnd" />
-									<Button text="{i18n>cancelar}" type="Transparent" press=".onCancelarAlta" />
+									<Button text="{i18n>altaCrear}" type="Emphasized" press=".onCrearCliente" class="sapUiSmallMarginEnd" enabled="{= ${oferta>/pedidos}.length === 0 }" />
+									<Button text="{i18n>cancelar}" type="Transparent" press=".onCancelarAlta" enabled="{= ${oferta>/pedidos}.length === 0 }" />
 								</HBox>
 							</Panel>
 
@@ -147,7 +148,7 @@
 									<Label text="{i18n>documento}" />
 									<Text text="{oferta>/cliente/tipoDoc} {oferta>/cliente/doc}" />
 									<Label text="{i18n>areaCliente}" visible="{= ${oferta>/areasCliente}.length > 0 }" />
-									<Select selectedKey="{oferta>/areaClienteSel}" forceSelection="false" change=".onCambiaAreaCliente" visible="{= ${oferta>/areasCliente}.length > 0 }" items="{oferta>/areasCliente}"><core:Item key="{oferta>key}" text="{oferta>text}" /></Select>
+									<Select selectedKey="{oferta>/areaClienteSel}" forceSelection="false" change=".onCambiaAreaCliente" visible="{= ${oferta>/areasCliente}.length > 0 }" items="{oferta>/areasCliente}" enabled="{= ${oferta>/pedidos}.length === 0 }"><core:Item key="{oferta>key}" text="{oferta>text}" /></Select>
 									<Label text="{i18n>condicionComercial}" />
 									<Text text="{oferta>/cliente/condicion}" />
 									<Label text="{i18n>grupoCliente}" />
@@ -162,8 +163,8 @@
 								<HBox wrap="Wrap">
 									<Button text="{i18n>estadoCuenta}" type="Transparent" press=".onEstadoCuenta" />
 									<Button text="{i18n>fichaCompleta}" type="Transparent" press=".onFichaCompleta" />
-									<Button text="{i18n>editarCliente}" type="Transparent" press=".onEditarCliente" />
-									<Button text="{i18n>ampliarArea}" type="Transparent" press=".onAmpliarAbrir" />
+									<Button text="{i18n>editarCliente}" type="Transparent" press=".onEditarCliente" enabled="{= ${oferta>/pedidos}.length === 0 }" />
+									<Button text="{i18n>ampliarArea}" type="Transparent" press=".onAmpliarAbrir" enabled="{= ${oferta>/pedidos}.length === 0 }" />
 								</HBox>
 							</VBox>
 						</VBox>
@@ -191,21 +192,21 @@
 								<Label text="{i18n>orgVentas}" visible="{= !!${oferta>/perfil/orgVentas} }" />
 								<Input value="{= ${oferta>/perfil/orgVentasTxt} || ${oferta>/perfil/orgVentas} }" editable="false" visible="{= !!${oferta>/perfil/orgVentas} }" />
 								<Label text="{i18n>canal}" />
-								<Select selectedKey="{oferta>/perfil/canal}" forceSelection="false" change=".onCambiaCanal" items="{oferta>/opciones/canales}"><core:Item key="{oferta>key}" text="{oferta>text}" /></Select>
+								<Select selectedKey="{oferta>/perfil/canal}" forceSelection="false" change=".onCambiaCanal" items="{oferta>/opciones/canales}" enabled="{= ${oferta>/pedidos}.length === 0 }"><core:Item key="{oferta>key}" text="{oferta>text}" /></Select>
 								<Label text="{i18n>oficina}" />
-								<Select selectedKey="{oferta>/perfil/oficina}" forceSelection="false" items="{oferta>/oficinasSede}"><core:Item key="{oferta>key}" text="{oferta>text}" /></Select>
+								<Select selectedKey="{oferta>/perfil/oficina}" forceSelection="false" items="{oferta>/oficinasSede}" enabled="{= ${oferta>/pedidos}.length === 0 }"><core:Item key="{oferta>key}" text="{oferta>text}" /></Select>
 								<Label text="{i18n>centro}" />
-								<Select selectedKey="{oferta>/perfil/centro}" forceSelection="false" items="{oferta>/opcionesCentro}"><core:Item key="{oferta>key}" text="{oferta>text}" /></Select>
+								<Select selectedKey="{oferta>/perfil/centro}" forceSelection="false" items="{oferta>/opcionesCentro}" enabled="{= ${oferta>/pedidos}.length === 0 }"><core:Item key="{oferta>key}" text="{oferta>text}" /></Select>
 								<Label text="{i18n>almacenPerfil}" />
 								<Input value="{parts: ['oferta>/perfil/centro', 'oferta>/perfil/almacen'], formatter: '.formatAlmacenPerfil'}" editable="false" description="{i18n>almacenPerfilNota}" />
 								<Label text="{i18n>moneda}" />
-								<Select selectedKey="{oferta>/perfil/moneda}" change=".onCambiaMoneda"><core:Item key="PEN" text="{i18n>monedaSoles}" /><core:Item key="USD" text="{i18n>monedaDolares}" /></Select>
+								<Select selectedKey="{oferta>/perfil/moneda}" change=".onCambiaMoneda" enabled="{= ${oferta>/pedidos}.length === 0 }"><core:Item key="PEN" text="{i18n>monedaSoles}" /><core:Item key="USD" text="{i18n>monedaDolares}" /></Select>
 								<Label text="{i18n>formaPago}" />
-								<Select selectedKey="{oferta>/perfil/formaPago}" forceSelection="false" items="{oferta>/formasPago}">
+								<Select selectedKey="{oferta>/perfil/formaPago}" forceSelection="false" items="{oferta>/formasPago}" enabled="{= ${oferta>/pedidos}.length === 0 }">
 									<core:Item key="{oferta>key}" text="{oferta>text}" />
 								</Select>
 								<Label text="{i18n>expedicion}" />
-								<Select selectedKey="{oferta>/perfil/expedicion}" forceSelection="false" change=".onCambiaExpedicion" items="{oferta>/opciones/expediciones}"><core:Item key="{oferta>key}" text="{oferta>text}" /></Select>
+								<Select selectedKey="{oferta>/perfil/expedicion}" forceSelection="false" change=".onCambiaExpedicion" items="{oferta>/opciones/expediciones}" enabled="{= ${oferta>/pedidos}.length === 0 }"><core:Item key="{oferta>key}" text="{oferta>text}" /></Select>
 								<Label text="{i18n>tipoCambio}" />
 								<Input value="{oferta>/perfil/tipoCambio}" editable="false" description="{i18n>tipoCambioNota}" />
 							</form:SimpleForm>
@@ -224,14 +225,14 @@
 								<Button
 									text="{= ${oferta>/materialElegido} ? ${i18n>cambiarMaterial} : ${i18n>buscarMaterial} }"
 									icon="sap-icon://search"
-									press=".onAbrirBusqueda" />
+									press=".onAbrirBusqueda" enabled="{= ${oferta>/pedidos}.length === 0 }" />
 								<Button
 									text="{i18n>quitarMaterial}"
 									icon="sap-icon://decline"
 									type="Transparent"
 									class="sapUiSmallMarginBegin"
 									visible="{= !!${oferta>/materialElegido} || ${oferta>/elegidosLista}.length > 0 }"
-									press=".onQuitarMaterial" />
+									press=".onQuitarMaterial" enabled="{= ${oferta>/pedidos}.length === 0 }" />
 							</HBox>
 							<!-- Solicitudes de traslado (SOLPED) de esta oferta, con su estado visible -->
 							<VBox visible="{= ${oferta>/solpeds}.length > 0 }" class="sapUiSmallMarginBottom">
@@ -274,7 +275,7 @@
 												</VBox>
 												<Text text="{oferta>promoTxt}" />
 												<ObjectNumber number="{oferta>finalTxt}" unit="{oferta>/perfil/moneda}" />
-												<StepInput value="{oferta>cantidad}" min="1" max="{oferta>maxCantidad}" width="7rem" change=".onCambiaCantidadFila" />
+												<StepInput value="{oferta>cantidad}" min="1" max="{oferta>maxCantidad}" width="7rem" change=".onCambiaCantidadFila" enabled="{= ${oferta>/pedidos}.length === 0 }" />
 												<ObjectNumber number="{oferta>totalTxt}" unit="{oferta>/perfil/moneda}" emphasized="true" />
 												<HBox justifyContent="Center">
 													<Button icon="sap-icon://detail-view" type="Transparent" tooltip="{i18n>detalleVer}" press=".onVerDetalle" />
@@ -299,7 +300,7 @@
 									</VBox>
 								</VBox>
 								<HBox class="sapUiSmallMarginTop">
-									<Button text="{i18n>agregarTodos}" press=".onAgregarLista" />
+									<Button text="{i18n>agregarTodos}" press=".onAgregarLista" enabled="{= ${oferta>/pedidos}.length === 0 }" />
 								</HBox>
 							</VBox>
 
@@ -336,7 +337,7 @@
 											min="1"
 											max="{oferta>/vista/maxCantidad}"
 											width="8rem"
-											change=".onCambiaCantidad" />
+											change=".onCambiaCantidad" enabled="{= ${oferta>/pedidos}.length === 0 }" />
 										<Text
 											visible="{= ${oferta>/vista/maxCantidad} === 1 }"
 											text="{i18n>unidadUnica}"
@@ -368,7 +369,7 @@
 									<Text visible="{oferta>/vista/sinClienteVisible}" text="{i18n>impuestosSinCliente}" />
 								</Panel>
 								<HBox class="sapUiSmallMarginTop">
-									<Button text="{i18n>agregarOferta}" press=".onAgregar" />
+									<Button text="{i18n>agregarOferta}" press=".onAgregar" enabled="{= ${oferta>/pedidos}.length === 0 }" />
 								</HBox>
 							</VBox>
 						</VBox>
@@ -484,7 +485,7 @@
 				<uxap:subSections>
 					<uxap:ObjectPageSubSection>
 						<VBox>
-							<SegmentedButton selectedKey="{oferta>/entrega}" selectionChange=".onCambiaEntrega" class="sapUiSmallMarginBottom">
+							<SegmentedButton selectedKey="{oferta>/entrega}" selectionChange=".onCambiaEntrega" class="sapUiSmallMarginBottom" enabled="{= ${oferta>/pedidos}.length === 0 }">
 								<items>
 									<SegmentedButtonItem key="recojo" text="{i18n>entregaRecojo}" />
 									<SegmentedButtonItem key="envio" text="{i18n>entregaEnvio}" />
@@ -503,15 +504,15 @@
 									<Label text="{i18n>direccionFactura}" />
 									<Text text="{oferta>/cliente/direccion}" />
 									<Label text="{i18n>direccionEnvio}" />
-									<Select selectedKey="{oferta>/entregaDatos/direccionId}" items="{oferta>/opcionesDireccion}" change=".onCambiaDireccionEnvio">
+									<Select selectedKey="{oferta>/entregaDatos/direccionId}" items="{oferta>/opcionesDireccion}" change=".onCambiaDireccionEnvio" enabled="{= ${oferta>/pedidos}.length === 0 }">
 										<core:Item key="{oferta>id}" text="{= ${oferta>texto} ? ${oferta>alias} + ' · ' + ${oferta>texto} : ${oferta>alias} }" />
 									</Select>
 									<Label text="" visible="{= ${oferta>/entregaDatos/direccionId} === '__unica__' }" />
-									<Input visible="{= ${oferta>/entregaDatos/direccionId} === '__unica__' }" value="{oferta>/entregaDatos/direccionUnica}" placeholder="{i18n>direccionUnicaPh}" liveChange=".onCambiaDireccionUnica" valueState="{= ${oferta>/entregaDatos/direccionUnica} ? 'None' : 'Warning' }" />
+									<Input visible="{= ${oferta>/entregaDatos/direccionId} === '__unica__' }" value="{oferta>/entregaDatos/direccionUnica}" placeholder="{i18n>direccionUnicaPh}" liveChange=".onCambiaDireccionUnica" valueState="{= ${oferta>/entregaDatos/direccionUnica} ? 'None' : 'Warning' }" enabled="{= ${oferta>/pedidos}.length === 0 }" />
 									<Label text="" visible="{= ${oferta>/entregaDatos/direccionId} === '__unica__' }" />
 									<Text text="{i18n>direccionUnicaNota}" visible="{= ${oferta>/entregaDatos/direccionId} === '__unica__' }" />
 									<Label text="" />
-									<Button text="{i18n>direccionesAdministrar}" type="Transparent" icon="sap-icon://add" press=".onEditarCliente" width="18rem" />
+									<Button text="{i18n>direccionesAdministrar}" type="Transparent" icon="sap-icon://add" press=".onEditarCliente" width="18rem" enabled="{= ${oferta>/pedidos}.length === 0 }" />
 									<Label text="{i18n>transportista}" />
 									<Input
 											value="{oferta>/entregaDatos/transportistaTexto}"
@@ -522,13 +523,13 @@
 											suggestionItemSelected=".onSugerenciaTransportista"
 											change=".onCambiaTransportistaTexto"
 											valueState="{= ${oferta>/entregaDatos/transportistaError} ? 'Error' : 'None' }"
-											valueStateText="{oferta>/entregaDatos/transportistaError}">
+											valueStateText="{oferta>/entregaDatos/transportistaError}" enabled="{= ${oferta>/pedidos}.length === 0 }">
 											<suggestionItems>
 												<core:ListItem key="{oferta>key}" text="{oferta>text}" additionalText="{oferta>nSedes}" />
 											</suggestionItems>
 										</Input>
 									<Label text="{i18n>sedeTransportista}" />
-									<Select selectedKey="{oferta>/entregaDatos/sede}" items="{oferta>/sedes}" change=".onCambiaSede" enabled="{= !!${oferta>/entregaDatos/transportista} }">
+									<Select selectedKey="{oferta>/entregaDatos/sede}" items="{oferta>/sedes}" change=".onCambiaSede" enabled="{= (!!${oferta>/entregaDatos/transportista}) &amp;&amp; ${oferta>/pedidos}.length === 0 }">
 										<core:Item key="{oferta>key}" text="{oferta>text}" />
 									</Select>
 									<Label text="{i18n>direccionTransporte}" />
@@ -537,13 +538,13 @@
 									<HBox wrap="Wrap" alignItems="Center" class="sapUiSmallMarginBottom" visible="{= ${oferta>/recientes}.length > 0 }">
 											<Text text="{i18n>transportistasRecientes}" class="sapUiTinyMarginEnd" />
 											<HBox items="{oferta>/recientes}">
-												<Button text="{oferta>text}" type="Transparent" press=".onElegirReciente" />
+												<Button text="{oferta>text}" type="Transparent" press=".onElegirReciente" enabled="{= ${oferta>/pedidos}.length === 0 }" />
 											</HBox>
 										</HBox>
 							</VBox>
 							<form:SimpleForm editable="true" layout="ColumnLayout" columnsM="1" columnsL="1" columnsXL="2">
 								<Label text="{i18n>comentario}" />
-								<TextArea value="{oferta>/entregaDatos/comentario}" rows="2" />
+								<TextArea value="{oferta>/entregaDatos/comentario}" rows="2" enabled="{= ${oferta>/pedidos}.length === 0 }" />
 							</form:SimpleForm>
 							<MessageStrip text="{= ${oferta>/hayVehiculos} ? ${i18n>entregaVehiculoNota} : ${i18n>entregaRepuestoNota} }" type="Information" showIcon="true" />
 						</VBox>

@@ -102,8 +102,8 @@ interface CondicionPosSap {
 	Kmein?: string;
 	Kwert?: string | number;
 	Waerk?: string;
-	Kstat?: string;
-	Kinak?: string;
+	Kstat?: string | boolean;
+	Kinak?: string | boolean;
 	Kherk?: string;
 }
 
@@ -113,6 +113,11 @@ interface CondicionPosSap {
  * se deja en esa escala para reutilizar Condiciones.ts. El importe de las demas condiciones se copia tal cual.
  * En los porcentajes Waers viene vacio: la moneda es la del documento (Waerk). Manual = origen 'C'.
  */
+/** Marca de SAP como texto: el servicio entrega los indicadores como "X" o como booleano segun el campo (de ahi el error "trim is not a function"). */
+function marca(valor: unknown): string {
+	return valor === true || (typeof valor === "string" && valor.trim() !== "") ? "X" : "";
+}
+
 function condicionDeDocumento(c: CondicionPosSap): CondicionServicio {
 	const porcentaje = c.Krech === "A";
 	return {
@@ -125,11 +130,11 @@ function condicionDeDocumento(c: CondicionPosSap): CondicionServicio {
 		Total: c.Kwert,
 		MonedaDoc: c.Waerk,
 		Manual: c.Kherk === "C" ? "X" : "",
-		Estadistica: c.Kstat,
+		Estadistica: marca(c.Kstat),
 		Paso: c.Stunr,
 		Contador: c.Zaehk,
 		TipoCalculo: c.Krech,
-		Inactiva: c.Kinak
+		Inactiva: marca(c.Kinak)
 	};
 }
 

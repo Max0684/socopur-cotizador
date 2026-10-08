@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { filasDeCondiciones, importeVisible, type CondicionServicio } from "../webapp/model/Condiciones.ts";
+import { filaDeCondicion, filasDeCondiciones, importeVisible, type CondicionServicio } from "../webapp/model/Condiciones.ts";
 import { consultarCondiciones } from "../webapp/model/PreciosService.ts";
 import { crearModeloFalso } from "./helpers/modeloFalso.ts";
 
@@ -77,4 +77,15 @@ test("la marca de estadistica y la modificacion manual se leen del servicio", ()
 	const [f] = filasDeCondiciones([{ CondType: "DCD1", Valor: 0, Total: 0, Estadistica: "X", Manual: "X" }], true);
 	assert.equal(f.estadistica, true);
 	assert.equal(f.manual, true);
+});
+
+test("filaDeCondicion acepta los indicadores como booleano o como texto (el servicio de la oferta guardada los entrega distinto)", () => {
+	const f = filaDeCondicion({ CondType: "Z320", Valor: 1, TipoCalculo: "A", Total: -10, Estadistica: true as unknown as string, Manual: "X", Inactiva: false as unknown as string });
+	assert.equal(f.estadistica, true);
+	assert.equal(f.manual, true);
+	assert.equal(f.relevante, true);
+	const g = filaDeCondicion({ CondType: "ZIGV", Valor: 0, Total: 0, Estadistica: false as unknown as string, Manual: "", Inactiva: true as unknown as string });
+	assert.equal(g.estadistica, false);
+	assert.equal(g.manual, false);
+	assert.equal(g.relevante, false);
 });

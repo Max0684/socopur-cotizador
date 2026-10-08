@@ -3169,9 +3169,8 @@ export default class Oferta extends Controller {
 		dialogo.open("");
 	}
 
-	private aplicarClienteSap(elegido: ClienteSap): void {
-		const oferta = this.modeloOferta();
-		const cliente: Cliente = {
+	private clienteDeSap(elegido: ClienteSap): Cliente {
+		return {
 			kunnr: elegido.kunnr,
 			doc: elegido.doc,
 			tipoDoc: elegido.tipoDoc,
@@ -3187,10 +3186,36 @@ export default class Oferta extends Controller {
 			areas: elegido.areas,
 			condicionesAreas: elegido.condicionesAreas
 		};
-		oferta.setProperty("/cliente", cliente);
+	}
+
+	private aplicarClienteSap(elegido: ClienteSap): void {
+		const oferta = this.modeloOferta();
+		oferta.setProperty("/cliente", this.clienteDeSap(elegido));
 		oferta.setProperty("/clienteNoEncontrado", false);
 		this.refrescarTrasCliente();
 		void this.cargarDatosCliente(elegido.kunnr, elegido.bloqueado);
+	}
+
+	/**
+	 * Al abrir una oferta o pedido ya creado, el documento solo trae el numero y el nombre del cliente: se completan sus datos reales (documento,
+	 * condicion, grupo, direccion, credito, contacto). No se recalcula ni se cambia nada de la oferta: es solo para mostrar.
+	 */
+	private async completarClienteDeDocumento(kunnr: string): Promise<void> {
+		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel | undefined;
+		if (!odata || !kunnr) {
+			return;
+		}
+		try {
+			const encontrados = await buscarClientes(odata, kunnr, [], 1);
+			const elegido = encontrados.find((c) => c.kunnr === kunnr) ?? encontrados[0];
+			if (!elegido) {
+				return;
+			}
+			this.modeloOferta().setProperty("/cliente", this.clienteDeSap(elegido));
+			void this.cargarDatosCliente(elegido.kunnr, elegido.bloqueado);
+		} catch (error) {
+			MessageToast.show(this.i18n().getText("odataClienteError", [(error as Error).message]) as string);
+		}
 	}
 
 	/**
@@ -3888,6 +3913,7 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 			);
 			this.recalcular();
 			this.instantanea = JSON.stringify(oferta.getProperty("/lineas") ?? []);
+			await this.completarClienteDeDocumento(detalle.kunnr);
 		} catch (error) {
 			MessageToast.show(this.i18n().getText("odataDetalleError", [(error as Error).message]) as string);
 		}
