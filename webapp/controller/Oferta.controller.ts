@@ -11,6 +11,7 @@ import { consultarCondiciones, consultarPrecio, impuestosDeCondiciones } from "c
 import { type CondicionServicio, type FilaCondicion, descuentosAplicados, filasDeCondiciones } from "com/socopur/cotizador/model/Condiciones";
 import { agruparVehiculos, buscarVehiculos, filtrarVehiculos, textoDetalleVehiculo } from "com/socopur/cotizador/model/VehiculosService";
 import { areasOrgCanal, textoSolicitudAmpliacion, type CondicionArea, type OpcionAreaCliente, condicionDeArea, opcionesAreaCliente, almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, faltaSectorDeVentas, gruposParaGuardar, igvExonerado, modalidadPorDefecto, oficinaDe, orgVehiculosDe, puedeVenderOtroCentro, sectorDeCabecera, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
+import { evaluarBloqueoPedido, type BloqueoPedido } from "com/socopur/cotizador/model/BloqueoPedido";
 import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type VinAsignado, esperarVinculos, leerMotivoVinculo, anularGrupo } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
 import { buscarRepuestosConStock, disponibilidadPorAlmacen, motivoVacio } from "com/socopur/cotizador/model/MaterialesService";
@@ -2718,18 +2719,10 @@ export default class Oferta extends Controller {
 	/** Fila de la tabla de pedidos con el estado real de SAP (credito, bloqueos, liberado y total con IGV). */
 	private filaPedidoReal(real: GrupoEstado | null, numeroPedido: string, numeroOferta: string, detalle: string, clasePedido: string, impuestos?: { isc: number; igv: number } | null): Record<string, string> {
 		const i18n = this.i18n();
-		const bloqueos: string[] = [];
-		if (real?.BloqueoEntrega) {
-			bloqueos.push(i18n.getText("pedidoBloqueoEntrega", [real.BloqueoEntrega]) as string);
-		}
-		if (real?.BloqueoFactura) {
-			bloqueos.push(i18n.getText("pedidoBloqueoFactura", [real.BloqueoFactura]) as string);
-		}
-		const credito = !real
-			? (i18n.getText("pedidoEstadoNoLeido") as string)
-			: real.EstadoCredito === "B"
-				? (i18n.getText("pedidoCreditoBloqueado") as string)
-				: (i18n.getText("pedidoCreditoLibre") as string);
+		const bloqueo = this.bloqueoDelPedido(real, clasePedido, numeroPedido);
+		const textoBloqueo = bloqueo
+			? bloqueo.fila.map((f) => i18n.getText(f.clave, f.parametros) as string).join(" \u00b7 ")
+			: (i18n.getText("pedidoEstadoNoLeido") as string);
 		const liberado = real?.Liberado === "X";
 		return {
 			numero: numeroPedido,
@@ -2740,19 +2733,35 @@ export default class Oferta extends Controller {
 			clasePedido,
 			estado: real?.Rechazado === "X" ? (i18n.getText("pedidoRechazado") as string) : !real ? (i18n.getText("pedidoPendiente") as string) : liberado ? (i18n.getText("pedidoLiberado") as string) : (i18n.getText("pedidoBloqueado") as string),
 			estadoState: real?.Rechazado === "X" ? "Error" : liberado ? "Success" : "Warning",
-			liberacion: [credito, ...bloqueos].join(" \u00b7 "),
+			liberacion: textoBloqueo,
 			liberacionState: !real ? "Warning" : liberado ? "Success" : "Warning",
 			totalSap: real && real.TotalPedido !== undefined && real.TotalPedido !== "" ? this.textoTotalSap(real, impuestos) : "\u2014"
 		};
 	}
 
-	/** Que debe hacer el vendedor despues de crear el pedido, segun el estado real de SAP (credito bloqueado -> Creditos; si no, Caja verifica el cobro y factura). */
-	private avisarSiguientePaso(estados: (GrupoEstado | null)[]): void {
+	/**
+	 * Bloqueo real del pedido segun la matriz de credito (Story 1.19). Muestra lo que SAP dejo en el pedido; si no coincide con la matriz,
+	 * lo registra en el log para revisarlo con el funcional. Null si no se pudo leer el estado.
+	 */
+	private bloqueoDelPedido(real: GrupoEstado | null, clasePedido: string, numeroPedido: string): BloqueoPedido | null {
+		const bloqueo = evaluarBloqueoPedido(real, clasePedido, String(this.modeloOferta().getProperty("/perfil/formaPago") ?? ""));
+		if (bloqueo?.discrepancia) {
+			console.warn(`[Cotizador] pedido ${numeroPedido} (clase ${clasePedido || "?"}): ${bloqueo.discrepancia}. Estado real: FAKSK=${real?.BloqueoFactura || "-"} LIFSK=${real?.BloqueoEntrega || "-"} CMGST=${real?.EstadoCredito || "-"}`);
+		}
+		return bloqueo;
+	}
+
+	/** Que debe hacer el vendedor despues de crear el pedido, segun el bloqueo real de SAP: Caja, Creditos o Case Management; sin bloqueo no hay siguiente paso. */
+	private avisarSiguientePaso(estados: { real: GrupoEstado | null; clase: string; numeroPedido: string }[]): void {
 		const i18n = this.i18n();
-		const conCreditoBloqueado = estados.some((e) => e?.EstadoCredito === "B");
+		const claves = new Set<string>();
+		for (const e of estados) {
+			this.bloqueoDelPedido(e.real, e.clase, e.numeroPedido)?.avisos.forEach((a) => claves.add(a));
+		}
+		const textos = [...claves].map((c) => i18n.getText(c) as string);
 		this.modeloOferta().setProperty(
 			"/avisoPedido",
-			estados.length === 0 ? { texto: "", tipo: "None" } : { texto: i18n.getText(conCreditoBloqueado ? "pedidoAvisoCredito" : "pedidoAvisoCobro") as string, tipo: conCreditoBloqueado ? "Warning" : "Information" }
+			textos.length === 0 ? { texto: "", tipo: "None" } : { texto: textos.join(" "), tipo: claves.has("pedidoAvisoCaja") && claves.size === 1 ? "Information" : "Warning" }
 		);
 	}
 
@@ -2913,7 +2922,7 @@ export default class Oferta extends Controller {
 			}
 			const real = await leerEstadoPedido(odata, cotizId, g.GrupoNo);
 			const oferta = this.modeloOferta();
-			this.avisarSiguientePaso([real]);
+			this.avisarSiguientePaso([{ real, clase: g.AuartPedido, numeroPedido: g.VbelnPedido }]);
 			const base = this.filaPedidoReal(real, g.VbelnPedido, numeroOferta, (oferta.getProperty("/grupos/0/titulo") as string) ?? "\u2014", g.AuartPedido, await this.impuestosDeOferta(odata, numeroOferta));
 			// Igual que al crear el pedido: una fila por vehiculo con su VIN (solo lectura; aqui no se asigna nada).
 			let vins: { material: string; color: string; vin: string }[] = [];
@@ -2942,7 +2951,7 @@ export default class Oferta extends Controller {
 		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel;
 		const filas: Record<string, string>[] = [];
 		const numeros: string[] = [];
-		const estadosReales: (GrupoEstado | null)[] = [];
+		const estadosReales: { real: GrupoEstado | null; clase: string; numeroPedido: string }[] = [];
 		vista?.setBusy(true);
 		// Antes de llamar a SAP: si el disponible del almacen no alcanza, se dice aqui (SAP lo rechazaria igual) y no se crea nada.
 		const faltan = await this.lineasSinDisponible();
@@ -2959,7 +2968,7 @@ export default class Oferta extends Controller {
 				numeros.push(pedido.vbelnPedido);
 				// Estado REAL leido de SAP (vista GrupoEstado sobre VBAK); si no se puede leer, se dice que no hay informacion.
 				const real = await leerEstadoPedido(odata, o.cotizId as string, o.grupoNo as string);
-				estadosReales.push(real);
+				estadosReales.push({ real, clase: o.clasePedido ?? "", numeroPedido: pedido.vbelnPedido });
 				const base = this.filaPedidoReal(real, pedido.vbelnPedido, o.numero, o.titulo, o.clasePedido ?? "", await this.impuestosDeOferta(odata, o.numero));
 				const vins = await this.asignarVinsDelGrupo(odata, o.cotizId as string, o.grupoNo as string, elegidos);
 				if (vins.length === 0) {
