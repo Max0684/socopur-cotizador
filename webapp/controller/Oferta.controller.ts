@@ -2724,6 +2724,7 @@ export default class Oferta extends Controller {
 			? bloqueo.fila.map((f) => i18n.getText(f.clave, f.parametros) as string).join(" \u00b7 ")
 			: (i18n.getText("pedidoEstadoNoLeido") as string);
 		const liberado = real?.Liberado === "X";
+		const pendienteCobro = !!bloqueo && bloqueo.destinos.length === 1 && bloqueo.destinos[0] === "caja";
 		return {
 			numero: numeroPedido,
 			oferta: numeroOferta,
@@ -2731,7 +2732,7 @@ export default class Oferta extends Controller {
 			vin: "\u2014",
 			bloqueo: "\u2014",
 			clasePedido,
-			estado: real?.Rechazado === "X" ? (i18n.getText("pedidoRechazado") as string) : !real ? (i18n.getText("pedidoPendiente") as string) : liberado ? (i18n.getText("pedidoLiberado") as string) : (i18n.getText("pedidoBloqueado") as string),
+			estado: real?.Rechazado === "X" ? (i18n.getText("pedidoRechazado") as string) : !real ? (i18n.getText("pedidoPendiente") as string) : liberado ? (i18n.getText("pedidoLiberado") as string) : pendienteCobro ? (i18n.getText("pedidoPendienteCobro") as string) : (i18n.getText("pedidoBloqueado") as string),
 			estadoState: real?.Rechazado === "X" ? "Error" : liberado ? "Success" : "Warning",
 			liberacion: textoBloqueo,
 			liberacionState: !real ? "Warning" : liberado ? "Success" : "Warning",
@@ -3597,6 +3598,11 @@ export default class Oferta extends Controller {
 		const grupos = (oferta.getProperty("/grupos") as Grupo[]) ?? [];
 		if (!cliente?.kunnr) {
 			MessageBox.error(i18n.getText("guardarSinCliente") as string);
+			return;
+		}
+		if (!oferta.getProperty("/perfil/formaPago")) {
+			// Sin forma de pago no viaja Zterm y SAP usa la del maestro del cliente: el bloqueo (contado o credito) no se puede anticipar.
+			MessageBox.error(i18n.getText("guardarSinFormaPago") as string);
 			return;
 		}
 		if (grupos.length === 0 || grupos.every((g) => g.lineas.length === 0)) {

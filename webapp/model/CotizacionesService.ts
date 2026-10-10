@@ -246,7 +246,7 @@ export async function crearPedidoGrupo(modelo: ODataModel, cotizId: string, grup
 
 /**
  * Estado real del pedido de un grupo (vista YC_COTIZ_GRUPOESTADO sobre VBAK): credito (CMGST), bloqueo de entrega (LIFSK),
- * bloqueo de facturacion (FAKSK) y Liberado ("X" si el credito no esta en B y no hay bloqueo de entrega).
+ * bloqueo de facturacion (FAKSK) y Liberado ("X" si el credito no esta en B y no hay bloqueo de entrega ni de facturacion; desde el 09/10/2026 la vista tambien mira FAKSK).
  * Devuelve null si no se puede leer: el llamador debe mostrar "sin informacion" y no inventar un estado.
  */
 export async function leerEstadoPedido(modelo: ODataModel, cotizId: string, grupoNo: string): Promise<GrupoEstado | null> {
