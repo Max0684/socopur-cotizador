@@ -3740,6 +3740,8 @@ export default class Oferta extends Controller {
 			MessageBox.error(i18n.getText("guardarCentroInvalido", [perfil.centro, `${centroMalo.vkorg}/${centroMalo.vtweg}`]) as string);
 			return;
 		}
+		// Los mensajes de errores anteriores (p. ej. un PIN mal escrito al identificarse) no son de este guardado: si se dejan, el motivo sale equivocado.
+		Messaging.removeAllMessages();
 		const vista = this.getView();
 		vista?.setBusy(true);
 		try {
