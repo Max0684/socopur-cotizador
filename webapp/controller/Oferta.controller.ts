@@ -3223,6 +3223,8 @@ export default class Oferta extends Controller {
 	private async buscarClienteReal(texto: string): Promise<void> {
 		const oferta = this.modeloOferta();
 		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel;
+		// Sin errores viejos en el gestor de mensajes: el motivo que se muestra es el de esta busqueda.
+		Messaging.removeAllMessages();
 		try {
 			// El cliente se busca en TODAS las organizaciones: es de toda la empresa. Si no esta dado de alta en la organizacion y el canal
 			// de la oferta, la pantalla lo avisa y permite ampliar el area de ventas.
@@ -3238,7 +3240,7 @@ export default class Oferta extends Controller {
 				this.abrirSelectorCliente(encontrados);
 			}
 		} catch (error) {
-			MessageToast.show(this.i18n().getText("odataClienteError", [(error as Error).message]) as string);
+			MessageToast.show(this.i18n().getText("odataClienteError", [this.motivoDeError(error)]) as string, { duration: 8000 });
 		}
 	}
 
@@ -3335,7 +3337,7 @@ export default class Oferta extends Controller {
 			this.modeloOferta().setProperty("/cliente", this.clienteDeSap(elegido));
 			void this.cargarDatosCliente(elegido.kunnr, elegido.bloqueado);
 		} catch (error) {
-			MessageToast.show(this.i18n().getText("odataClienteError", [(error as Error).message]) as string);
+			MessageToast.show(this.i18n().getText("odataClienteError", [this.motivoDeError(error)]) as string, { duration: 8000 });
 		}
 	}
 
