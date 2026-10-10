@@ -50,6 +50,18 @@ test("aDirecciones: la fiscal va primero y los destinatarios WE se identifican p
 	]);
 });
 
+test("aDirecciones: con Addrnumber cada direccion distinta tiene su propio id aunque sea del mismo cliente", () => {
+	const r = aDirecciones(
+		[
+			{ Kunnr: "1", Tipo: "WE", Kunn2: "1", Nombre: "BM3", Calle: "AV SANTA 1201", Addrnumber: "87247", Origen: "HISTORIAL" },
+			{ Kunnr: "1", Tipo: "WE", Kunn2: "1", Nombre: "BM3", Calle: "AV AMERICA OESTE", Addrnumber: "87248", Origen: "HISTORIAL" },
+			{ Kunnr: "1", Tipo: "FISCAL", Kunn2: "1", Calle: "AV MANUEL VERA", Addrnumber: "73851", Origen: "MAESTRO" }
+		],
+		"Fiscal / Facturacion"
+	);
+	assert.deepEqual(r.map((d) => d.id), ["FISCAL", "A-87247", "A-87248"]);
+});
+
 test("aContacto: toma el predeterminado; sin predeterminado prefiere el movil; vacio si no hay", () => {
 	const r = aContacto([
 		{ Tipo: "MAIL", Seq: 1, Valor: "otro@x.pe" },

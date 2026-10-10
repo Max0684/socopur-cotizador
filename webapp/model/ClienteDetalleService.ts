@@ -32,6 +32,9 @@ interface DireccionSap {
 	Provincia?: string;
 	RegionTexto?: string;
 	Ubigeo?: string;
+	/** Numero de direccion de SAP (ADRC). Con el: una fila por direccion distinta del cliente (maestro o ya usada en pedidos). */
+	Addrnumber?: string;
+	Origen?: string;
 }
 
 interface ContactoSap {
@@ -108,10 +111,13 @@ export function textoDireccion(d: DireccionSap): string {
 	return d.Ubigeo ? `${base} (${d.Ubigeo})` : base;
 }
 
-/** Fiscal primero; los destinatarios de envio (WE) distintos del propio cliente despues. Un cliente sin WE propio usa la fiscal para enviar. */
+/**
+ * Fiscal primero; despues todas las demas direcciones del cliente (envio, facturacion, maestro o ya usadas en pedidos). Los selectores de envio y
+ * de facturacion muestran todas, sin filtrar por tipo. Con Addrnumber el id es la direccion; sin el (servicio anterior), el cliente del WE.
+ */
 export function aDirecciones(filas: DireccionSap[], aliasFiscal: string): DireccionCliente[] {
 	const lista = filas.map((d) => ({
-		id: d.Tipo === "FISCAL" ? "FISCAL" : `WE-${d.Kunn2}`,
+		id: d.Tipo === "FISCAL" ? "FISCAL" : d.Addrnumber ? `A-${d.Addrnumber}` : `WE-${d.Kunn2}`,
 		alias: d.Tipo === "FISCAL" ? aliasFiscal : d.Nombre || d.Kunn2,
 		tipo: (d.Tipo === "FISCAL" ? "Fiscal" : "Envio") as "Fiscal" | "Envio",
 		texto: textoDireccion(d)
@@ -138,7 +144,7 @@ export async function cargarMovimientos(modelo: ODataModel, kunnr: string, maxim
 }
 
 export async function cargarDirecciones(modelo: ODataModel, kunnr: string, aliasFiscal: string): Promise<DireccionCliente[]> {
-	const filas = await modelo.bindList("/ClienteDireccion", undefined, undefined, undefined, { $filter: `Kunnr eq '${comillas(kunnr)}'` }).requestContexts(0, 50);
+	const filas = await modelo.bindList("/ClienteDireccion", undefined, undefined, undefined, { $filter: `Kunnr eq '${comillas(kunnr)}'` }).requestContexts(0, 100);
 	return aDirecciones(filas.map((c) => c.getObject() as DireccionSap), aliasFiscal);
 }
 
