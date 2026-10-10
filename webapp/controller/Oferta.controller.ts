@@ -3622,6 +3622,10 @@ export default class Oferta extends Controller {
 			MessageBox.error(i18n.getText("guardarSinCliente") as string);
 			return;
 		}
+		if (!oferta.getProperty("/perfil/vendedor")) {
+			MessageBox.error(i18n.getText("vendIdRequerido") as string);
+			return;
+		}
 		if (!oferta.getProperty("/perfil/formaPago")) {
 			// Sin forma de pago no viaja Zterm y SAP usa la del maestro del cliente: el bloqueo (contado o credito) no se puede anticipar.
 			MessageBox.error(i18n.getText("guardarSinFormaPago") as string);

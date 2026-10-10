@@ -111,7 +111,20 @@ export default class Main extends Controller {
 		return `N° ${numero} · ${this.formatFecha(fecha)}`;
 	}
 
+	/** Sin vendedor identificado no se consulta ni se cotiza: se vuelve a abrir la identificacion. */
+	private sinVendedor(): boolean {
+		const mock = (this.getOwnerComponent() as UIComponent).getModel("mock") as JSONModel;
+		if (mock.getProperty("/perfil/vendedor")) {
+			return false;
+		}
+		this.onCambiarVendedor();
+		return true;
+	}
+
 	public async onVerMisOfertas(): Promise<void> {
+		if (this.sinVendedor()) {
+			return;
+		}
 		(this.getView()?.getModel("vista") as JSONModel).setProperty("/consultado", true);
 		this.forzado = true;
 		// El vendedor se identifica despues de abrir la pantalla: se vuelve a leer con su PERNR antes de mostrar.
@@ -124,6 +137,9 @@ export default class Main extends Controller {
 	}
 
 	public onNuevaOferta(): void {
+		if (this.sinVendedor()) {
+			return;
+		}
 		this.router.navTo("nueva");
 	}
 

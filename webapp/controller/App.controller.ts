@@ -26,12 +26,11 @@ import {
  */
 export default class App extends Controller {
 	private dialogoVendedor?: Dialog;
-	private vendedorActual = "";
 
 	public onInit(): void {
 		this.getView()?.addStyleClass("sapUiSizeCompact");
 		this.getView()?.setModel(new JSONModel({ layout: "OneColumn" }), "app");
-		this.getView()?.setModel(new JSONModel({ visibles: [], elegido: "", pedirPin: false, pin: "", estadoPin: "None", puedeCancelar: false }), "vend");
+		this.getView()?.setModel(new JSONModel({ visibles: [], elegido: "", pedirPin: false, pin: "", estadoPin: "None" }), "vend");
 
 		const router = (this.getOwnerComponent() as UIComponent).getRouter();
 		router.attachRouteMatched(this.onRouteMatched, this);
@@ -76,7 +75,6 @@ export default class App extends Controller {
 
 	/** Carga el perfil del vendedor y su sede (ciudad y region, deducidas de su centro). */
 	private entrarComo(mock: JSONModel, vendedor: Vendedor): void {
-		this.vendedorActual = claveVendedor(vendedor);
 		aplicarPerfil(mock, vendedor);
 		mock.setProperty("/perfil/sede", textoSede(vendedor.werks));
 		mock.setProperty("/perfil/ciudad", ciudadDeCentro(vendedor.werks)?.clave ?? "");
@@ -99,18 +97,13 @@ export default class App extends Controller {
 			this.getView()?.addDependent(this.dialogoVendedor);
 		}
 		const modelo = this.getView()?.getModel("vend") as JSONModel;
-		// Con un vendedor ya identificado se puede cerrar el dialogo y seguir con el mismo; sin ninguno no se puede cotizar.
-		modelo.setData({ visibles: this.activos().map((v) => ({ ...v, clave: claveVendedor(v) })), elegido: "", pedirPin: false, pin: "", estadoPin: "None", puedeCancelar: !!this.vendedorActual });
+		modelo.setData({ visibles: this.activos().map((v) => ({ ...v, clave: claveVendedor(v) })), elegido: "", pedirPin: false, pin: "", estadoPin: "None" });
 		this.dialogoVendedor.open();
 	}
 
-	/** Sin identificarse no se puede cotizar: solo se cierra con Escape o Cancelar si ya hay un vendedor activo. */
-	public onVendedorEscape(promesa: { resolve(): void; reject(): void }): void {
-		if (this.vendedorActual) {
-			promesa.resolve();
-		} else {
-			promesa.reject();
-		}
+	/** El dialogo se puede cerrar siempre; sin vendedor no se puede cotizar (Main y Oferta lo vuelven a pedir). */
+	public onVendedorEscape(promesa: { resolve(): void }): void {
+		promesa.resolve();
 	}
 
 	public onVendedorCancelar(): void {

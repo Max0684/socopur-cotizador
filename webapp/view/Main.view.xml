@@ -29,7 +29,7 @@
 						press=".onAdministrarVendedores" />
 					<Button
 						id="vendedorBtn"
-						text="{mock>/perfil/vendedor}"
+						text="{= ${mock>/perfil/vendedor} || ${i18n>vendIdIdentificarse} }"
 						tooltip="{i18n>vendIdCambiar}"
 						type="Transparent"
 						icon="sap-icon://person-placeholder"
