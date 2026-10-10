@@ -1598,8 +1598,11 @@ export default class Oferta extends Controller {
 		const cl = oferta.getProperty("/cliente") as Cliente | null;
 		if (!cl) {
 			oferta.setProperty("/opcionesDireccion", []);
+			oferta.setProperty("/opcionesFactura", []);
 			oferta.setProperty("/entregaDatos/direccionId", "");
 			oferta.setProperty("/entregaDatos/direccionEnvio", "");
+			oferta.setProperty("/entregaDatos/facturaId", "");
+			oferta.setProperty("/entregaDatos/direccionFactura", "");
 			return;
 		}
 		const dirs = this.direccionesDe(cl);
@@ -1608,6 +1611,13 @@ export default class Oferta extends Controller {
 		}
 		// Ultima opcion: direccion de un solo uso, que se guarda solo en la oferta (SAP crea una direccion propia del documento).
 		oferta.setProperty("/opcionesDireccion", [...ordenarPorTexto(dirs, (d) => d.alias), { id: "__unica__", alias: this.i18n().getText("direccionUnica") as string, tipo: "", texto: "" }]);
+		// Direccion de facturacion: todas las direcciones del cliente, la fiscal por defecto.
+		const ordenadas = ordenarPorTexto(dirs, (d) => d.alias);
+		oferta.setProperty("/opcionesFactura", ordenadas);
+		const facturaActual = oferta.getProperty("/entregaDatos/facturaId") as string;
+		const factura = dirs.find((x) => x.id === facturaActual) ?? dirs.find((x) => x.tipo === "Fiscal") ?? dirs[0];
+		oferta.setProperty("/entregaDatos/facturaId", factura.id);
+		oferta.setProperty("/entregaDatos/direccionFactura", factura.texto);
 		const actual = oferta.getProperty("/entregaDatos/direccionId") as string;
 		if (actual === "__unica__") {
 			oferta.setProperty("/entregaDatos/direccionEnvio", oferta.getProperty("/entregaDatos/direccionUnica") ?? "");
@@ -1627,6 +1637,13 @@ export default class Oferta extends Controller {
 		}
 		const dirs = (oferta.getProperty("/cliente/direcciones") as Direccion[]) ?? [];
 		oferta.setProperty("/entregaDatos/direccionEnvio", dirs.find((x) => x.id === id)?.texto ?? "");
+	}
+
+	public onCambiaDireccionFactura(): void {
+		const oferta = this.modeloOferta();
+		const id = oferta.getProperty("/entregaDatos/facturaId") as string;
+		const dirs = (oferta.getProperty("/cliente/direcciones") as Direccion[]) ?? [];
+		oferta.setProperty("/entregaDatos/direccionFactura", dirs.find((x) => x.id === id)?.texto ?? "");
 	}
 
 	public onCambiaDireccionUnica(): void {
@@ -4107,11 +4124,12 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 			tiposCliente: [],
 			fechaEntrega: new Date().toISOString().slice(0, 10),
 			entrega: "recojo",
-			entregaDatos: { direccionId: "", direccionEnvio: "", direccionUnica: "", transportista: "", transportistaTexto: "", transportistaError: "", sede: "", sedeDireccion: "", comentario: "" },
+			entregaDatos: { direccionId: "", direccionEnvio: "", direccionUnica: "", facturaId: "", direccionFactura: "", transportista: "", transportistaTexto: "", transportistaError: "", sede: "", sedeDireccion: "", comentario: "" },
 			sedes: [],
 			transportistas: ((mock.getProperty("/transportistas") as { key: string; text: string; sedes: unknown[] }[]) ?? []).map((t) => ({ ...t, nSedes: `${t.sedes.length} sede(s)` })),
 			recientes: (((mock.getProperty("/transportistasRecientes") as string[]) ?? []).map((k) => (mock.getProperty("/transportistas") as { key: string; text: string }[]).find((t) => t.key === k)).filter((t) => !!t) as { key: string; text: string }[]).map((t) => ({ key: t.key, text: t.text })),
 			opcionesDireccion: [],
+			opcionesFactura: [],
 			modalidades: mock.getProperty("/modalidades") ?? [],
 			modalidadesGrupo: {},
 			formasPago: mock.getProperty("/formasPago") ?? [],

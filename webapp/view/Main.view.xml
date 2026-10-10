@@ -28,6 +28,12 @@
 						visible="{= ${mock>/perfil/rol} === 'A' }"
 						press=".onAdministrarVendedores" />
 					<Button
+						id="misOfertasBtn"
+						text="{i18n>verMisOfertas}"
+						type="Transparent"
+						icon="sap-icon://list"
+						press=".onVerMisOfertas" />
+					<Button
 						id="vendedorBtn"
 						text="{= ${mock>/perfil/vendedor} || ${i18n>vendIdIdentificarse} }"
 						tooltip="{i18n>vendIdCambiar}"

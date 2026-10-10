@@ -495,14 +495,18 @@
 								<form:SimpleForm editable="false" layout="ColumnLayout" columnsM="1" columnsL="1" columnsXL="2">
 									<Label text="{i18n>puntoRecojo}" />
 									<Text text="{i18n>centro} {oferta>/perfil/centro} · {oferta>/perfil/sede}" />
-									<Label text="{i18n>direccionFactura}" visible="{= !!${oferta>/cliente/direccion} }" />
-									<Text text="{oferta>/cliente/direccion}" visible="{= !!${oferta>/cliente/direccion} }" />
+									<Label text="{i18n>direccionFactura}" visible="{= (${oferta>/opcionesFactura} || []).length > 0 }" />
+									<Select selectedKey="{oferta>/entregaDatos/facturaId}" items="{oferta>/opcionesFactura}" change=".onCambiaDireccionFactura" visible="{= (${oferta>/opcionesFactura} || []).length > 0 }" enabled="{= ${oferta>/pedidos}.length === 0 }">
+										<core:Item key="{oferta>id}" text="{= ${oferta>texto} ? ${oferta>alias} + ' · ' + ${oferta>texto} : ${oferta>alias} }" />
+									</Select>
 								</form:SimpleForm>
 							</VBox>
 							<VBox visible="{= ${oferta>/entrega} === 'envio' }">
 								<form:SimpleForm editable="true" layout="ColumnLayout" columnsM="1" columnsL="1" columnsXL="2">
-									<Label text="{i18n>direccionFactura}" visible="{= !!${oferta>/cliente/direccion} }" />
-									<Text text="{oferta>/cliente/direccion}" visible="{= !!${oferta>/cliente/direccion} }" />
+									<Label text="{i18n>direccionFactura}" visible="{= (${oferta>/opcionesFactura} || []).length > 0 }" />
+									<Select selectedKey="{oferta>/entregaDatos/facturaId}" items="{oferta>/opcionesFactura}" change=".onCambiaDireccionFactura" visible="{= (${oferta>/opcionesFactura} || []).length > 0 }" enabled="{= ${oferta>/pedidos}.length === 0 }">
+										<core:Item key="{oferta>id}" text="{= ${oferta>texto} ? ${oferta>alias} + ' · ' + ${oferta>texto} : ${oferta>alias} }" />
+									</Select>
 									<Label text="{i18n>direccionEnvio}" />
 									<Select selectedKey="{oferta>/entregaDatos/direccionId}" items="{oferta>/opcionesDireccion}" change=".onCambiaDireccionEnvio" enabled="{= ${oferta>/pedidos}.length === 0 }">
 										<core:Item key="{oferta>id}" text="{= ${oferta>texto} ? ${oferta>alias} + ' · ' + ${oferta>texto} : ${oferta>alias} }" />
