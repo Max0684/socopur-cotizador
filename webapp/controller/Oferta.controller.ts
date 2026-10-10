@@ -3719,6 +3719,12 @@ export default class Oferta extends Controller {
 			MessageBox.error(i18n.getText("guardarSinLineas") as string);
 			return;
 		}
+		// El cliente debe estar dado de alta en el area de ventas (organizacion, canal y sector) de cada grupo: si no, SAP rechaza toda la oferta.
+		const grupoSinArea = grupos.find((g) => g.areaFalta);
+		if (grupoSinArea) {
+			MessageBox.error(i18n.getText("guardarAreaFalta", [grupoSinArea.titulo, grupoSinArea.areaAviso ?? ""]) as string);
+			return;
+		}
 		const sinPrecio = ((oferta.getProperty("/lineas") as Linea[]) ?? []).filter((l) => l.sinPrecioVigente);
 		if (sinPrecio.length) {
 			MessageBox.error(i18n.getText("guardarSinPrecio", [sinPrecio.map((l) => l.material).join(", ")]) as string);
