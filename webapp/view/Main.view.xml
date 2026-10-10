@@ -14,7 +14,7 @@
 				<f:content>
 					<SearchField
 						id="filtroTexto"
-						width="100%"
+						width="22rem"
 						placeholder="{i18n>buscarPlaceholder}"
 						liveChange=".onFiltrar"
 						search=".onFiltrar" />

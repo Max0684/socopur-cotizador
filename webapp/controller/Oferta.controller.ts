@@ -47,6 +47,7 @@ import FileUploader from "sap/ui/unified/FileUploader";
 import Fragment from "sap/ui/core/Fragment";
 import { ListBase$SelectionChangeEvent } from "sap/m/ListBase";
 import { Route$PatternMatchedEvent } from "sap/ui/core/routing/Route";
+import ObjectPageLayout from "sap/uxap/ObjectPageLayout";
 
 
 /** Clase de oferta con la que se consulta el precio al elegir un material (todas las modalidades de repuestos usan Z300). */
@@ -348,11 +349,25 @@ export default class Oferta extends Controller {
 		const dispositivo = new JSONModel({ ancho: Device.resize.width });
 		this.getView()?.setModel(dispositivo, "device");
 		Device.resize.attachHandler((p: { width: number }) => dispositivo.setProperty("/ancho", p.width));
-		this.router.getRoute("nueva")?.attachPatternMatched(() => this.cargar(), this);
+		this.router.getRoute("nueva")?.attachPatternMatched(() => {
+			this.cargar();
+			this.irAlInicio();
+		}, this);
 		this.router.getRoute("oferta")?.attachPatternMatched((event: Route$PatternMatchedEvent) => {
 			const args = event.getParameter("arguments") as { numero: string };
 			this.cargar(args.numero);
+			this.irAlInicio();
 		}, this);
+	}
+
+	/** La pagina conserva la seccion y el scroll de la oferta anterior: cada oferta se abre desde arriba. */
+	private irAlInicio(): void {
+		const pagina = this.byId("ofertaPage") as ObjectPageLayout | undefined;
+		const primera = pagina?.getSections()[0];
+		if (pagina && primera) {
+			pagina.setSelectedSection(primera.getId());
+			pagina.scrollToSection(primera.getId(), 0);
+		}
 	}
 
 	public formatMonto(valor: number): string {
@@ -2440,9 +2455,16 @@ export default class Oferta extends Controller {
 		if (oferta.getProperty("/perfil/formaPago") === "C000") {
 			return { estado: "Success", texto: i18n.getText("libContado") as string, automatica: true, bloquea: false };
 		}
+		// Matriz del 09/10/2026: el credito Retail (Z311/Z116) siempre queda con Z1 de facturacion en la Bandeja de Credito.
+		if (["Z311", "Z116"].includes(clase)) {
+			return { estado: "Warning", texto: i18n.getText("libCreditoRetail") as string, automatica: false, bloquea: false };
+		}
 		const cliente = oferta.getProperty("/cliente") as Cliente | null;
 		if (!cliente || cliente.estadoState === "Error") {
 			return { estado: "Warning", texto: i18n.getText("libCreditoBloq") as string, automatica: false, bloquea: false };
+		}
+		if ((cliente.estadoCuenta?.vencido ?? 0) > 0) {
+			return { estado: "Warning", texto: i18n.getText("libCreditoVencido") as string, automatica: false, bloquea: false };
 		}
 		const linea = cliente.lineaCredito ?? 0;
 		if ((o.total ?? 0) > linea) {
@@ -4147,7 +4169,7 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 		oferta.setProperty("/hayCondiciones", lineas.some((l) => !l.bonificacion && (l.condiciones?.length ?? 0) > 0));
 		oferta.setProperty("/hayVehiculos", grupos.some((g) => g.lineas.some((l) => l.unica)));
 		oferta.setProperty("/cantidadOfertas", grupos.length);
-		oferta.setProperty("/textoGenerar", grupos.length ? this.i18n().getText("generaraOfertas", [grupos.length]) : "");
+		oferta.setProperty("/textoGenerar", grupos.length ? this.i18n().getText(grupos.length === 1 ? "generaraUnaOferta" : "generaraOfertas", [grupos.length]) : "");
 		// IGV real de SAP (solo tras guardar); antes de guardar no se conoce y se muestra "—".
 		const totales = totalesDeOferta(grupos.flatMap((g) => g.lineas));
 		oferta.setProperty("/totales", {

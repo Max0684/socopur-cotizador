@@ -26,11 +26,12 @@ import {
  */
 export default class App extends Controller {
 	private dialogoVendedor?: Dialog;
+	private vendedorActual = "";
 
 	public onInit(): void {
 		this.getView()?.addStyleClass("sapUiSizeCompact");
 		this.getView()?.setModel(new JSONModel({ layout: "OneColumn" }), "app");
-		this.getView()?.setModel(new JSONModel({ visibles: [], elegido: "", pedirPin: false, pin: "", estadoPin: "None" }), "vend");
+		this.getView()?.setModel(new JSONModel({ visibles: [], elegido: "", pedirPin: false, pin: "", estadoPin: "None", puedeCancelar: false }), "vend");
 
 		const router = (this.getOwnerComponent() as UIComponent).getRouter();
 		router.attachRouteMatched(this.onRouteMatched, this);
@@ -75,6 +76,7 @@ export default class App extends Controller {
 
 	/** Carga el perfil del vendedor y su sede (ciudad y region, deducidas de su centro). */
 	private entrarComo(mock: JSONModel, vendedor: Vendedor): void {
+		this.vendedorActual = claveVendedor(vendedor);
 		aplicarPerfil(mock, vendedor);
 		mock.setProperty("/perfil/sede", textoSede(vendedor.werks));
 		mock.setProperty("/perfil/ciudad", ciudadDeCentro(vendedor.werks)?.clave ?? "");
@@ -97,13 +99,22 @@ export default class App extends Controller {
 			this.getView()?.addDependent(this.dialogoVendedor);
 		}
 		const modelo = this.getView()?.getModel("vend") as JSONModel;
-		modelo.setData({ visibles: this.activos().map((v) => ({ ...v, clave: claveVendedor(v) })), elegido: "", pedirPin: false, pin: "", estadoPin: "None" });
+		// Con un vendedor ya identificado se puede cerrar el dialogo y seguir con el mismo; sin ninguno no se puede cotizar.
+		modelo.setData({ visibles: this.activos().map((v) => ({ ...v, clave: claveVendedor(v) })), elegido: "", pedirPin: false, pin: "", estadoPin: "None", puedeCancelar: !!this.vendedorActual });
 		this.dialogoVendedor.open();
 	}
 
-	/** Sin identificarse no se puede cotizar: el dialogo no se cierra con Escape. */
-	public onVendedorEscape(promesa: { reject(): void }): void {
-		promesa.reject();
+	/** Sin identificarse no se puede cotizar: solo se cierra con Escape o Cancelar si ya hay un vendedor activo. */
+	public onVendedorEscape(promesa: { resolve(): void; reject(): void }): void {
+		if (this.vendedorActual) {
+			promesa.resolve();
+		} else {
+			promesa.reject();
+		}
+	}
+
+	public onVendedorCancelar(): void {
+		this.dialogoVendedor?.close();
 	}
 
 	public onVendedorBuscar(event: Event): void {
@@ -141,7 +152,7 @@ export default class App extends Controller {
 
 	/** Permite cambiar de vendedor sin recargar (el usuario SAP es compartido). */
 	public async onCambiarVendedor(): Promise<void> {
-		recordarVendedor(undefined);
+		// El vendedor recordado se cambia al pulsar Entrar; si se cancela, sigue el actual.
 		await this.abrirDialogoVendedor();
 	}
 }

@@ -38,5 +38,8 @@
 		<beginButton>
 			<Button text="{i18n>vendIdEntrar}" type="Emphasized" enabled="{= !!${vend>/elegido} }" press=".onVendedorEntrar" />
 		</beginButton>
+		<endButton>
+			<Button text="{i18n>vendIdCancelar}" visible="{vend>/puedeCancelar}" press=".onVendedorCancelar" />
+		</endButton>
 	</Dialog>
 </core:FragmentDefinition>

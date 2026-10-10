@@ -147,8 +147,8 @@
 									columnsXL="3">
 									<Label text="{i18n>documento}" />
 									<Text text="{oferta>/cliente/tipoDoc} {oferta>/cliente/doc}" />
-									<Label text="{i18n>areaCliente}" visible="{= ${oferta>/areasCliente}.length > 0 }" />
-									<Select selectedKey="{oferta>/areaClienteSel}" forceSelection="false" change=".onCambiaAreaCliente" visible="{= ${oferta>/areasCliente}.length > 0 }" items="{oferta>/areasCliente}" enabled="{= ${oferta>/pedidos}.length === 0 }"><core:Item key="{oferta>key}" text="{oferta>text}" /></Select>
+									<Label text="{i18n>areaCliente}" visible="{= (${oferta>/areasCliente} || []).length > 0 }" />
+									<Select selectedKey="{oferta>/areaClienteSel}" forceSelection="false" change=".onCambiaAreaCliente" visible="{= (${oferta>/areasCliente} || []).length > 0 }" items="{oferta>/areasCliente}" enabled="{= ${oferta>/pedidos}.length === 0 }"><core:Item key="{oferta>key}" text="{oferta>text}" /></Select>
 									<Label text="{i18n>condicionComercial}" />
 									<Text text="{oferta>/cliente/condicion}" />
 									<Label text="{i18n>grupoCliente}" />
@@ -495,14 +495,14 @@
 								<form:SimpleForm editable="false" layout="ColumnLayout" columnsM="1" columnsL="1" columnsXL="2">
 									<Label text="{i18n>puntoRecojo}" />
 									<Text text="{i18n>centro} {oferta>/perfil/centro} · {oferta>/perfil/sede}" />
-									<Label text="{i18n>direccionFactura}" />
-									<Text text="{oferta>/cliente/direccion}" />
+									<Label text="{i18n>direccionFactura}" visible="{= !!${oferta>/cliente/direccion} }" />
+									<Text text="{oferta>/cliente/direccion}" visible="{= !!${oferta>/cliente/direccion} }" />
 								</form:SimpleForm>
 							</VBox>
 							<VBox visible="{= ${oferta>/entrega} === 'envio' }">
 								<form:SimpleForm editable="true" layout="ColumnLayout" columnsM="1" columnsL="1" columnsXL="2">
-									<Label text="{i18n>direccionFactura}" />
-									<Text text="{oferta>/cliente/direccion}" />
+									<Label text="{i18n>direccionFactura}" visible="{= !!${oferta>/cliente/direccion} }" />
+									<Text text="{oferta>/cliente/direccion}" visible="{= !!${oferta>/cliente/direccion} }" />
 									<Label text="{i18n>direccionEnvio}" />
 									<Select selectedKey="{oferta>/entregaDatos/direccionId}" items="{oferta>/opcionesDireccion}" change=".onCambiaDireccionEnvio" enabled="{= ${oferta>/pedidos}.length === 0 }">
 										<core:Item key="{oferta>id}" text="{= ${oferta>texto} ? ${oferta>alias} + ' · ' + ${oferta>texto} : ${oferta>alias} }" />
@@ -546,7 +546,7 @@
 								<Label text="{i18n>comentario}" />
 								<TextArea value="{oferta>/entregaDatos/comentario}" rows="2" enabled="{= ${oferta>/pedidos}.length === 0 }" />
 							</form:SimpleForm>
-							<MessageStrip text="{= ${oferta>/hayVehiculos} ? ${i18n>entregaVehiculoNota} : ${i18n>entregaRepuestoNota} }" type="Information" showIcon="true" />
+							<MessageStrip text="{= ${oferta>/hayVehiculos} ? ${i18n>entregaVehiculoNota} : ${i18n>entregaRepuestoNota} }" visible="{= (${oferta>/grupos} || []).length > 0 }" type="Information" showIcon="true" />
 						</VBox>
 					</uxap:ObjectPageSubSection>
 				</uxap:subSections>
