@@ -517,34 +517,49 @@
 									<Text text="{i18n>direccionUnicaNota}" visible="{= ${oferta>/entregaDatos/direccionId} === '__unica__' }" />
 									<Label text="" />
 									<Button text="{i18n>direccionesAdministrar}" type="Transparent" icon="sap-icon://add" press=".onEditarCliente" width="18rem" enabled="{= ${oferta>/pedidos}.length === 0 }" />
-									<Label text="{i18n>transportista}" />
-									<Input
-											value="{oferta>/entregaDatos/transportistaTexto}"
-											placeholder="{i18n>transportistaBuscar}"
-											showSuggestion="true"
-											startSuggestion="1"
-											suggestionItems="{oferta>/transportistas}"
-											suggestionItemSelected=".onSugerenciaTransportista"
-											change=".onCambiaTransportistaTexto"
-											valueState="{= ${oferta>/entregaDatos/transportistaError} ? 'Error' : 'None' }"
-											valueStateText="{oferta>/entregaDatos/transportistaError}" enabled="{= ${oferta>/pedidos}.length === 0 }">
-											<suggestionItems>
-												<core:ListItem key="{oferta>key}" text="{oferta>text}" additionalText="{oferta>nSedes}" />
-											</suggestionItems>
-										</Input>
-									<Label text="{i18n>sedeTransportista}" />
-									<Select selectedKey="{oferta>/entregaDatos/sede}" items="{oferta>/sedes}" change=".onCambiaSede" enabled="{= (!!${oferta>/entregaDatos/transportista}) &amp;&amp; ${oferta>/pedidos}.length === 0 }">
-										<core:Item key="{oferta>key}" text="{oferta>text}" />
-									</Select>
-									<Label text="{i18n>direccionTransporte}" />
-									<Text text="{= ${oferta>/entregaDatos/sedeDireccion} || '—' }" />
 									</form:SimpleForm>
-									<HBox wrap="Wrap" alignItems="Center" class="sapUiSmallMarginBottom" visible="{= ${oferta>/recientes}.length > 0 }">
-											<Text text="{i18n>transportistasRecientes}" class="sapUiTinyMarginEnd" />
-											<HBox items="{oferta>/recientes}">
-												<Button text="{oferta>text}" type="Transparent" press=".onElegirReciente" enabled="{= ${oferta>/pedidos}.length === 0 }" />
-											</HBox>
+									<VBox class="sapUiSmallMarginBottom">
+										<Title text="{i18n>transpBuscarTitulo}" level="H5" class="sapUiTinyMarginBottom" />
+										<SearchField width="100%" placeholder="{i18n>transpBuscarPh}" search=".onBuscarTransportista" enabled="{= ${oferta>/pedidos}.length === 0 }" class="sapUiTinyMarginBottom" />
+										<MessageStrip text="{oferta>/transp/error}" visible="{= !!${oferta>/transp/error} }" type="Error" showIcon="true" class="sapUiTinyMarginBottom" />
+										<Table items="{oferta>/transp/filas}" busy="{oferta>/transp/cargando}" noDataText="{i18n>transpSinResultados}">
+											<columns>
+												<Column width="11rem"><Text text="{i18n>transpColDoc}" /></Column>
+												<Column><Text text="{i18n>transpColNombre}" /></Column>
+												<Column width="11rem" hAlign="End"><Text text="{i18n>transpColAcciones}" /></Column>
+											</columns>
+											<items>
+												<ColumnListItem highlight="{= ${oferta>id} === ${oferta>/entregaDatos/transportista} ? 'Success' : 'None' }">
+													<cells>
+														<Text text="{oferta>documento}" />
+														<HBox alignItems="Center">
+															<Text text="{oferta>nombre}" class="sapUiTinyMarginEnd" />
+															<ObjectStatus text="{i18n>transpProveedor}" state="Information" visible="{= ${oferta>rol} === 'SP' }" />
+														</HBox>
+														<Button text="{i18n>transpDirecciones}" icon="sap-icon://show" type="Transparent" press=".onVerSedes" enabled="{= ${oferta>/pedidos}.length === 0 }" />
+													</cells>
+												</ColumnListItem>
+											</items>
+										</Table>
+										<OverflowToolbar design="Transparent">
+											<Text text="{i18n>transpMostrar}" />
+											<Select selectedKey="{oferta>/transp/tamano}" change=".onTranspTamano" width="5rem">
+												<core:Item key="10" text="10" />
+												<core:Item key="20" text="20" />
+												<core:Item key="50" text="50" />
+											</Select>
+											<Text text="{= ${oferta>/transp/total} + ' ' + ${i18n>transpResultadosUnidad} }" />
+											<ToolbarSpacer />
+											<Button icon="sap-icon://navigation-left-arrow" type="Transparent" press=".onTranspAnterior" enabled="{= ${oferta>/transp/pagina} > 1 }" />
+											<Text text="{= ${oferta>/transp/pagina} + ' / ' + ${oferta>/transp/paginas} }" />
+											<Button icon="sap-icon://navigation-right-arrow" type="Transparent" press=".onTranspSiguiente" enabled="{= ${oferta>/transp/pagina} &lt; ${oferta>/transp/paginas} }" />
+										</OverflowToolbar>
+										<HBox alignItems="Center" wrap="Wrap" visible="{= !!${oferta>/entregaDatos/transportista} }" class="sapUiTinyMarginTop">
+											<Label text="{i18n>transportista}:" class="sapUiTinyMarginEnd" />
+											<Text text="{oferta>/entregaDatos/transportistaTexto}{= ${oferta>/entregaDatos/sedeDireccion} ? ' · ' + ${oferta>/entregaDatos/sedeDireccion} : '' }" class="sapUiTinyMarginEnd" />
+											<Button text="{i18n>transpQuitar}" type="Transparent" icon="sap-icon://decline" press=".onQuitarTransportista" enabled="{= ${oferta>/pedidos}.length === 0 }" />
 										</HBox>
+									</VBox>
 							</VBox>
 							<form:SimpleForm editable="true" layout="ColumnLayout" columnsM="1" columnsL="1" columnsXL="2">
 								<Label text="{i18n>comentario}" />

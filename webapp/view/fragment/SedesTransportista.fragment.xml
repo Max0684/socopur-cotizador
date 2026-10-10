@@ -1,0 +1,26 @@
+<core:FragmentDefinition
+	xmlns="sap.m"
+	xmlns:core="sap.ui.core">
+	<Dialog
+		id="dlgSedes"
+		title="{i18n>transpSedesTitulo}"
+		contentWidth="36rem"
+		draggable="true"
+		resizable="true">
+		<content>
+			<VBox class="sapUiSmallMargin">
+				<Title text="{sedes>/transportista/nombre}" level="H5" class="sapUiTinyMarginBottom" />
+				<MessageStrip text="{i18n>transpSinSedes}" visible="{= ${sedes>/sedes}.length === 0 }" type="Information" showIcon="true" />
+				<List items="{sedes>/sedes}" mode="SingleSelectMaster" selectionChange=".onSedeSeleccion" visible="{= ${sedes>/sedes}.length > 0 }">
+					<StandardListItem title="{sedes>text}" description="{sedes>direccion}" selected="{= ${sedes>key} === ${sedes>/elegida} }" />
+				</List>
+			</VBox>
+		</content>
+		<beginButton>
+			<Button text="{i18n>transpElegir}" type="Emphasized" enabled="{= ${sedes>/sedes}.length === 0 || !!${sedes>/elegida} }" press=".onElegirSede" />
+		</beginButton>
+		<endButton>
+			<Button text="{i18n>cancelar}" press=".onCerrarSedes" />
+		</endButton>
+	</Dialog>
+</core:FragmentDefinition>

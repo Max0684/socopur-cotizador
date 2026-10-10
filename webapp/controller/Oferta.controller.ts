@@ -23,6 +23,7 @@ import { cargarContacto, cargarDirecciones, cargarMovimientos, type Movimiento }
 import { cargarCreditoCliente, fechaLocalISO, resumirCredito, textoPorMoneda, type EstadoCuenta, type ResumenCredito } from "com/socopur/cotizador/model/CreditoClienteService";
 import { cargarModalidades, type ModalidadPantalla } from "com/socopur/cotizador/model/ModalidadesService";
 import { ordenarPorTexto } from "com/socopur/cotizador/model/Orden";
+import { buscarTransportistas, buscarTransportistasMock, cargarSedes, type FilaTransportista, type SedeTransportista, type TransportistaMock } from "com/socopur/cotizador/model/TransportistasService";
 import UIComponent from "sap/ui/core/UIComponent";
 import Router from "sap/ui/core/routing/Router";
 import JSONModel from "sap/ui/model/json/JSONModel";
@@ -329,6 +330,7 @@ export default class Oferta extends Controller {
 	private router!: Router;
 	private dialogoBusqueda?: Dialog;
 	private dialogoStock?: Dialog;
+	private dialogoSedes?: Dialog;
 	private dialogoDetalle?: Dialog;
 	/** Material del detalle abierto (su fila de la lista de elegidos); la cantidad y las condiciones se piden de nuevo a SAP al cambiarla. */
 	private detalleMaterial?: Vehiculo & Repuesto & { tipo: string };
@@ -1169,6 +1171,10 @@ export default class Oferta extends Controller {
 	public onCambiaEntrega(): void {
 		const oferta = this.modeloOferta();
 		oferta.setProperty("/perfil/expedicion", oferta.getProperty("/entrega") === "envio" ? "01" : "02");
+		// La lista de transportistas se pide la primera vez que se elige Envio.
+		if (oferta.getProperty("/entrega") === "envio" && !oferta.getProperty("/transp/cargado")) {
+			void this.cargarTransportistas();
+		}
 	}
 
 	public async onCambiaCanal(): Promise<void> {
@@ -1652,57 +1658,116 @@ export default class Oferta extends Controller {
 	}
 
 	/**
-	 * El transportista es un buscador (en SAP es cualquier Business Partner con la funcion ZT, no hay lista cerrada).
-	 * Cada transportista puede tener varias sedes con su direccion; el vendedor elige de cual sede sale.
+	 * Transportistas: tabla con busqueda y paginado en el servidor (son unos 1700 proveedores de SAP). Sin SAP (prototipo) se usan los de EJEMPLO.
+	 * Al pedido viaja el rol segun el transportista: ZT si es cliente, SP si solo es proveedor (aun no se envia: solo se muestra e imprime).
 	 */
-	private seleccionarTransportista(clave: string): void {
+	private async cargarTransportistas(): Promise<void> {
 		const oferta = this.modeloOferta();
-		const t = (oferta.getProperty("/transportistas") as { key: string; text: string; sedes: { key: string; text: string; direccion: string }[] }[]).find((x) => x.key === clave);
-		oferta.setProperty("/entregaDatos/transportista", t?.key ?? "");
-		oferta.setProperty("/entregaDatos/transportistaTexto", t?.text ?? "");
-		oferta.setProperty("/entregaDatos/transportistaError", "");
-		oferta.setProperty("/sedes", t?.sedes ?? []);
-		const unica = t?.sedes.length === 1 ? t.sedes[0] : undefined;
-		oferta.setProperty("/entregaDatos/sede", unica?.key ?? "");
-		oferta.setProperty("/entregaDatos/sedeDireccion", unica?.direccion ?? "");
-	}
-
-	public onSugerenciaTransportista(event: Event): void {
-		const item = (event as unknown as { getParameter(n: string): { getKey(): string } | undefined }).getParameter("selectedItem");
-		if (item) {
-			this.seleccionarTransportista(item.getKey());
+		const texto = String(oferta.getProperty("/transp/texto") ?? "");
+		const pagina = Number(oferta.getProperty("/transp/pagina")) || 1;
+		const tamano = Number(oferta.getProperty("/transp/tamano")) || 10;
+		oferta.setProperty("/transp/cargando", true);
+		oferta.setProperty("/transp/error", "");
+		try {
+			const odata = this.usarOData() ? ((this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel | undefined) : undefined;
+			const mock = (this.getOwnerComponent() as UIComponent).getModel("mock") as JSONModel;
+			const r = odata
+				? await buscarTransportistas(odata, texto, pagina, tamano)
+				: buscarTransportistasMock((mock.getProperty("/transportistas") as TransportistaMock[]) ?? [], texto, pagina, tamano);
+			oferta.setProperty("/transp/filas", r.filas);
+			oferta.setProperty("/transp/total", r.total);
+			oferta.setProperty("/transp/paginas", Math.max(1, Math.ceil(r.total / tamano)));
+			oferta.setProperty("/transp/cargado", true);
+		} catch (error) {
+			oferta.setProperty("/transp/filas", []);
+			oferta.setProperty("/transp/error", this.i18n().getText("transpError", [(error as Error).message]) as string);
+		} finally {
+			oferta.setProperty("/transp/cargando", false);
 		}
 	}
 
-	public onCambiaTransportistaTexto(event: Event): void {
-		const texto = String((event as unknown as { getParameter(n: string): string }).getParameter("value") ?? "").trim();
+	public onBuscarTransportista(event: Event): void {
 		const oferta = this.modeloOferta();
-		if (!texto) {
-			this.seleccionarTransportista("");
+		oferta.setProperty("/transp/texto", (event.getSource() as SearchField).getValue().trim());
+		oferta.setProperty("/transp/pagina", 1);
+		void this.cargarTransportistas();
+	}
+
+	public onTranspTamano(): void {
+		this.modeloOferta().setProperty("/transp/pagina", 1);
+		void this.cargarTransportistas();
+	}
+
+	public onTranspAnterior(): void {
+		const oferta = this.modeloOferta();
+		oferta.setProperty("/transp/pagina", Math.max(1, (Number(oferta.getProperty("/transp/pagina")) || 1) - 1));
+		void this.cargarTransportistas();
+	}
+
+	public onTranspSiguiente(): void {
+		const oferta = this.modeloOferta();
+		const paginas = Number(oferta.getProperty("/transp/paginas")) || 1;
+		oferta.setProperty("/transp/pagina", Math.min(paginas, (Number(oferta.getProperty("/transp/pagina")) || 1) + 1));
+		void this.cargarTransportistas();
+	}
+
+	/** "Direcciones" de una fila: lista las sedes del transportista y deja elegir una. */
+	public async onVerSedes(event: Event): Promise<void> {
+		const fila = (event.getSource() as Control).getBindingContext("oferta")?.getObject() as FilaTransportista | undefined;
+		if (!fila) {
 			return;
 		}
-		const t = (oferta.getProperty("/transportistas") as { key: string; text: string }[]).find((x) => x.text.toLowerCase() === texto.toLowerCase());
-		if (t) {
-			this.seleccionarTransportista(t.key);
+		let sedes: SedeTransportista[];
+		try {
+			const odata = this.usarOData() ? ((this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel | undefined) : undefined;
+			const mock = (this.getOwnerComponent() as UIComponent).getModel("mock") as JSONModel;
+			sedes = odata ? await cargarSedes(odata, fila.id) : (((mock.getProperty("/transportistas") as TransportistaMock[]) ?? []).find((t) => t.key === fila.id)?.sedes ?? []);
+		} catch (error) {
+			MessageBox.error(this.i18n().getText("transpSedeError", [(error as Error).message]) as string);
 			return;
 		}
-		this.seleccionarTransportista("");
-		oferta.setProperty("/entregaDatos/transportistaTexto", texto);
-		oferta.setProperty("/entregaDatos/transportistaError", this.i18n().getText("transportistaNoExiste") as string);
-	}
-
-	public onElegirReciente(event: Event): void {
-		const t = (event.getSource() as unknown as Control).getBindingContext("oferta")?.getObject() as { key: string } | undefined;
-		if (t) {
-			this.seleccionarTransportista(t.key);
+		if (!this.dialogoSedes) {
+			this.dialogoSedes = (await Fragment.load({
+				id: this.getView()?.getId(),
+				name: "com.socopur.cotizador.view.fragment.SedesTransportista",
+				controller: this
+			})) as Dialog;
+			this.getView()?.addDependent(this.dialogoSedes);
+			this.dialogoSedes.setModel(new JSONModel(), "sedes");
 		}
+		const actual = this.modeloOferta().getProperty("/entregaDatos/transportista") === fila.id ? String(this.modeloOferta().getProperty("/entregaDatos/sede") ?? "") : "";
+		(this.dialogoSedes.getModel("sedes") as JSONModel).setData({ transportista: fila, sedes, elegida: actual || (sedes.length === 1 ? sedes[0].key : "") });
+		this.dialogoSedes.open();
 	}
 
-	public onCambiaSede(): void {
+	public onSedeSeleccion(event: ListBase$SelectionChangeEvent): void {
+		const sede = event.getParameter("listItem")?.getBindingContext("sedes")?.getObject() as SedeTransportista | undefined;
+		(this.dialogoSedes?.getModel("sedes") as JSONModel).setProperty("/elegida", sede?.key ?? "");
+	}
+
+	public onElegirSede(): void {
+		const datos = (this.dialogoSedes?.getModel("sedes") as JSONModel).getData() as { transportista: FilaTransportista; sedes: SedeTransportista[]; elegida: string };
+		const sede = datos.sedes.find((s) => s.key === datos.elegida);
 		const oferta = this.modeloOferta();
-		const sedes = (oferta.getProperty("/sedes") as { key: string; direccion: string }[]) ?? [];
-		const clave = oferta.getProperty("/entregaDatos/sede") as string;
-		oferta.setProperty("/entregaDatos/sedeDireccion", sedes.find((x) => x.key === clave)?.direccion ?? "");
+		oferta.setProperty("/entregaDatos/transportista", datos.transportista.id);
+		oferta.setProperty("/entregaDatos/transportistaTexto", datos.transportista.nombre);
+		oferta.setProperty("/entregaDatos/transportistaRol", datos.transportista.rol);
+		oferta.setProperty("/entregaDatos/sede", sede?.key ?? "");
+		oferta.setProperty("/entregaDatos/sedeDireccion", sede?.direccion ?? "");
+		this.dialogoSedes?.close();
+	}
+
+	public onCerrarSedes(): void {
+		this.dialogoSedes?.close();
+	}
+
+	public onQuitarTransportista(): void {
+		const oferta = this.modeloOferta();
+		oferta.setProperty("/entregaDatos/transportista", "");
+		oferta.setProperty("/entregaDatos/transportistaTexto", "");
+		oferta.setProperty("/entregaDatos/transportistaRol", "");
+		oferta.setProperty("/entregaDatos/sede", "");
+		oferta.setProperty("/entregaDatos/sedeDireccion", "");
 	}
 
 	public async onAmpliarAbrir(): Promise<void> {
@@ -4124,10 +4189,8 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 			tiposCliente: [],
 			fechaEntrega: new Date().toISOString().slice(0, 10),
 			entrega: "recojo",
-			entregaDatos: { direccionId: "", direccionEnvio: "", direccionUnica: "", facturaId: "", direccionFactura: "", transportista: "", transportistaTexto: "", transportistaError: "", sede: "", sedeDireccion: "", comentario: "" },
-			sedes: [],
-			transportistas: ((mock.getProperty("/transportistas") as { key: string; text: string; sedes: unknown[] }[]) ?? []).map((t) => ({ ...t, nSedes: `${t.sedes.length} sede(s)` })),
-			recientes: (((mock.getProperty("/transportistasRecientes") as string[]) ?? []).map((k) => (mock.getProperty("/transportistas") as { key: string; text: string }[]).find((t) => t.key === k)).filter((t) => !!t) as { key: string; text: string }[]).map((t) => ({ key: t.key, text: t.text })),
+			entregaDatos: { direccionId: "", direccionEnvio: "", direccionUnica: "", facturaId: "", direccionFactura: "", transportista: "", transportistaTexto: "", transportistaRol: "", sede: "", sedeDireccion: "", comentario: "" },
+			transp: { texto: "", filas: [], pagina: 1, tamano: "10", total: 0, paginas: 1, cargando: false, cargado: false, error: "" },
 			opcionesDireccion: [],
 			opcionesFactura: [],
 			modalidades: mock.getProperty("/modalidades") ?? [],
