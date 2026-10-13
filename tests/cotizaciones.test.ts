@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { asignarVinItem, ATNAM_VARIANTE, crearPedidoGrupo, esperarVinculos, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, OfertaEnProcesoError, liberarVinItem, renovarCotizacion, type GrupoParaGuardar, type OfertaParaGuardar } from "../webapp/model/CotizacionesService.ts";
+import { asignarVinItem, ATNAM_VARIANTE, camposEntrega, ENVIO_UNICO, crearPedidoGrupo, esperarVinculos, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, OfertaEnProcesoError, liberarVinItem, renovarCotizacion, type GrupoParaGuardar, type OfertaParaGuardar } from "../webapp/model/CotizacionesService.ts";
 import { crearModeloFalso } from "./helpers/modeloFalso.ts";
 
 function grupo(extra: Partial<GrupoParaGuardar> = {}): GrupoParaGuardar {
@@ -388,4 +388,38 @@ test("esperarVinculos sin VIN o sin el campo del servicio no espera", async () =
 	const sinCampo = await esperarVinculos(async () => { veces++; return [{ ...vin("000010"), vhcle: "" }]; }, { pausa: async () => undefined });
 	assert.equal(sinCampo.size, 0);
 	assert.equal(veces, 1);
+});
+
+test("camposEntrega: con envio viajan WE y ZT; con recojo solo el tipo; sin entrega nada", () => {
+	assert.deepEqual(camposEntrega(undefined), {});
+	assert.deepEqual(camposEntrega({ tipo: "02", kunnrWe: "0100000001", addrnumberWe: "55" }), { TipoEntrega: "02" });
+	assert.deepEqual(camposEntrega({ tipo: "01", kunnrWe: "0100000001", addrnumberWe: "55", kunnrZt: "0100000009", addrnumberZt: "77" }), {
+		TipoEntrega: "01",
+		KunnrWe: "0100000001",
+		AddrnumberWe: "55",
+		KunnrZt: "0100000009",
+		AddrnumberZt: "77"
+	});
+	assert.deepEqual(camposEntrega({ tipo: "01", kunnrWe: "0100000001", addrnumberWe: "55", kunnrZt: "0100000009" }).AddrnumberZt, "");
+	assert.equal("KunnrWe" in camposEntrega({ tipo: "01", kunnrWe: "0100000001" }), false);
+});
+
+test("guardarCotizacion envia la entrega solo si el servicio publica los campos WE/ZT", async () => {
+	const entrega = { tipo: "01" as const, kunnrWe: "0100024840", addrnumberWe: "55", kunnrZt: "0100000009", addrnumberZt: "77" };
+	const con = crearModeloFalso({ gruposLeidos: [{ GrupoNo: "01", VbelnOferta: "3100007390" }], camposPublicados: ["Cotizacion/AddrnumberWe"] });
+	await guardarCotizacion(como(con.modelo), { ...oferta(), entrega });
+	assert.equal(con.creadas[0].datos.TipoEntrega, "01");
+	assert.equal(con.creadas[0].datos.AddrnumberWe, "55");
+	assert.equal(con.creadas[0].datos.KunnrZt, "0100000009");
+	const sin = crearModeloFalso({ gruposLeidos: [{ GrupoNo: "01", VbelnOferta: "3100007390" }] });
+	await guardarCotizacion(como(sin.modelo), { ...oferta(), entrega });
+	assert.equal("TipoEntrega" in sin.creadas[0].datos, false);
+});
+
+test("guardarCotizacion: direccion de un solo uso crea la fila Direc con rol WE antes de los grupos", async () => {
+	const { modelo, creadas, llamadas } = crearModeloFalso({ gruposLeidos: [{ GrupoNo: "01", VbelnOferta: "3100007390" }], camposPublicados: ["Cotizacion/AddrnumberWe"] });
+	await guardarCotizacion(como(modelo), { ...oferta(), entrega: { tipo: "01", kunnrWe: "0100024840", addrnumberWe: ENVIO_UNICO, direccionUnica: { nombre: "Cliente SA", calle: "Av. Prueba 123" } } });
+	assert.equal(creadas[0].datos.AddrnumberWe, "$");
+	assert.deepEqual(creadas[1].datos, { PartnRole: "WE", Name1: "Cliente SA", Street: "Av. Prueba 123", Country: "PE" });
+	assert.deepEqual(llamadas.slice(0, 3).map((l) => l.split("(")[0]), ["create /Cotizacion", "create _Direc", "create _Grupo"]);
 });

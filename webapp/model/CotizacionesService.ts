@@ -29,6 +29,22 @@ export interface GrupoParaGuardar {
 	lineas: LineaParaGuardar[];
 }
 
+/**
+ * Entrega de la cabecera. Con envio (01) viajan el destinatario WE (cliente + numero de direccion) y, si hay, el transportista ZT.
+ * AddrnumberWe "$" = direccion de un solo uso: su texto va en una fila Direc con rol WE. El transportista que solo es proveedor (SP) no se
+ * envia: el servicio aun no publica ese campo.
+ */
+export interface EntregaParaGuardar {
+	/** 01 envio, 02 recojo. */
+	tipo: "01" | "02";
+	kunnrWe?: string;
+	addrnumberWe?: string;
+	/** Solo con addrnumberWe "$": nombre y calle de la direccion de un solo uso. */
+	direccionUnica?: { nombre: string; calle: string };
+	kunnrZt?: string;
+	addrnumberZt?: string;
+}
+
 export interface OfertaParaGuardar {
 	kunnr: string;
 	moneda: string;
@@ -38,6 +54,7 @@ export interface OfertaParaGuardar {
 	pernr?: string;
 	/** Condicion de expedicion (VSBED: 01 envio, 02 recojo) elegida en la pantalla; con ella SAP determina el punto de expedicion. */
 	vsbed?: string;
+	entrega?: EntregaParaGuardar;
 	comentario: string;
 	grupos: GrupoParaGuardar[];
 }
@@ -50,6 +67,26 @@ export interface OfertaGenerada {
 export interface ResultadoGuardado {
 	cotizId: string;
 	ofertas: OfertaGenerada[];
+}
+
+/** AddrnumberWe de una direccion de un solo uso: el servicio la toma de la fila Direc con rol WE. */
+export const ENVIO_UNICO = "$";
+
+/** Campos de entrega de la cabecera. Recojo no lleva destinatario ni transportista. */
+export function camposEntrega(e: EntregaParaGuardar | undefined): Record<string, string> {
+	if (!e) {
+		return {};
+	}
+	const campos: Record<string, string> = { TipoEntrega: e.tipo };
+	if (e.tipo === "01" && e.kunnrWe && e.addrnumberWe) {
+		campos.KunnrWe = e.kunnrWe;
+		campos.AddrnumberWe = e.addrnumberWe;
+	}
+	if (e.tipo === "01" && e.kunnrZt) {
+		campos.KunnrZt = e.kunnrZt;
+		campos.AddrnumberZt = e.addrnumberZt ?? "";
+	}
+	return campos;
 }
 
 /** El servicio recibe los decimales como texto (cabecera IEEE754Compatible del modelo V4). */
@@ -105,6 +142,8 @@ export async function guardarCotizacion(modelo: ODataModel, datos: OfertaParaGua
 	// Un campo desconocido en el create hace que SAP rechace toda la oferta: el PERNR viaja solo si el $metadata ya lo trae.
 	const conPernr = !!datos.pernr && (await entidadTieneCampo(modelo, "Cotizacion", "Pernr"));
 	const conVsbed = !!datos.vsbed && (await entidadTieneCampo(modelo, "Cotizacion", "Vsbed"));
+	// Un campo desconocido en el create haria rechazar toda la oferta: la entrega viaja solo si el $metadata ya trae los campos WE/ZT.
+	const entrega = datos.entrega && (await entidadTieneCampo(modelo, "Cotizacion", "AddrnumberWe")) ? datos.entrega : undefined;
 	const cabecera = raiz.create(
 		{
 			Kunnr: datos.kunnr,
@@ -112,7 +151,8 @@ export async function guardarCotizacion(modelo: ODataModel, datos: OfertaParaGua
 			Comentario: datos.comentario,
 			...(datos.zterm ? { Zterm: datos.zterm } : {}),
 			...(conPernr ? { Pernr: datos.pernr } : {}),
-			...(conVsbed ? { Vsbed: datos.vsbed } : {})
+			...(conVsbed ? { Vsbed: datos.vsbed } : {}),
+			...camposEntrega(entrega)
 		},
 		true
 	);
@@ -120,6 +160,15 @@ export async function guardarCotizacion(modelo: ODataModel, datos: OfertaParaGua
 	const cotizId = (cabecera.getObject() as Cotizacion).CotizId;
 	let activada = false;
 	try {
+		if (entrega?.addrnumberWe === ENVIO_UNICO && entrega.direccionUnica) {
+			// SAP copia estos datos al interlocutor WE del pedido (la fila Direc con rol WE).
+			await crearHija(modelo, "_Direc", cabecera, {
+				PartnRole: "WE",
+				Name1: entrega.direccionUnica.nombre.slice(0, 40),
+				Street: entrega.direccionUnica.calle.slice(0, 60),
+				Country: "PE"
+			});
+		}
 		for (const g of datos.grupos) {
 			const grupo = await crearHija<Grupo>(modelo, "_Grupo", cabecera, {
 				Vkorg: g.vkorg,

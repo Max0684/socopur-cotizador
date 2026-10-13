@@ -10,9 +10,13 @@ test("filtroTransportistas: solo digitos busca por RUC o DNI; si no, por nombre 
 });
 
 test("aFilaTransportista: documento RUC o DNI y rol SP solo si SAP lo dice", () => {
-	assert.deepEqual(aFilaTransportista({ Id: "1", Nombre: "SHALOM", Ruc: "20512528458", RolPedido: "ZT", UsosZT: "413" }), { id: "1", nombre: "SHALOM", documento: "20512528458", rol: "ZT", usos: 413 });
+	assert.deepEqual(aFilaTransportista({ Id: "1", Nombre: "SHALOM", Ruc: "20512528458", RolPedido: "ZT", UsosZT: "413" }), { id: "1", nombre: "SHALOM", documento: "20512528458", rol: "ZT", usos: 413, kunnr: "", lifnr: "" });
 	assert.equal(aFilaTransportista({ Id: "2", Nombre: "PERSONA", Dni: "42838535" }).documento, "42838535");
 	assert.equal(aFilaTransportista({ Id: "3", RolPedido: "SP" }).rol, "SP");
+	assert.deepEqual(
+		[aFilaTransportista({ Id: "4", Kunnr: "0100000001", Lifnr: "0000200001" }).kunnr, aFilaTransportista({ Id: "4", Kunnr: "0100000001", Lifnr: "0000200001" }).lifnr],
+		["0100000001", "0000200001"]
+	);
 });
 
 test("textoSede y aSede: direccion completa con ubigeo, omite lo que falte", () => {

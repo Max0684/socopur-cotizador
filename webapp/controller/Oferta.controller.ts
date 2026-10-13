@@ -12,7 +12,7 @@ import { type CondicionServicio, type FilaCondicion, descuentosAplicados, filasD
 import { agruparVehiculos, buscarVehiculos, filtrarVehiculos, textoDetalleVehiculo } from "com/socopur/cotizador/model/VehiculosService";
 import { areasOrgCanal, textoSolicitudAmpliacion, type CondicionArea, type OpcionAreaCliente, condicionDeArea, opcionesAreaCliente, almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, faltaSectorDeVentas, gruposParaGuardar, igvExonerado, modalidadPorDefecto, oficinaDe, orgVehiculosDe, puedeVenderOtroCentro, sectorDeCabecera, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
 import { evaluarBloqueoPedido, type BloqueoPedido } from "com/socopur/cotizador/model/BloqueoPedido";
-import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type VinAsignado, esperarVinculos, leerMotivoVinculo, anularGrupo } from "com/socopur/cotizador/model/CotizacionesService";
+import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type EntregaParaGuardar, ENVIO_UNICO, type VinAsignado, esperarVinculos, leerMotivoVinculo, anularGrupo } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
 import { buscarRepuestosConStock, disponibilidadPorAlmacen, motivoVacio } from "com/socopur/cotizador/model/MaterialesService";
 import { cargarPreciosLista, precioListaDisponible, textoPrecioLista } from "com/socopur/cotizador/model/PrecioListaService";
@@ -273,6 +273,9 @@ interface Direccion {
 	alias: string;
 	tipo: string;
 	texto: string;
+	/** Destinatario y numero de direccion de SAP (solo en direcciones leidas del servicio). */
+	kunn2?: string;
+	addrnumber?: string;
 }
 
 /** El servicio devuelve unos numeros de oferta con ceros a la izquierda y otros sin ellos; se comparan sin ceros. */
@@ -1752,6 +1755,8 @@ export default class Oferta extends Controller {
 		oferta.setProperty("/entregaDatos/transportista", datos.transportista.id);
 		oferta.setProperty("/entregaDatos/transportistaTexto", datos.transportista.nombre);
 		oferta.setProperty("/entregaDatos/transportistaRol", datos.transportista.rol);
+		oferta.setProperty("/entregaDatos/transportistaKunnr", datos.transportista.kunnr);
+		oferta.setProperty("/entregaDatos/transportistaLifnr", datos.transportista.lifnr);
 		oferta.setProperty("/entregaDatos/sede", sede?.key ?? "");
 		oferta.setProperty("/entregaDatos/sedeDireccion", sede?.direccion ?? "");
 		this.dialogoSedes?.close();
@@ -1766,6 +1771,8 @@ export default class Oferta extends Controller {
 		oferta.setProperty("/entregaDatos/transportista", "");
 		oferta.setProperty("/entregaDatos/transportistaTexto", "");
 		oferta.setProperty("/entregaDatos/transportistaRol", "");
+		oferta.setProperty("/entregaDatos/transportistaKunnr", "");
+		oferta.setProperty("/entregaDatos/transportistaLifnr", "");
 		oferta.setProperty("/entregaDatos/sede", "");
 		oferta.setProperty("/entregaDatos/sedeDireccion", "");
 	}
@@ -3696,6 +3703,44 @@ export default class Oferta extends Controller {
 		}
 	}
 
+	/**
+	 * Entrega que viaja a SAP: con envio, el destinatario WE (la direccion elegida) y el transportista ZT; con recojo solo el tipo.
+	 * El transportista que solo es proveedor (SP) no se puede enviar todavia (el servicio no publica ese campo): se avisa en vez de callarlo.
+	 */
+	private entregaParaGuardar(cliente: Cliente): { datos?: EntregaParaGuardar; error?: string } {
+		const oferta = this.modeloOferta();
+		const i18n = this.i18n();
+		if (oferta.getProperty("/entrega") !== "envio") {
+			return { datos: oferta.getProperty("/entrega") === "recojo" ? { tipo: "02" } : undefined };
+		}
+		const datos: EntregaParaGuardar = { tipo: "01" };
+		const id = oferta.getProperty("/entregaDatos/direccionId") as string;
+		if (id === "__unica__") {
+			const calle = String(oferta.getProperty("/entregaDatos/direccionUnica") ?? "").trim();
+			if (!calle) {
+				return { error: i18n.getText("guardarEnvioSinDireccion") as string };
+			}
+			datos.kunnrWe = cliente.kunnr;
+			datos.addrnumberWe = ENVIO_UNICO;
+			datos.direccionUnica = { nombre: cliente.nombre, calle };
+		} else {
+			const dir = ((oferta.getProperty("/cliente/direcciones") as Direccion[]) ?? []).find((x) => x.id === id);
+			if (!dir?.addrnumber) {
+				return { error: i18n.getText("guardarEnvioSinDireccion") as string };
+			}
+			datos.kunnrWe = dir.kunn2 || cliente.kunnr;
+			datos.addrnumberWe = dir.addrnumber;
+		}
+		const rol = oferta.getProperty("/entregaDatos/transportistaRol") as string;
+		if (rol === "ZT") {
+			datos.kunnrZt = (oferta.getProperty("/entregaDatos/transportistaKunnr") as string) || undefined;
+			datos.addrnumberZt = (oferta.getProperty("/entregaDatos/sede") as string) || undefined;
+		} else if (rol === "SP") {
+			MessageToast.show(i18n.getText("guardarTranspSpNoEnviado") as string);
+		}
+		return { datos };
+	}
+
 	/** Arma lo que necesita el servicio a partir del carrito y llama a guardarCotizacion. */
 	private async guardarEnSap(): Promise<void> {
 		const oferta = this.modeloOferta();
@@ -3730,6 +3775,11 @@ export default class Oferta extends Controller {
 			MessageBox.error(i18n.getText("guardarSinPrecio", [sinPrecio.map((l) => l.material).join(", ")]) as string);
 			return;
 		}
+		const entrega = this.entregaParaGuardar(cliente);
+		if (entrega.error) {
+			MessageBox.error(entrega.error);
+			return;
+		}
 		const perfil = oferta.getProperty("/perfil") as Record<string, string>;
 		const datos: OfertaParaGuardar = {
 			kunnr: cliente.kunnr,
@@ -3738,6 +3788,7 @@ export default class Oferta extends Controller {
 			zterm: perfil.formaPago || "",
 			pernr: perfil.pernr || "",
 			vsbed: this.condicionExpedicion(),
+			entrega: entrega.datos,
 			comentario: (oferta.getProperty("/entregaDatos/comentario") as string) ?? "",
 			grupos: gruposParaGuardar(grupos, perfil, (centro) => almacenDeCentro(centro, this.modeloMock().getProperty("/opciones/almacenPorCentro") ?? {}, perfil.almacen, perfil.centro))
 		};
@@ -4199,7 +4250,7 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 			tiposCliente: [],
 			fechaEntrega: new Date().toISOString().slice(0, 10),
 			entrega: "recojo",
-			entregaDatos: { direccionId: "", direccionEnvio: "", direccionUnica: "", facturaId: "", direccionFactura: "", transportista: "", transportistaTexto: "", transportistaRol: "", sede: "", sedeDireccion: "", comentario: "" },
+			entregaDatos: { direccionId: "", direccionEnvio: "", direccionUnica: "", facturaId: "", direccionFactura: "", transportista: "", transportistaTexto: "", transportistaRol: "", transportistaKunnr: "", transportistaLifnr: "", sede: "", sedeDireccion: "", comentario: "" },
 			transp: { texto: "", filas: [], pagina: 1, tamano: "10", total: 0, paginas: 1, cargando: false, cargado: false, error: "" },
 			opcionesDireccion: [],
 			opcionesFactura: [],

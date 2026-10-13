@@ -60,6 +60,9 @@ export interface DireccionCliente {
 	alias: string;
 	tipo: "Fiscal" | "Envio";
 	texto: string;
+	/** Destinatario (KUNN2) y numero de direccion (ADRC) tal como los guarda SAP; con ellos viaja el WE al pedido. */
+	kunn2?: string;
+	addrnumber?: string;
 }
 
 export interface ContactoCliente {
@@ -120,7 +123,9 @@ export function aDirecciones(filas: DireccionSap[], aliasFiscal: string): Direcc
 		id: d.Tipo === "FISCAL" ? "FISCAL" : d.Addrnumber ? `A-${d.Addrnumber}` : `WE-${d.Kunn2}`,
 		alias: d.Tipo === "FISCAL" ? aliasFiscal : d.Nombre || d.Kunn2,
 		tipo: (d.Tipo === "FISCAL" ? "Fiscal" : "Envio") as "Fiscal" | "Envio",
-		texto: textoDireccion(d)
+		texto: textoDireccion(d),
+		kunn2: d.Kunn2 || undefined,
+		addrnumber: d.Addrnumber || undefined
 	}));
 	return [...lista.filter((d) => d.tipo === "Fiscal"), ...lista.filter((d) => d.tipo === "Envio")];
 }

@@ -35,6 +35,10 @@ export interface FilaTransportista {
 	documento: string;
 	rol: "ZT" | "SP";
 	usos: number;
+	/** Cliente (KUNNR) del transportista: es el interlocutor ZT del pedido. Vacio si solo es proveedor. */
+	kunnr: string;
+	/** Proveedor (LIFNR): es el interlocutor SP del pedido cuando no es cliente. */
+	lifnr: string;
 }
 
 export interface SedeTransportista {
@@ -56,7 +60,9 @@ export function aFilaTransportista(t: TransportistaSap): FilaTransportista {
 		nombre: t.Nombre ?? t.Id,
 		documento: t.Ruc || t.Dni || "",
 		rol: t.RolPedido === "SP" ? "SP" : "ZT",
-		usos: Number(t.UsosZT ?? 0) || 0
+		usos: Number(t.UsosZT ?? 0) || 0,
+		kunnr: t.Kunnr ?? "",
+		lifnr: t.Lifnr ?? ""
 	};
 }
 
@@ -115,6 +121,6 @@ export function buscarTransportistasMock(lista: TransportistaMock[], texto: stri
 	const coincide = lista.filter((x) => !t || x.text.toUpperCase().includes(t) || x.key.toUpperCase().includes(t));
 	const filas = coincide
 		.slice((pagina - 1) * tamano, pagina * tamano)
-		.map((x) => ({ id: x.key, nombre: x.text, documento: "", rol: "ZT" as const, usos: 0 }));
+		.map((x) => ({ id: x.key, nombre: x.text, documento: "", rol: "ZT" as const, usos: 0, kunnr: "", lifnr: "" }));
 	return { filas, total: coincide.length };
 }
