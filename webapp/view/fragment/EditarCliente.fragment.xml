@@ -10,15 +10,17 @@
 		resizable="true">
 		<content>
 			<VBox class="sapUiSmallMargin">
-				<MessageStrip text="{i18n>editarNota}" type="Information" showIcon="true" class="sapUiSmallMarginBottom" />
+				<MessageStrip text="{i18n>editarNota}" type="Information" showIcon="true" class="sapUiSmallMarginBottom" visible="{= !${cli>/real} }" />
+				<MessageStrip text="{i18n>editarNotaSap}" type="Information" showIcon="true" class="sapUiSmallMarginBottom" visible="{cli>/real}" />
+				<MessageStrip text="{cli>/bloqueoAviso}" type="Warning" showIcon="true" class="sapUiSmallMarginBottom" visible="{= !!${cli>/bloqueoAviso} }" />
 				<MessageStrip visible="{= !!${cli>/errores} }" text="{cli>/errores}" type="Error" showIcon="true" class="sapUiSmallMarginBottom" />
 				<form:SimpleForm editable="true" layout="ColumnLayout" columnsM="1" columnsL="1" columnsXL="2">
 					<Label text="{i18n>documento}" />
 					<Input value="{cli>/tipoDoc} {cli>/doc}" editable="false" />
 					<Label text="{i18n>editarRazon}" required="true" />
-					<Input value="{cli>/razon1}" maxLength="35" />
-					<Input value="{cli>/razon2}" maxLength="35" />
-					<Input value="{cli>/razon3}" maxLength="35" />
+					<Input value="{cli>/razon1}" maxLength="35" editable="{= !${cli>/nombreBloqueado} }" />
+					<Input value="{cli>/razon2}" maxLength="35" editable="{= !${cli>/nombreBloqueado} }" />
+					<Input value="{cli>/razon3}" maxLength="35" editable="{= !${cli>/nombreBloqueado} }" />
 					<Label text="{i18n>telefono}" required="true" />
 					<Input value="{cli>/telefono}" type="Tel" maxLength="9" />
 					<Label text="{i18n>correo}" required="true" />
@@ -27,7 +29,7 @@
 				<Toolbar class="sapUiSmallMarginTop">
 					<Title text="{i18n>direccionesTitulo}" level="H4" />
 					<ToolbarSpacer />
-					<Button text="{i18n>direccionAgregar}" icon="sap-icon://add" press=".onAgregarDireccion" />
+					<Button text="{i18n>direccionAgregar}" icon="sap-icon://add" press=".onAgregarDireccion" enabled="{= !${cli>/real} }" />
 				</Toolbar>
 				<Table items="{cli>/direcciones}" contextualWidth="Auto">
 					<columns>
@@ -39,12 +41,12 @@
 					<items>
 						<ColumnListItem>
 							<cells>
-								<Input value="{cli>alias}" />
-								<Select selectedKey="{cli>tipo}" width="100%" items="{cli>/tiposDireccion}">
+								<Input value="{cli>alias}" editable="{= !${cli>/real} }" />
+								<Select selectedKey="{cli>tipo}" width="100%" items="{cli>/tiposDireccion}" enabled="{= !${cli>/real} }">
 									<core:Item key="{cli>key}" text="{cli>text}" />
 								</Select>
-								<Input value="{cli>texto}" />
-								<Button icon="sap-icon://delete" type="Transparent" tooltip="{i18n>quitarLinea}" press=".onQuitarDireccion" />
+								<Input value="{cli>texto}" editable="{= !${cli>/real} }" />
+								<Button icon="sap-icon://delete" type="Transparent" tooltip="{i18n>quitarLinea}" press=".onQuitarDireccion" enabled="{= !${cli>/real} }" />
 							</cells>
 						</ColumnListItem>
 					</items>

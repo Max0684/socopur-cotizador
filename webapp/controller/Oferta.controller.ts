@@ -14,6 +14,7 @@ import { areasOrgCanal, textoSolicitudAmpliacion, type CondicionArea, type Opcio
 import { evaluarBloqueoPedido, type BloqueoPedido } from "com/socopur/cotizador/model/BloqueoPedido";
 import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type EntregaParaGuardar, ENVIO_UNICO, type VinAsignado, esperarVinculos, leerMotivoVinculo, anularGrupo } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
+import { crearClienteSap, leerBloqueoEdicion, modificarClienteSap, serviciosDeCliente, type CambiosCliente, type DatosAlta } from "com/socopur/cotizador/model/ClienteEscrituraService";
 import { buscarRepuestosConStock, disponibilidadPorAlmacen, motivoVacio } from "com/socopur/cotizador/model/MaterialesService";
 import { cargarPreciosLista, precioListaDisponible, textoPrecioLista } from "com/socopur/cotizador/model/PrecioListaService";
 import { textoOrganizacion } from "com/socopur/cotizador/model/VendedoresService";
@@ -1521,7 +1522,24 @@ export default class Oferta extends Controller {
 			return;
 		}
 		const nombre = cl.nombre ?? "";
+		// Con SAP real (y si el servicio ya publica la edicion) se guarda en SAP y se leen los bloqueos; si no, sigue simulado.
+		let real = false;
+		let bloqueoAviso = "";
+		let nombreBloqueado = false;
+		if (this.usarOData() && cl.kunnr) {
+			const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel;
+			const servicios = await serviciosDeCliente(odata);
+			real = servicios.edicion;
+			if (real && servicios.bloqueo) {
+				const bloqueo = await leerBloqueoEdicion(odata, cl.kunnr);
+				nombreBloqueado = !!bloqueo?.nombreBloqueado;
+				bloqueoAviso = nombreBloqueado ? bloqueo?.nombreMotivo || (this.i18n().getText("editarNombreBloqueado") as string) : "";
+			}
+		}
 		await this.abrirCliente("EditarCliente", {
+			real,
+			nombreBloqueado,
+			bloqueoAviso,
 			tipoDoc: cl.tipoDoc,
 			doc: cl.doc,
 			razon1: nombre.slice(0, 35),
@@ -1529,6 +1547,7 @@ export default class Oferta extends Controller {
 			razon3: nombre.slice(70, 105),
 			telefono: cl.telefono,
 			correo: cl.correo,
+			original: { razon1: nombre.slice(0, 35), razon2: nombre.slice(35, 70), razon3: nombre.slice(70, 105), telefono: cl.telefono, correo: cl.correo },
 			direcciones: this.direccionesDe(cl).map((x) => ({ ...x })),
 			tiposDireccion: [
 				{ key: "Fiscal", text: this.i18n().getText("direccionFiscal") },
@@ -1553,7 +1572,7 @@ export default class Oferta extends Controller {
 		}
 	}
 
-	/** SIMULADO: en SAP lo hace ZSDSCPP002 (valida y actualiza el Business Partner). */
+	/** Con el servicio de edicion publicado guarda en SAP (nombre, telefono y correo); si no, queda simulado (en SAP lo hace ZSDSCPP002). */
 	public onGuardarCliente(): void {
 		const modelo = this.dialogoClienteActual?.getModel("cli") as JSONModel;
 		const i18n = this.i18n();
@@ -1569,10 +1588,10 @@ export default class Oferta extends Controller {
 			errores.push(i18n.getText("altaErrEmail") as string);
 		}
 		const dirs = (modelo.getProperty("/direcciones") as Direccion[]) ?? [];
-		if (dirs.some((x) => !x.texto.trim())) {
+		if (!modelo.getProperty("/real") && dirs.some((x) => !x.texto.trim())) {
 			errores.push(i18n.getText("editarErrDirecciones") as string);
 		}
-		if (!dirs.some((x) => x.tipo === "Fiscal")) {
+		if (!modelo.getProperty("/real") && !dirs.some((x) => x.tipo === "Fiscal")) {
 			errores.push(i18n.getText("editarErrFiscal") as string);
 		}
 		modelo.setProperty("/errores", errores.join("\n"));
@@ -1582,6 +1601,10 @@ export default class Oferta extends Controller {
 		const oferta = this.modeloOferta();
 		const cl = this.clienteActual();
 		if (!cl) {
+			return;
+		}
+		if (modelo.getProperty("/real") && cl.kunnr) {
+			void this.guardarClienteEnSap(modelo, cl, razon);
 			return;
 		}
 		const limpias = dirs.map((x) => ({ ...x, alias: x.alias.trim() || (i18n.getText("direccionSinNombre") as string), texto: x.texto.trim() }));
@@ -1599,6 +1622,45 @@ export default class Oferta extends Controller {
 		this.aplicarDireccionEnvio();
 		this.dialogoClienteActual?.close();
 		MessageToast.show(`${i18n.getText("editarOk")} (${i18n.getText("simulacion")})`);
+	}
+
+	/** PATCH de los campos que cambiaron. Las direcciones aun no se editan en SAP desde esta pantalla (ver contrato, seccion 2.3). */
+	private async guardarClienteEnSap(modelo: JSONModel, cl: Cliente, razon: string): Promise<void> {
+		const i18n = this.i18n();
+		const orig = modelo.getProperty("/original") as Record<string, string>;
+		const actual: Record<string, string> = {
+			razon1: String(modelo.getProperty("/razon1") ?? ""),
+			razon2: String(modelo.getProperty("/razon2") ?? ""),
+			razon3: String(modelo.getProperty("/razon3") ?? ""),
+			celular: String(modelo.getProperty("/telefono") ?? "").replace(/\s/g, ""),
+			email: String(modelo.getProperty("/correo") ?? "")
+		};
+		const origen: Record<string, string> = { razon1: orig.razon1, razon2: orig.razon2, razon3: orig.razon3, celular: orig.telefono, email: orig.correo };
+		const cambios: CambiosCliente = {};
+		for (const [k, v] of Object.entries(actual)) {
+			if (v !== origen[k]) {
+				(cambios as Record<string, string>)[k] = v;
+			}
+		}
+		if (Object.keys(cambios).length === 0) {
+			this.dialogoClienteActual?.close();
+			return;
+		}
+		Messaging.removeAllMessages();
+		this.dialogoClienteActual?.setBusy(true);
+		try {
+			await modificarClienteSap((this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel, cl.kunnr as string, cambios);
+			const oferta = this.modeloOferta();
+			oferta.setProperty("/cliente/nombre", razon);
+			oferta.setProperty("/cliente/telefono", actual.celular);
+			oferta.setProperty("/cliente/correo", actual.email);
+			this.dialogoClienteActual?.close();
+			MessageToast.show(i18n.getText("editarOk") as string);
+		} catch (error) {
+			modelo.setProperty("/errores", i18n.getText("editarErrSap", [this.motivoDeError(error)]) as string);
+		} finally {
+			this.dialogoClienteActual?.setBusy(false);
+		}
 	}
 
 	/** Deja elegida la direccion de envio: la ya elegida si sigue existiendo; si no, la primera de tipo envio o la fiscal. */
@@ -3614,7 +3676,7 @@ export default class Oferta extends Controller {
 		if (a.tipoDoc === "RUC" && !/^(10|15|17|20)\d{9}$/.test(doc)) {
 			errores.push(i18n.getText("altaErrRuc") as string);
 		}
-		if (clientes[doc]) {
+		if (!this.usarOData() && clientes[doc]) {
 			errores.push(i18n.getText("altaErrExiste") as string);
 		}
 		if (!(a.razon1 ?? "").trim()) {
@@ -3636,7 +3698,53 @@ export default class Oferta extends Controller {
 		if (errores.length) {
 			return;
 		}
-		// SIMULADO: en SAP se crea el Business Partner (una sola transaccion, con control de duplicados por documento).
+		if (this.usarOData()) {
+			void this.crearClienteEnSap(a as unknown as DatosAlta, doc);
+			return;
+		}
+		this.crearClienteSimulado(a, doc);
+	}
+
+	/**
+	 * Alta real (entidad ClienteAlta). Si el servicio aun no la publica, sigue el alta simulada. Tras crear, se vuelve a leer el cliente por su
+	 * documento con la misma busqueda de siempre, asi la oferta usa los datos que SAP guardo. Un documento ya existente no se duplica.
+	 */
+	private async crearClienteEnSap(a: DatosAlta, doc: string): Promise<void> {
+		const oferta = this.modeloOferta();
+		const i18n = this.i18n();
+		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel;
+		oferta.setProperty("/alta/errores", "");
+		Messaging.removeAllMessages();
+		this.getView()?.setBusy(true);
+		try {
+			if (!(await serviciosDeCliente(odata)).alta) {
+				this.crearClienteSimulado(a as unknown as Record<string, string>, doc);
+				return;
+			}
+			const r = await crearClienteSap(odata, { ...a, doc });
+			if (!r.kunnr) {
+				oferta.setProperty("/alta/errores", i18n.getText("altaErrSap", [r.mensaje || (i18n.getText("altaErrSinNumero") as string)]) as string);
+				return;
+			}
+			const encontrados = (await buscarClientes(odata, doc)).filter((c) => c.kunnr === r.kunnr);
+			oferta.setProperty("/altaAbierta", false);
+			oferta.setProperty("/clienteNoEncontrado", false);
+			if (encontrados.length) {
+				this.aplicarClienteSap(encontrados[0]);
+			}
+			MessageToast.show(r.creado ? (i18n.getText("altaCreadoSap", [r.kunnr]) as string) : (i18n.getText("altaYaExistia", [r.kunnr]) as string), { duration: 6000 });
+		} catch (error) {
+			oferta.setProperty("/alta/errores", i18n.getText("altaErrSap", [this.motivoDeError(error)]) as string);
+		} finally {
+			this.getView()?.setBusy(false);
+		}
+	}
+
+	/** SIMULADO: en SAP se crea el Business Partner (una sola transaccion, con control de duplicados por documento). */
+	private crearClienteSimulado(a: Record<string, string>, doc: string): void {
+		const oferta = this.modeloOferta();
+		const i18n = this.i18n();
+		const clientes = this.modeloMock().getProperty("/clientes") as Record<string, Cliente>;
 		const nombre = [a.razon1, a.razon2, a.razon3].map((t) => t.trim()).join("").length ? `${a.razon1}${a.razon2}${a.razon3}`.trim() : "";
 		const nuevo: Cliente = {
 			doc,

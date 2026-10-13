@@ -1,0 +1,186 @@
+import type ODataModel from "sap/ui/model/odata/v4/ODataModel";
+import { entidadTieneCampo } from "./CamposServicio";
+
+/**
+ * Alta y edicion de clientes contra YUI_COTIZ_SRV (entidades ClienteAlta, ClienteEdicion, ClienteEdicionBloqueo y ClienteCambio).
+ * El contrato esta en Proyecto Socopur/03_Arquitectura/CONTRATO_FRONT_ALTA_EDICION_CLIENTE.md. Cada operacion solo se usa si el $metadata ya
+ * publica la entidad (ver `serviciosDeCliente`); si no, la pantalla sigue en modo simulado.
+ */
+
+export interface DatosAlta {
+	tipoDoc: string;
+	doc: string;
+	razon1: string;
+	razon2: string;
+	razon3: string;
+	dir1: string;
+	dir2: string;
+	dir3: string;
+	dep: string;
+	prov: string;
+	dist: string;
+	celular: string;
+	email: string;
+}
+
+export interface ResultadoAlta {
+	kunnr: string;
+	/** false = el documento ya existia en SAP y no se creo otro; kunnr es el del cliente existente. */
+	creado: boolean;
+	mensaje: string;
+}
+
+export interface CambiosCliente {
+	razon1?: string;
+	razon2?: string;
+	razon3?: string;
+	celular?: string;
+	email?: string;
+	/** Numero de la direccion fiscal a modificar (ClienteDireccion.Addrnumber). */
+	addrnumber?: string;
+	dir1?: string;
+	dir2?: string;
+	dir3?: string;
+	dep?: string;
+	prov?: string;
+	dist?: string;
+}
+
+export interface BloqueoEdicion {
+	nombreBloqueado: boolean;
+	nombreMotivo: string;
+	direccionBloqueada: boolean;
+	direccionMotivo: string;
+}
+
+export interface CambioCliente {
+	fecha: string;
+	usuario: string;
+	campo: string;
+	antes: string;
+	despues: string;
+}
+
+export interface ServiciosDeCliente {
+	alta: boolean;
+	edicion: boolean;
+	bloqueo: boolean;
+	historial: boolean;
+}
+
+const comillas = (texto: string): string => texto.replace(/'/g, "''");
+const texto = (v: unknown): string => (v === undefined || v === null ? "" : String(v));
+const verdadero = (v: unknown): boolean => v === true || v === "X";
+
+/** Que partes del contrato publica ya el servicio. Un campo o entidad desconocidos en una peticion hacen que SAP la rechace entera. */
+export async function serviciosDeCliente(modelo: ODataModel): Promise<ServiciosDeCliente> {
+	const [alta, edicion, bloqueo, historial] = await Promise.all([
+		entidadTieneCampo(modelo, "ClienteAlta", "Doc"),
+		entidadTieneCampo(modelo, "ClienteEdicion", "Kunnr"),
+		entidadTieneCampo(modelo, "ClienteEdicionBloqueo", "NombreBloqueado"),
+		entidadTieneCampo(modelo, "ClienteCambio", "Campo")
+	]);
+	return { alta, edicion, bloqueo, historial };
+}
+
+/** Cuerpo del create de ClienteAlta: todo recortado y con el largo de los campos de SAP. */
+export function cuerpoAlta(a: DatosAlta): Record<string, string> {
+	const corto = (v: string, largo: number): string => texto(v).trim().slice(0, largo);
+	return {
+		TipoDoc: a.tipoDoc,
+		Doc: corto(a.doc, 11),
+		Razon1: corto(a.razon1, 35),
+		Razon2: corto(a.razon2, 35),
+		Razon3: corto(a.razon3, 35),
+		Dir1: corto(a.dir1, 35),
+		Dir2: corto(a.dir2, 35),
+		Dir3: corto(a.dir3, 35),
+		Dep: corto(a.dep, 40),
+		Prov: corto(a.prov, 40),
+		Dist: corto(a.dist, 40),
+		Celular: corto(a.celular.replace(/\s/g, ""), 9),
+		Email: corto(a.email, 241)
+	};
+}
+
+/** Solo los campos que cambiaron, con el nombre que espera ClienteEdicion. */
+export function cuerpoEdicion(cambios: CambiosCliente): Record<string, string> {
+	const nombres: Record<keyof CambiosCliente, string> = {
+		razon1: "Razon1",
+		razon2: "Razon2",
+		razon3: "Razon3",
+		celular: "Celular",
+		email: "Email",
+		addrnumber: "Addrnumber",
+		dir1: "Dir1",
+		dir2: "Dir2",
+		dir3: "Dir3",
+		dep: "Dep",
+		prov: "Prov",
+		dist: "Dist"
+	};
+	const cuerpo: Record<string, string> = {};
+	for (const [clave, valor] of Object.entries(cambios) as [keyof CambiosCliente, string | undefined][]) {
+		if (valor !== undefined) {
+			cuerpo[nombres[clave]] = valor.trim();
+		}
+	}
+	return cuerpo;
+}
+
+/** Crea el cliente en SAP. Un rechazo llega como error (con el mensaje de negocio) o como creado=false con su motivo. */
+export async function crearClienteSap(modelo: ODataModel, datos: DatosAlta): Promise<ResultadoAlta> {
+	const contexto = modelo.bindList("/ClienteAlta").create(cuerpoAlta(datos), true);
+	await contexto.created();
+	const r = contexto.getObject() as Record<string, unknown>;
+	return { kunnr: texto(r.Kunnr), creado: r.Creado === undefined ? true : verdadero(r.Creado), mensaje: texto(r.Mensaje) };
+}
+
+/** Pasa la fila de ClienteEdicionBloqueo a lo que muestra la pantalla. */
+export function aBloqueo(f: Record<string, unknown>): BloqueoEdicion {
+	return {
+		nombreBloqueado: verdadero(f.NombreBloqueado),
+		nombreMotivo: texto(f.NombreMotivo),
+		direccionBloqueada: verdadero(f.DireccionBloqueada),
+		direccionMotivo: texto(f.DireccionMotivo)
+	};
+}
+
+/**
+ * Bloqueos de edicion del cliente (p. ej. anticipo abierto). Si no se puede leer devuelve null: no se inventa un bloqueo, y el backend vuelve
+ * a validar al guardar.
+ */
+export async function leerBloqueoEdicion(modelo: ODataModel, kunnr: string): Promise<BloqueoEdicion | null> {
+	try {
+		const filas = await modelo.bindList("/ClienteEdicionBloqueo", undefined, undefined, undefined, { $filter: `Kunnr eq '${comillas(kunnr)}'` }).requestContexts(0, 1);
+		return filas.length ? aBloqueo(filas[0].getObject() as Record<string, unknown>) : null;
+	} catch {
+		return null;
+	}
+}
+
+/** Envia los cambios (PATCH de ClienteEdicion). El mensaje del backend, si rechaza, llega como error. */
+export async function modificarClienteSap(modelo: ODataModel, kunnr: string, cambios: CambiosCliente): Promise<void> {
+	const cuerpo = cuerpoEdicion(cambios);
+	const filas = await modelo.bindList("/ClienteEdicion", undefined, undefined, undefined, { $filter: `Kunnr eq '${comillas(kunnr)}'` }).requestContexts(0, 1);
+	const contexto = filas[0];
+	if (!contexto) {
+		throw new Error(`SAP no encontro al cliente ${kunnr} para editarlo`);
+	}
+	for (const [campo, valor] of Object.entries(cuerpo)) {
+		await contexto.setProperty(campo, valor, "$auto");
+	}
+	await modelo.submitBatch("$auto");
+}
+
+export function aCambio(f: Record<string, unknown>): CambioCliente {
+	return { fecha: texto(f.Fecha).slice(0, 10), usuario: texto(f.Usuario), campo: texto(f.Campo), antes: texto(f.ValorAntes), despues: texto(f.ValorDespues) };
+}
+
+/** Ultimos cambios del cliente (quien, cuando y que campo), los mas recientes primero. */
+export async function leerCambiosCliente(modelo: ODataModel, kunnr: string, maximo = 50): Promise<CambioCliente[]> {
+	const filas = await modelo
+		.bindList("/ClienteCambio", undefined, undefined, undefined, { $filter: `Kunnr eq '${comillas(kunnr)}'`, $orderby: "Fecha desc" })
+		.requestContexts(0, maximo);
+	return filas.map((c) => aCambio(c.getObject() as Record<string, unknown>));
+}
