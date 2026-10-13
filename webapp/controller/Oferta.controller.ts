@@ -14,7 +14,7 @@ import { areasOrgCanal, textoSolicitudAmpliacion, type CondicionArea, type Opcio
 import { evaluarBloqueoPedido, type BloqueoPedido } from "com/socopur/cotizador/model/BloqueoPedido";
 import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type EntregaParaGuardar, ENVIO_UNICO, type VinAsignado, esperarVinculos, leerMotivoVinculo, anularGrupo } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
-import { crearClienteSap, leerBloqueoEdicion, leerCambiosCliente, modificarClienteSap, serviciosDeCliente, type CambiosCliente, type DatosAlta } from "com/socopur/cotizador/model/ClienteEscrituraService";
+import { cargarUbigeo, crearClienteSap, leerBloqueoEdicion, leerCambiosCliente, modificarClienteSap, serviciosDeCliente, type CambiosCliente, type DatosAlta } from "com/socopur/cotizador/model/ClienteEscrituraService";
 import { buscarRepuestosConStock, disponibilidadPorAlmacen, motivoVacio } from "com/socopur/cotizador/model/MaterialesService";
 import { cargarPreciosLista, precioListaDisponible, textoPrecioLista } from "com/socopur/cotizador/model/PrecioListaService";
 import { textoOrganizacion } from "com/socopur/cotizador/model/VendedoresService";
@@ -3625,6 +3625,26 @@ export default class Oferta extends Controller {
 		oferta.setProperty("/alta", this.altaVacia(doc));
 		oferta.setProperty("/ubigeo", this.modeloMock().getProperty("/ubigeo") ?? []);
 		oferta.setProperty("/tiposCliente", this.modeloMock().getProperty("/tiposCliente") ?? []);
+		void this.usarUbigeoReal();
+	}
+
+	/** Con SAP real y el catalogo publicado, los desplegables de departamento/provincia/distrito usan la lista real en vez de la de ejemplo. */
+	private async usarUbigeoReal(): Promise<void> {
+		if (!this.usarOData()) {
+			return;
+		}
+		try {
+			const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel;
+			if (!(await serviciosDeCliente(odata)).ubigeo) {
+				return;
+			}
+			const arbol = await cargarUbigeo(odata);
+			if (arbol.length) {
+				this.modeloOferta().setProperty("/ubigeo", arbol);
+			}
+		} catch {
+			// si el catalogo real no se puede leer queda el de ejemplo
+		}
 	}
 
 	public onCancelarAlta(): void {

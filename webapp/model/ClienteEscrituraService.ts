@@ -66,6 +66,14 @@ export interface ServiciosDeCliente {
 	edicion: boolean;
 	bloqueo: boolean;
 	historial: boolean;
+	/** Catalogo real de departamento/provincia/distrito (UbigeoCatalogo). Sin el, la pantalla usa el de ejemplo. */
+	ubigeo: boolean;
+}
+
+/** Arbol que usan los desplegables en cascada del alta. */
+export interface NodoUbigeo {
+	dep: string;
+	provincias: { prov: string; distritos: string[] }[];
 }
 
 const comillas = (texto: string): string => texto.replace(/'/g, "''");
@@ -74,13 +82,14 @@ const verdadero = (v: unknown): boolean => v === true || v === "X";
 
 /** Que partes del contrato publica ya el servicio. Un campo o entidad desconocidos en una peticion hacen que SAP la rechace entera. */
 export async function serviciosDeCliente(modelo: ODataModel): Promise<ServiciosDeCliente> {
-	const [alta, edicion, bloqueo, historial] = await Promise.all([
+	const [alta, edicion, bloqueo, historial, ubigeo] = await Promise.all([
 		entidadTieneCampo(modelo, "ClienteAlta", "Doc"),
 		entidadTieneCampo(modelo, "ClienteEdicion", "Kunnr"),
 		entidadTieneCampo(modelo, "ClienteEdicionBloqueo", "NombreBloqueado"),
-		entidadTieneCampo(modelo, "ClienteCambio", "Campo")
+		entidadTieneCampo(modelo, "ClienteCambio", "Campo"),
+		entidadTieneCampo(modelo, "UbigeoCatalogo", "Dist")
 	]);
-	return { alta, edicion, bloqueo, historial };
+	return { alta, edicion, bloqueo, historial, ubigeo };
 }
 
 /** Cuerpo del create de ClienteAlta: todo recortado y con el largo de los campos de SAP. */
@@ -183,4 +192,39 @@ export async function leerCambiosCliente(modelo: ODataModel, kunnr: string, maxi
 		.bindList("/ClienteCambio", undefined, undefined, undefined, { $filter: `Kunnr eq '${comillas(kunnr)}'`, $orderby: "Fecha desc" })
 		.requestContexts(0, maximo);
 	return filas.map((c) => aCambio(c.getObject() as Record<string, unknown>));
+}
+
+interface FilaUbigeo {
+	Dep?: string;
+	Prov?: string;
+	Dist?: string;
+}
+
+/** Agrupa las filas planas (Dep, Prov, Dist) en departamento -> provincia -> distritos, todo ordenado y sin repetidos. */
+export function arbolUbigeo(filas: FilaUbigeo[]): NodoUbigeo[] {
+	const deps = new Map<string, Map<string, Set<string>>>();
+	for (const f of filas) {
+		if (!f.Dep || !f.Prov || !f.Dist) {
+			continue;
+		}
+		const provs = deps.get(f.Dep) ?? new Map<string, Set<string>>();
+		const dists = provs.get(f.Prov) ?? new Set<string>();
+		dists.add(f.Dist);
+		provs.set(f.Prov, dists);
+		deps.set(f.Dep, provs);
+	}
+	const orden = (a: string, b: string): number => a.localeCompare(b, "es");
+	return [...deps.keys()].sort(orden).map((dep) => ({
+		dep,
+		provincias: [...(deps.get(dep) as Map<string, Set<string>>).keys()].sort(orden).map((prov) => ({
+			prov,
+			distritos: [...((deps.get(dep) as Map<string, Set<string>>).get(prov) as Set<string>)].sort(orden)
+		}))
+	}));
+}
+
+/** Catalogo real de ubigeo (unas 2 mil filas). Quien lo llame debe haber comprobado `servicios.ubigeo`. */
+export async function cargarUbigeo(modelo: ODataModel): Promise<NodoUbigeo[]> {
+	const filas = await modelo.bindList("/UbigeoCatalogo", undefined, undefined, undefined, { $select: "Dep,Prov,Dist" }).requestContexts(0, 5000);
+	return arbolUbigeo(filas.map((c) => c.getObject() as FilaUbigeo));
 }

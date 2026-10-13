@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { aBloqueo, aCambio, crearClienteSap, cuerpoAlta, cuerpoEdicion, leerBloqueoEdicion, serviciosDeCliente, type DatosAlta } from "../webapp/model/ClienteEscrituraService.ts";
+import { aBloqueo, aCambio, arbolUbigeo, crearClienteSap, cuerpoAlta, cuerpoEdicion, leerBloqueoEdicion, serviciosDeCliente, type DatosAlta } from "../webapp/model/ClienteEscrituraService.ts";
 import { crearModeloFalso } from "./helpers/modeloFalso.ts";
 
 const como = (m: unknown) => m as Parameters<typeof crearClienteSap>[0];
@@ -53,9 +53,9 @@ test("aBloqueo y aCambio: pasan la fila del servicio a lo que muestra la pantall
 
 test("serviciosDeCliente: solo marca lo que el $metadata ya publica", async () => {
 	const nada = crearModeloFalso();
-	assert.deepEqual(await serviciosDeCliente(como(nada.modelo)), { alta: false, edicion: false, bloqueo: false, historial: false });
+	assert.deepEqual(await serviciosDeCliente(como(nada.modelo)), { alta: false, edicion: false, bloqueo: false, historial: false, ubigeo: false });
 	const parcial = crearModeloFalso({ camposPublicados: ["ClienteAlta/Doc", "ClienteEdicionBloqueo/NombreBloqueado"] });
-	assert.deepEqual(await serviciosDeCliente(como(parcial.modelo)), { alta: true, edicion: false, bloqueo: true, historial: false });
+	assert.deepEqual(await serviciosDeCliente(como(parcial.modelo)), { alta: true, edicion: false, bloqueo: true, historial: false, ubigeo: false });
 });
 
 test("crearClienteSap: crea en ClienteAlta con el cuerpo recortado", async () => {
@@ -76,4 +76,18 @@ test("leerBloqueoEdicion: si la lectura falla no inventa un bloqueo", async () =
 		}
 	};
 	assert.equal(await leerBloqueoEdicion(como(modelo), "0100000001"), null);
+});
+
+test("arbolUbigeo: agrupa departamento, provincia y distritos, ordenados y sin repetidos", () => {
+	const arbol = arbolUbigeo([
+		{ Dep: "Lima", Prov: "Lima", Dist: "Miraflores" },
+		{ Dep: "Lima", Prov: "Lima", Dist: "Barranco" },
+		{ Dep: "Lima", Prov: "Lima", Dist: "Barranco" },
+		{ Dep: "Amazonas", Prov: "Chachapoyas", Dist: "Asunci\u00f3n" },
+		{ Dep: "Lima", Prov: "", Dist: "X" }
+	]);
+	assert.deepEqual(arbol, [
+		{ dep: "Amazonas", provincias: [{ prov: "Chachapoyas", distritos: ["Asunci\u00f3n"] }] },
+		{ dep: "Lima", provincias: [{ prov: "Lima", distritos: ["Barranco", "Miraflores"] }] }
+	]);
 });
