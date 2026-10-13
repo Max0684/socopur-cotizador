@@ -8,6 +8,7 @@ import List from "sap/m/List";
 import SearchField from "sap/m/SearchField";
 import Event from "sap/ui/base/Event";
 import { ciudadDeCentro, textoSede } from "com/socopur/cotizador/model/Ciudades";
+import { usarOData as usarODataActual } from "com/socopur/cotizador/model/Modo";
 import { Router$RouteMatchedEvent } from "sap/ui/core/routing/Router";
 import {
 	Vendedor,
@@ -46,16 +47,16 @@ export default class App extends Controller {
 		appModel.setProperty("/layout", config.layout ?? "OneColumn");
 	}
 
-	/** Solo con ?odata=1 se usa el servicio real; sin la bandera el prototipo con datos de ejemplo. */
+	/** Con ?odata=1, o publicada fuera de localhost, se usa el servicio real; si no, el prototipo con datos de ejemplo. */
 	private odata(): ODataModel | undefined {
-		const usar = new URLSearchParams(window.location.search).get("odata") === "1";
+		const usar = usarODataActual();
 		return usar ? ((this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel | undefined) : undefined;
 	}
 
 	/** Lee los vendedores (SAP con ?odata=1, si no los del prototipo) y recupera al de esta pestana o abre el dialogo. */
 	private async identificarVendedor(mock: JSONModel): Promise<void> {
 		const prototipo = (mock.getProperty("/vendedores") as Vendedor[]) ?? [];
-		const usarOData = new URLSearchParams(window.location.search).get("odata") === "1";
+		const usarOData = usarODataActual();
 		const odata = usarOData ? ((this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel | undefined) : undefined;
 		let lista = prototipo;
 		try {

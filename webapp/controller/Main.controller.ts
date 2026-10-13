@@ -1,4 +1,5 @@
 import Controller from "sap/ui/core/mvc/Controller";
+import { usarOData as usarODataActual } from "com/socopur/cotizador/model/Modo";
 import View from "sap/ui/core/mvc/View";
 import UIComponent from "sap/ui/core/UIComponent";
 import Router from "sap/ui/core/routing/Router";
@@ -47,9 +48,9 @@ export default class Main extends Controller {
 		void (raiz.getController() as unknown as { onCambiarVendedor(): Promise<void> }).onCambiarVendedor();
 	}
 
-	/** La lista lee del servicio real solo con ?odata=1 en la URL; sin la bandera sigue con los datos simulados. */
+	/** La lista lee del servicio real con ?odata=1 o publicada fuera de localhost; si no, sigue con los datos simulados. */
 	private usarOData(): boolean {
-		return new URLSearchParams(window.location.search).get("odata") === "1";
+		return usarODataActual();
 	}
 
 	private async cargarDesdeOData(mock: JSONModel): Promise<void> {

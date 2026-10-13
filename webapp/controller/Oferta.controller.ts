@@ -15,6 +15,7 @@ import { evaluarBloqueoPedido, type BloqueoPedido } from "com/socopur/cotizador/
 import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type EntregaParaGuardar, ENVIO_UNICO, type VinAsignado, esperarVinculos, leerMotivoVinculo, anularGrupo } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
 import { validarDocumento } from "com/socopur/cotizador/model/Documento";
+import { usarOData as usarODataActual } from "com/socopur/cotizador/model/Modo";
 import { AltaEnProcesoError, cargarUbigeo, crearClienteSap, leerBloqueoEdicion, leerCambiosCliente, modificarClienteSap, serviciosDeCliente, type CambiosCliente, type DatosAlta } from "com/socopur/cotizador/model/ClienteEscrituraService";
 import { buscarRepuestosConStock, disponibilidadPorAlmacen, motivoVacio } from "com/socopur/cotizador/model/MaterialesService";
 import { cargarPreciosLista, precioListaDisponible, textoPrecioLista } from "com/socopur/cotizador/model/PrecioListaService";
@@ -3310,9 +3311,9 @@ export default class Oferta extends Controller {
 		this.modeloBusqueda().setProperty("/elegido", null);
 	}
 
-	/** El cliente se busca en SAP solo con ?odata=1; sin la bandera sigue la busqueda simulada. */
+	/** El cliente se busca en SAP con ?odata=1 o publicada fuera de localhost; si no, sigue la busqueda simulada. */
 	private usarOData(): boolean {
-		return new URLSearchParams(window.location.search).get("odata") === "1";
+		return usarODataActual();
 	}
 
 	/** Busqueda real de cliente (vista YI_COTIZ_CLIENTE). Con varias coincidencias se abre una ventana para elegir. */

@@ -1,4 +1,5 @@
 import Controller from "sap/ui/core/mvc/Controller";
+import { usarOData as usarODataActual } from "com/socopur/cotizador/model/Modo";
 import UIComponent from "sap/ui/core/UIComponent";
 import Fragment from "sap/ui/core/Fragment";
 import JSONModel from "sap/ui/model/json/JSONModel";
@@ -66,9 +67,9 @@ export default class Vendedores extends Controller {
 		return (this.getOwnerComponent() as UIComponent).getModel("mock") as JSONModel;
 	}
 
-	/** Solo con ?odata=1 se escribe en SAP; sin la bandera todo queda en pantalla (prototipo). */
+	/** Con ?odata=1, o publicada fuera de localhost, se escribe en SAP; si no, todo queda en pantalla (prototipo). */
 	private odata(): ODataModel | undefined {
-		const usar = new URLSearchParams(window.location.search).get("odata") === "1";
+		const usar = usarODataActual();
 		return usar ? ((this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel | undefined) : undefined;
 	}
 
