@@ -3411,6 +3411,8 @@ export default class Oferta extends Controller {
 		const oferta = this.modeloOferta();
 		oferta.setProperty("/cliente", this.clienteDeSap(elegido));
 		oferta.setProperty("/clienteNoEncontrado", false);
+		// Un cliente encontrado cierra el formulario de alta que haya quedado abierto de una busqueda anterior.
+		oferta.setProperty("/altaAbierta", false);
 		this.refrescarTrasCliente();
 		void this.cargarDatosCliente(elegido.kunnr, elegido.bloqueado);
 	}
