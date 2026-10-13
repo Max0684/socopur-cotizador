@@ -87,7 +87,7 @@ export async function serviciosDeCliente(modelo: ODataModel): Promise<ServiciosD
 		entidadTieneCampo(modelo, "ClienteEdicion", "Kunnr"),
 		entidadTieneCampo(modelo, "ClienteEdicionBloqueo", "NombreBloqueado"),
 		entidadTieneCampo(modelo, "ClienteCambio", "Campo"),
-		entidadTieneCampo(modelo, "UbigeoCatalogo", "Dist")
+		entidadTieneCampo(modelo, "UbigeoCatalogo", "Distrito")
 	]);
 	return { alta, edicion, bloqueo, historial, ubigeo };
 }
@@ -137,12 +137,47 @@ export function cuerpoEdicion(cambios: CambiosCliente): Record<string, string> {
 	return cuerpo;
 }
 
-/** Crea el cliente en SAP. Un rechazo llega como error (con el mensaje de negocio) o como creado=false con su motivo. */
-export async function crearClienteSap(modelo: ODataModel, datos: DatosAlta): Promise<ResultadoAlta> {
+export interface EsperaAlta {
+	/** Cada cuanto se vuelve a leer la solicitud (ms). */
+	intervaloMs?: number;
+	/** Tiempo maximo de espera (ms). */
+	maximoMs?: number;
+	/** Pausa entre lecturas; se puede reemplazar en las pruebas. */
+	pausa?: (ms: number) => Promise<void>;
+}
+
+/** La solicitud sigue en proceso en SAP: no es un fallo, el cliente aparecera en unos minutos. */
+export class AltaEnProcesoError extends Error {}
+
+const pausaReal = (ms: number): Promise<void> => new Promise((resolver) => setTimeout(resolver, ms));
+
+export function aResultadoAlta(r: Record<string, unknown>): ResultadoAlta {
+	return { kunnr: texto(r.Kunnr), creado: r.Creado === undefined ? true : verdadero(r.Creado), mensaje: texto(r.Mensaje) };
+}
+
+/** Sin Kunnr y con el aviso «en proceso»: el cliente se esta creando en segundo plano. Cualquier otro mensaje sin Kunnr es un rechazo. */
+const sigueEnProceso = (r: ResultadoAlta): boolean => !r.kunnr && /proceso/i.test(r.mensaje);
+
+/**
+ * Crea el cliente en SAP. Las validaciones (formato, ubigeo, documento repetido) son inmediatas: un rechazo llega como error con el mensaje de
+ * negocio o como creado=false con su motivo, y un documento repetido devuelve el Kunnr existente. La creacion real corre en segundo plano:
+ * el POST vuelve con la solicitud «en proceso» y se vuelve a leer hasta que traiga el Kunnr o un mensaje de error.
+ */
+export async function crearClienteSap(modelo: ODataModel, datos: DatosAlta, espera: EsperaAlta = {}): Promise<ResultadoAlta> {
 	const contexto = modelo.bindList("/ClienteAlta").create(cuerpoAlta(datos), true);
 	await contexto.created();
-	const r = contexto.getObject() as Record<string, unknown>;
-	return { kunnr: texto(r.Kunnr), creado: r.Creado === undefined ? true : verdadero(r.Creado), mensaje: texto(r.Mensaje) };
+	let r = aResultadoAlta(contexto.getObject() as Record<string, unknown>);
+	const intervalo = espera.intervaloMs ?? 2000;
+	const maximo = espera.maximoMs ?? 90000;
+	const pausa = espera.pausa ?? pausaReal;
+	for (let transcurrido = 0; sigueEnProceso(r) && transcurrido < maximo; transcurrido += intervalo) {
+		await pausa(intervalo);
+		r = aResultadoAlta((await modelo.bindContext(contexto.getPath(), undefined, { $$ownRequest: true }).requestObject()) as Record<string, unknown>);
+	}
+	if (sigueEnProceso(r)) {
+		throw new AltaEnProcesoError(r.mensaje);
+	}
+	return r;
 }
 
 /** Pasa la fila de ClienteEdicionBloqueo a lo que muestra la pantalla. */
@@ -189,29 +224,29 @@ export function aCambio(f: Record<string, unknown>): CambioCliente {
 /** Ultimos cambios del cliente (quien, cuando y que campo), los mas recientes primero. */
 export async function leerCambiosCliente(modelo: ODataModel, kunnr: string, maximo = 50): Promise<CambioCliente[]> {
 	const filas = await modelo
-		.bindList("/ClienteCambio", undefined, undefined, undefined, { $filter: `Kunnr eq '${comillas(kunnr)}'`, $orderby: "Fecha desc" })
+		.bindList("/ClienteCambio", undefined, undefined, undefined, { $filter: `Kunnr eq '${comillas(kunnr)}'`, $orderby: "Fecha desc,Hora desc" })
 		.requestContexts(0, maximo);
 	return filas.map((c) => aCambio(c.getObject() as Record<string, unknown>));
 }
 
 interface FilaUbigeo {
-	Dep?: string;
-	Prov?: string;
-	Dist?: string;
+	Departamento?: string;
+	Provincia?: string;
+	Distrito?: string;
 }
 
-/** Agrupa las filas planas (Dep, Prov, Dist) en departamento -> provincia -> distritos, todo ordenado y sin repetidos. */
+/** Agrupa las filas planas (Departamento, Provincia, Distrito) en departamento -> provincia -> distritos, todo ordenado y sin repetidos. */
 export function arbolUbigeo(filas: FilaUbigeo[]): NodoUbigeo[] {
 	const deps = new Map<string, Map<string, Set<string>>>();
 	for (const f of filas) {
-		if (!f.Dep || !f.Prov || !f.Dist) {
+		if (!f.Departamento || !f.Provincia || !f.Distrito) {
 			continue;
 		}
-		const provs = deps.get(f.Dep) ?? new Map<string, Set<string>>();
-		const dists = provs.get(f.Prov) ?? new Set<string>();
-		dists.add(f.Dist);
-		provs.set(f.Prov, dists);
-		deps.set(f.Dep, provs);
+		const provs = deps.get(f.Departamento) ?? new Map<string, Set<string>>();
+		const dists = provs.get(f.Provincia) ?? new Set<string>();
+		dists.add(f.Distrito);
+		provs.set(f.Provincia, dists);
+		deps.set(f.Departamento, provs);
 	}
 	const orden = (a: string, b: string): number => a.localeCompare(b, "es");
 	return [...deps.keys()].sort(orden).map((dep) => ({
@@ -225,6 +260,6 @@ export function arbolUbigeo(filas: FilaUbigeo[]): NodoUbigeo[] {
 
 /** Catalogo real de ubigeo (unas 2 mil filas). Quien lo llame debe haber comprobado `servicios.ubigeo`. */
 export async function cargarUbigeo(modelo: ODataModel): Promise<NodoUbigeo[]> {
-	const filas = await modelo.bindList("/UbigeoCatalogo", undefined, undefined, undefined, { $select: "Dep,Prov,Dist" }).requestContexts(0, 5000);
+	const filas = await modelo.bindList("/UbigeoCatalogo", undefined, undefined, undefined, { $select: "Departamento,Provincia,Distrito" }).requestContexts(0, 5000);
 	return arbolUbigeo(filas.map((c) => c.getObject() as FilaUbigeo));
 }

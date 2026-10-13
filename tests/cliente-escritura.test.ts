@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { aBloqueo, aCambio, arbolUbigeo, crearClienteSap, cuerpoAlta, cuerpoEdicion, leerBloqueoEdicion, serviciosDeCliente, type DatosAlta } from "../webapp/model/ClienteEscrituraService.ts";
+import { aBloqueo, aCambio, AltaEnProcesoError, arbolUbigeo, crearClienteSap, cuerpoAlta, cuerpoEdicion, leerBloqueoEdicion, serviciosDeCliente, type DatosAlta } from "../webapp/model/ClienteEscrituraService.ts";
 import { crearModeloFalso } from "./helpers/modeloFalso.ts";
 
 const como = (m: unknown) => m as Parameters<typeof crearClienteSap>[0];
@@ -80,14 +80,61 @@ test("leerBloqueoEdicion: si la lectura falla no inventa un bloqueo", async () =
 
 test("arbolUbigeo: agrupa departamento, provincia y distritos, ordenados y sin repetidos", () => {
 	const arbol = arbolUbigeo([
-		{ Dep: "Lima", Prov: "Lima", Dist: "Miraflores" },
-		{ Dep: "Lima", Prov: "Lima", Dist: "Barranco" },
-		{ Dep: "Lima", Prov: "Lima", Dist: "Barranco" },
-		{ Dep: "Amazonas", Prov: "Chachapoyas", Dist: "Asunci\u00f3n" },
-		{ Dep: "Lima", Prov: "", Dist: "X" }
+		{ Departamento: "Lima", Provincia: "Lima", Distrito: "Miraflores" },
+		{ Departamento: "Lima", Provincia: "Lima", Distrito: "Barranco" },
+		{ Departamento: "Lima", Provincia: "Lima", Distrito: "Barranco" },
+		{ Departamento: "Amazonas", Provincia: "Chachapoyas", Distrito: "Asunci\u00f3n" },
+		{ Departamento: "Lima", Provincia: "", Distrito: "X" }
 	]);
 	assert.deepEqual(arbol, [
 		{ dep: "Amazonas", provincias: [{ prov: "Chachapoyas", distritos: ["Asunci\u00f3n"] }] },
 		{ dep: "Lima", provincias: [{ prov: "Lima", distritos: ["Barranco", "Miraflores"] }] }
 	]);
+});
+
+function modeloAlta(inicial: Record<string, unknown>, lecturas: Record<string, unknown>[]) {
+	const rutas: string[] = [];
+	let n = 0;
+	const modelo = {
+		bindList() {
+			return {
+				create() {
+					return { created: async () => undefined, getObject: () => inicial, getPath: () => "/ClienteAlta(Id=abc)" };
+				}
+			};
+		},
+		bindContext(ruta: string) {
+			rutas.push(ruta);
+			return { requestObject: async () => lecturas[Math.min(n++, lecturas.length - 1)] };
+		}
+	};
+	return { modelo, rutas };
+}
+
+const sinPausa = { pausa: async () => undefined };
+
+test("crearClienteSap: la creacion corre en segundo plano y se lee la solicitud hasta que trae el Kunnr", async () => {
+	const { modelo, rutas } = modeloAlta({ Id: "abc", Creado: false, Mensaje: "Solicitud en proceso" }, [{ Creado: false, Mensaje: "Solicitud en proceso" }, { Creado: true, Kunnr: "0100031000", Mensaje: "" }]);
+	const r = await crearClienteSap(como(modelo), alta, sinPausa);
+	assert.deepEqual(r, { kunnr: "0100031000", creado: true, mensaje: "" });
+	assert.deepEqual(rutas, ["/ClienteAlta(Id=abc)", "/ClienteAlta(Id=abc)"]);
+});
+
+test("crearClienteSap: un documento repetido devuelve el Kunnr existente sin esperar", async () => {
+	const { modelo, rutas } = modeloAlta({ Id: "abc", Creado: false, Kunnr: "0100019193", Mensaje: "El documento ya existe" }, []);
+	const r = await crearClienteSap(como(modelo), alta, sinPausa);
+	assert.deepEqual(r, { kunnr: "0100019193", creado: false, mensaje: "El documento ya existe" });
+	assert.equal(rutas.length, 0);
+});
+
+test("crearClienteSap: un mensaje de error sin Kunnr es un rechazo y no se sigue esperando", async () => {
+	const { modelo } = modeloAlta({ Id: "abc", Creado: false, Mensaje: "Solicitud en proceso" }, [{ Creado: false, Mensaje: "Ubigeo no reconocido: Lima/Lima/Xyz" }]);
+	const r = await crearClienteSap(como(modelo), alta, sinPausa);
+	assert.equal(r.kunnr, "");
+	assert.match(r.mensaje, /Ubigeo no reconocido/);
+});
+
+test("crearClienteSap: si no termina en el tiempo de espera avisa que sigue en proceso", async () => {
+	const { modelo } = modeloAlta({ Id: "abc", Creado: false, Mensaje: "Solicitud en proceso" }, [{ Creado: false, Mensaje: "Solicitud en proceso" }]);
+	await assert.rejects(() => crearClienteSap(como(modelo), alta, { ...sinPausa, intervaloMs: 1000, maximoMs: 3000 }), AltaEnProcesoError);
 });

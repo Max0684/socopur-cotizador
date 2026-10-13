@@ -14,7 +14,7 @@ import { areasOrgCanal, textoSolicitudAmpliacion, type CondicionArea, type Opcio
 import { evaluarBloqueoPedido, type BloqueoPedido } from "com/socopur/cotizador/model/BloqueoPedido";
 import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type EntregaParaGuardar, ENVIO_UNICO, type VinAsignado, esperarVinculos, leerMotivoVinculo, anularGrupo } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
-import { cargarUbigeo, crearClienteSap, leerBloqueoEdicion, leerCambiosCliente, modificarClienteSap, serviciosDeCliente, type CambiosCliente, type DatosAlta } from "com/socopur/cotizador/model/ClienteEscrituraService";
+import { AltaEnProcesoError, cargarUbigeo, crearClienteSap, leerBloqueoEdicion, leerCambiosCliente, modificarClienteSap, serviciosDeCliente, type CambiosCliente, type DatosAlta } from "com/socopur/cotizador/model/ClienteEscrituraService";
 import { buscarRepuestosConStock, disponibilidadPorAlmacen, motivoVacio } from "com/socopur/cotizador/model/MaterialesService";
 import { cargarPreciosLista, precioListaDisponible, textoPrecioLista } from "com/socopur/cotizador/model/PrecioListaService";
 import { textoOrganizacion } from "com/socopur/cotizador/model/VendedoresService";
@@ -3772,7 +3772,12 @@ export default class Oferta extends Controller {
 			}
 			MessageToast.show(r.creado ? (i18n.getText("altaCreadoSap", [r.kunnr]) as string) : (i18n.getText("altaYaExistia", [r.kunnr]) as string), { duration: 6000 });
 		} catch (error) {
-			oferta.setProperty("/alta/errores", i18n.getText("altaErrSap", [this.motivoDeError(error)]) as string);
+			if (error instanceof AltaEnProcesoError) {
+				oferta.setProperty("/altaAbierta", false);
+				MessageBox.information(i18n.getText("altaEnProceso", [a.doc]) as string);
+			} else {
+				oferta.setProperty("/alta/errores", i18n.getText("altaErrSap", [this.motivoDeError(error)]) as string);
+			}
 		} finally {
 			this.getView()?.setBusy(false);
 		}
