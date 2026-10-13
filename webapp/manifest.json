@@ -18,7 +18,25 @@
 					"localUri": "localService/mainService/metadata.xml"
 				}
 			}
+		},
+		"crossNavigation": {
+			"inbounds": {
+				"Cotizador-display": {
+					"semanticObject": "Cotizador",
+					"action": "display",
+					"title": "{{appTitle}}",
+					"subTitle": "{{appDescription}}",
+					"signature": {
+						"parameters": {},
+						"additionalParameters": "allowed"
+					}
+				}
+			}
 		}
+	},
+	"sap.cloud": {
+		"public": true,
+		"service": "socopur.cotizador"
 	},
 	"sap.ui": {
 		"technology": "UI5",

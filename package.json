@@ -10,6 +10,9 @@
     "lint": "ui5lint",
     "gen:types": "node scripts/gen-odata-types.mjs",
     "start:sap": "ui5 serve --config ui5-sap.yaml --open index.html",
+    "build:cf": "ui5 build preload --clean-dest --config ui5-deploy.yaml --include-task=generateCachebusterInfo",
+    "build:mta": "mbt build",
+    "deploy:cf": "cf deploy mta_archives/socopur-cotizador_0.1.0.mtar",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tests/helpers/registrar.mjs --test \"tests/**/*.test.ts\""
   },
   "devDependencies": {
@@ -18,6 +21,7 @@
     "@ui5/linter": "^1.0.0",
     "typescript": "~5.9.3",
     "ui5-middleware-simpleproxy": "^3.9.0",
+    "ui5-task-zipper": "^3.0.0",
     "ui5-tooling-transpile": "^3.0.0"
   }
 }

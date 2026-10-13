@@ -1,0 +1,22 @@
+# Compilacion para publicar en el repositorio HTML5 de BTP (npm run build:cf). No usa el servidor local ni el proxy.
+specVersion: "4.0"
+metadata:
+  name: com.socopur.cotizador
+type: application
+resources:
+  configuration:
+    propertiesFileSourceEncoding: UTF-8
+builder:
+  resources:
+    excludes:
+      - "/test/**"
+      - "/localService/**"
+  customTasks:
+    - name: ui5-tooling-transpile-task
+      afterTask: replaceVersion
+    - name: ui5-task-zipper
+      afterTask: generateCachebusterInfo
+      configuration:
+        archiveName: comsocopurcotizador
+        additionalFiles:
+          - xs-app.json

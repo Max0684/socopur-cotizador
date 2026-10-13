@@ -1,0 +1,7 @@
+{
+	"xsappname": "socopur-cotizador",
+	"tenant-mode": "dedicated",
+	"description": "Seguridad del Cotizador Socopur",
+	"scopes": [],
+	"role-templates": []
+}
