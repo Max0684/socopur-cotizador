@@ -108,6 +108,20 @@ async function crearHijaCtx(modelo: ODataModel, ruta: string, padre: Context, da
 	return contexto;
 }
 
+/**
+ * Posicion del ultimo marcador "[<prefijo> <grupo>]" que SAP deja en el Comentario de la cotizacion, o -1 si no esta. El numero de grupo se compara
+ * sin ceros a la izquierda: el servicio entrega GrupoNo "1" y los jobs escriben "[Anular grupo 01]" (visto en la prueba real del 13/10/2026).
+ */
+export function posicionMarcador(comentario: string, prefijo: string, grupoNo: string): number {
+	const numero = grupoNo.replace(/^0+(?=\d)/, "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+	const patron = new RegExp(`\\[${prefijo} 0*${numero}\\]`, "g");
+	let ultimo = -1;
+	for (let r = patron.exec(comentario); r; r = patron.exec(comentario)) {
+		ultimo = r.index;
+	}
+	return ultimo;
+}
+
 /** Grupo.Estado de un grupo cuya oferta (o pedido) se esta creando en segundo plano. */
 const ESTADO_EN_PROCESO = "Q";
 /** Grupo.Estado de un grupo cuyo pedido se esta creando en segundo plano. */
@@ -256,7 +270,6 @@ export async function crearPedidoGrupo(modelo: ODataModel, cotizId: string, grup
 				.requestObject()) as Pick<Cotizacion, "Comentario">
 		).Comentario ?? "";
 	// El Estado del grupo queda en "P" tanto si el pedido se crea como si SAP lo rechaza: el fallo solo se ve en el Comentario de la cotizacion.
-	const marcador = `[Pedido grupo ${grupoNo}]`;
 	const comentarioAntes = await leerComentario().catch(() => "");
 	const operacion = modelo.bindContext(`${ruta}/${NS}.crearPedido(...)`);
 	// ui5lint-disable-next-line no-deprecated-api -- invoke() existe desde UI5 1.123; el servidor de Socopur y los tipos son 1.120
@@ -276,8 +289,9 @@ export async function crearPedidoGrupo(modelo: ODataModel, cotizId: string, grup
 			// Sin numero de pedido todavia: si SAP dejo un motivo de rechazo del pedido de ESTE grupo, no se espera mas. Si el comentario es
 			// el mismo de antes (un intento anterior del mismo grupo) se confirma tras dos vueltas, para no tomar un error viejo por nuevo.
 			const comentario = await leerComentario().catch(() => "");
-			if (comentario.includes(marcador) && (comentario !== comentarioAntes || vuelta >= 2)) {
-				throw new Error(comentario.slice(comentario.lastIndexOf(marcador)));
+			const desde = posicionMarcador(comentario, "Pedido grupo", grupoNo);
+			if (desde >= 0 && (comentario !== comentarioAntes || vuelta >= 2)) {
+				throw new Error(comentario.slice(desde));
 			}
 		}
 		if (!grupo.VbelnPedido && grupo.Estado === ESTADO_PEDIDO_EN_PROCESO) {
@@ -341,7 +355,7 @@ export async function anularGrupo(modelo: ODataModel, cotizId: string, grupoNo: 
 		try {
 			const c = (await modelo.bindContext(`/Cotizacion(CotizId=${cotizId},IsActiveEntity=true)`, undefined, { $select: "Comentario", $$ownRequest: true }).requestObject()) as Pick<Cotizacion, "Comentario">;
 			const texto = c.Comentario ?? "";
-			const desde = texto.lastIndexOf(`[Anular grupo ${grupoNo}]`);
+			const desde = posicionMarcador(texto, "Anular grupo", grupoNo);
 			mensaje = desde >= 0 ? texto.slice(desde).trim() : "";
 		} catch {
 			mensaje = "";

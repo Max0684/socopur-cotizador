@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { asignarVinItem, ATNAM_VARIANTE, camposEntrega, ENVIO_UNICO, crearPedidoGrupo, esperarVinculos, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, OfertaEnProcesoError, liberarVinItem, renovarCotizacion, type GrupoParaGuardar, type OfertaParaGuardar } from "../webapp/model/CotizacionesService.ts";
+import { anularGrupo, asignarVinItem, ATNAM_VARIANTE, posicionMarcador, camposEntrega, ENVIO_UNICO, crearPedidoGrupo, esperarVinculos, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, OfertaEnProcesoError, liberarVinItem, renovarCotizacion, type GrupoParaGuardar, type OfertaParaGuardar } from "../webapp/model/CotizacionesService.ts";
 import { crearModeloFalso } from "./helpers/modeloFalso.ts";
 
 function grupo(extra: Partial<GrupoParaGuardar> = {}): GrupoParaGuardar {
@@ -422,4 +422,30 @@ test("guardarCotizacion: direccion de un solo uso crea la fila Direc con rol WE 
 	assert.equal(creadas[0].datos.AddrnumberWe, "$");
 	assert.deepEqual(creadas[1].datos, { PartnRole: "WE", Name1: "Cliente SA", Street: "Av. Prueba 123", Country: "PE" });
 	assert.deepEqual(llamadas.slice(0, 3).map((l) => l.split("(")[0]), ["create /Cotizacion", "create _Direc", "create _Grupo"]);
+});
+
+test("posicionMarcador: el grupo '1' del servicio coincide con '[Anular grupo 01]' del job y toma el ultimo marcador", () => {
+	const texto = "x [Anular grupo 01] viejo | y [Anular grupo 01] La clase Z311 no es de vehiculos";
+	assert.equal(posicionMarcador(texto, "Anular grupo", "1"), texto.lastIndexOf("[Anular grupo 01]"));
+	assert.equal(posicionMarcador(texto, "Anular grupo", "01"), texto.lastIndexOf("[Anular grupo 01]"));
+	assert.equal(posicionMarcador(texto, "Anular grupo", "2"), -1);
+	assert.equal(posicionMarcador("[Anular grupo 10] a", "Anular grupo", "1"), -1);
+	assert.equal(posicionMarcador("sin marcador", "Pedido grupo", "1"), -1);
+});
+
+test("anularGrupo: el motivo del job sale aunque el grupo sea '1' y el marcador diga 01", async () => {
+	const modelo = {
+		bindContext(ruta: string) {
+			return {
+				setParameter: () => undefined,
+				execute: async () => undefined,
+				getBoundContext: () => ({ getObject: () => ({ Estado: "Y" }) }),
+				requestObject: async () =>
+					ruta.includes("/Grupo(") ? { Estado: "R" } : { Comentario: "[Anular grupo 01] La clase Z311 no es de vehiculos (solo Z112/Z116)" }
+			};
+		}
+	};
+	const r = await anularGrupo(como(modelo), "COT-1", "1", "prueba", { pausa: async () => undefined, intervaloMs: 1 });
+	assert.equal(r.estado, "R");
+	assert.match(r.mensaje, /La clase Z311 no es de vehiculos/);
 });
