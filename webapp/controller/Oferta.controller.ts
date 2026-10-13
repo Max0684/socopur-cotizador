@@ -4342,7 +4342,8 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 				oferta.setProperty("/numero", esperaNumero ? "" : numero);
 				// Oferta real (lista leida del servicio) con numero SAP: el detalle se carga del documento SAP.
 				const numeroSap = cabecera?.numero || numero;
-				const sinPedido = cabecera?.estado !== this.i18n().getText("estadoPedido");
+				// Una oferta con pedido o ya anulada no se ofrece de nuevo para copiar a pedido.
+				const sinPedido = cabecera?.estado !== this.i18n().getText("estadoPedido") && cabecera?.estado !== this.i18n().getText("estadoAnulada");
 				if (this.usarOData() && /^\d{10}$/.test(numeroSap)) {
 					// Con el detalle ya leido, una oferta sin pedido queda lista para Copiar a pedido (antes solo pasaba tras guardar en esta pantalla).
 					void this.cargarDetalleReal(numeroSap).then(() => (sinPedido && cabecera?.cotizId ? this.prepararPedidoDeOfertaAbierta(cabecera.cotizId, numeroSap) : undefined));
@@ -4360,7 +4361,11 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 			if (numero) {
 				const cab = (mock.getProperty("/ofertas") as { numero: string; fecha: string; estado: string; cotizId?: string }[]).find((o) => o.numero === numero || o.cotizId === numero);
 				const conPedido = cab?.estado === i18n.getText("estadoPedido");
-				if (conPedido && this.usarOData() && cab?.cotizId) {
+				const anulada = cab?.estado === i18n.getText("estadoAnulada");
+				if (anulada && this.usarOData() && cab?.cotizId) {
+					// Anulada: se lee el grupo para mostrar el pedido anulado en su pestana (cargarPedidoReal ya sabe marcarlo).
+					void this.cargarPedidoReal(cab.cotizId, cab.numero);
+				} else if (conPedido && this.usarOData() && cab?.cotizId) {
 					void this.cargarPedidoReal(cab.cotizId, cab.numero);
 				} else if (conPedido) {
 					// Oferta con pedido: solo lectura (se usa el mismo bloqueo que tras crear el pedido)
