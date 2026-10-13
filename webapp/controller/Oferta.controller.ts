@@ -3037,9 +3037,13 @@ export default class Oferta extends Controller {
 	/** Pide el motivo y anula el pedido del grupo (SAP lo hace en segundo plano: devuelve el VIN, rechaza pedido y oferta). */
 	public onAnularPedido(): void {
 		const oferta = this.modeloOferta();
-		const datos = oferta.getProperty("/anulacion") as { cotizId: string; grupoNo: string };
+		const datos = oferta.getProperty("/anulacion") as { cotizId: string; grupoNo: string } | undefined;
 		const numero = (oferta.getProperty("/pedidos/0/numero") as string) ?? "";
 		const i18n = this.i18n();
+		if (!datos?.cotizId || !datos.grupoNo) {
+			MessageBox.error(i18n.getText("anularSinDatos") as string);
+			return;
+		}
 		const motivo = new TextArea({ width: "100%", rows: 3, maxLength: 200, placeholder: i18n.getText("anularMotivo") as string, liveChange: () => confirmar.setEnabled(motivo.getValue().trim().length > 0) });
 		const confirmar = new Button({
 			text: i18n.getText("anularConfirmar") as string,
@@ -3145,6 +3149,7 @@ export default class Oferta extends Controller {
 		const filas: Record<string, string>[] = [];
 		const numeros: string[] = [];
 		const estadosReales: { real: GrupoEstado | null; clase: string; numeroPedido: string }[] = [];
+		const creados: { cotizId: string; grupoNo: string }[] = [];
 		vista?.setBusy(true);
 		// Antes de llamar a SAP: si el disponible del almacen no alcanza, se dice aqui (SAP lo rechazaria igual) y no se crea nada.
 		const faltan = await this.lineasSinDisponible();
@@ -3159,6 +3164,7 @@ export default class Oferta extends Controller {
 			for (const o of guardadas) {
 				const pedido = await crearPedidoGrupo(odata, o.cotizId as string, o.grupoNo as string);
 				numeros.push(pedido.vbelnPedido);
+				creados.push({ cotizId: o.cotizId as string, grupoNo: o.grupoNo as string });
 				// Estado REAL leido de SAP (vista GrupoEstado sobre VBAK); si no se puede leer, se dice que no hay informacion.
 				const real = await leerEstadoPedido(odata, o.cotizId as string, o.grupoNo as string);
 				estadosReales.push({ real, clase: o.clasePedido ?? "", numeroPedido: pedido.vbelnPedido });
@@ -3186,6 +3192,8 @@ export default class Oferta extends Controller {
 		}
 		if (numeros.length > 0) {
 			oferta.setProperty("/pedidos", filas);
+			// El boton "Anular pedido" actua sobre el primer pedido creado (igual que al abrir una oferta ya guardada).
+			this.mostrarAnulacion({ ...creados[0], estado: "P", hayPedido: true });
 			this.avisarSiguientePaso(estadosReales);
 			oferta.setProperty("/guardado", { visible: true, texto: i18n.getText("pedidosCreados", [numeros.join(", ")]) as string });
 		}
