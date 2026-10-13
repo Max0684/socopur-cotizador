@@ -14,6 +14,7 @@ import { areasOrgCanal, textoSolicitudAmpliacion, type CondicionArea, type Opcio
 import { evaluarBloqueoPedido, type BloqueoPedido } from "com/socopur/cotizador/model/BloqueoPedido";
 import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type EntregaParaGuardar, ENVIO_UNICO, type VinAsignado, esperarVinculos, leerMotivoVinculo, anularGrupo } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
+import { validarDocumento } from "com/socopur/cotizador/model/Documento";
 import { AltaEnProcesoError, cargarUbigeo, crearClienteSap, leerBloqueoEdicion, leerCambiosCliente, modificarClienteSap, serviciosDeCliente, type CambiosCliente, type DatosAlta } from "com/socopur/cotizador/model/ClienteEscrituraService";
 import { buscarRepuestosConStock, disponibilidadPorAlmacen, motivoVacio } from "com/socopur/cotizador/model/MaterialesService";
 import { cargarPreciosLista, precioListaDisponible, textoPrecioLista } from "com/socopur/cotizador/model/PrecioListaService";
@@ -3708,11 +3709,10 @@ export default class Oferta extends Controller {
 		const clientes = this.modeloMock().getProperty("/clientes") as Record<string, Cliente>;
 		const errores: string[] = [];
 		const doc = (a.doc ?? "").trim();
-		if (a.tipoDoc === "DNI" && !/^\d{8}$/.test(doc)) {
-			errores.push(i18n.getText("altaErrDni") as string);
-		}
-		if (a.tipoDoc === "RUC" && !/^(10|15|17|20)\d{9}$/.test(doc)) {
-			errores.push(i18n.getText("altaErrRuc") as string);
+		// El digito verificador del RUC se exige con SAP real; el RUC de ejemplo del prototipo no lo cumple.
+		const errorDoc = validarDocumento(a.tipoDoc, doc, this.usarOData());
+		if (errorDoc) {
+			errores.push(i18n.getText({ dniFormato: "altaErrDni", dniFalso: "altaErrDniFalso", rucFormato: "altaErrRuc", rucDigito: "altaErrRucDigito" }[errorDoc]) as string);
 		}
 		if (!this.usarOData() && clientes[doc]) {
 			errores.push(i18n.getText("altaErrExiste") as string);
