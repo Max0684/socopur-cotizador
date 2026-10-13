@@ -1,4 +1,4 @@
-# Servidor de desarrollo CONTRA SAP REAL (DS4, mandante 100) a traves del tunel HTTPS.
+# Servidor de desarrollo CONTRA SAP REAL (DS4, mandante 130 por defecto) a traves del tunel HTTPS.
 # Uso: .\start-sap.ps1 -Url https://<host-del-tunel>   (pide usuario y contrasena; no se guardan)
 # Reenvia /sap/** al sistema SAP. NO PROBADO contra SAP todavia.
 specVersion: "4.0"
@@ -28,4 +28,4 @@ server:
         # (UI5_MIDDLEWARE_SIMPLE_PROXY_BASEURI / _USERNAME / _PASSWORD), puestas por start-sap.ps1.
         baseUri: "https://sin-configurar.invalid/sap"
         query:
-          sap-client: "100"
+          sap-client: "130"

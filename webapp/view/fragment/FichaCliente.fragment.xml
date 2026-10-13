@@ -32,6 +32,27 @@
 				<List items="{cli>/direcciones}" class="sapUiSmallMarginBottom">
 					<StandardListItem title="{cli>alias}" description="{cli>texto}" icon="sap-icon://addresses" />
 				</List>
+				<Title text="{i18n>historialTitulo}" level="H4" class="sapUiSmallMarginBottom" visible="{= ${cli>/cambios}.length > 0 }" />
+				<Table items="{cli>/cambios}" visible="{= ${cli>/cambios}.length > 0 }" class="sapUiSmallMarginBottom">
+					<columns>
+						<Column width="7rem"><Text text="{i18n>historialFecha}" /></Column>
+						<Column width="8rem"><Text text="{i18n>historialUsuario}" /></Column>
+						<Column><Text text="{i18n>historialCampo}" /></Column>
+						<Column><Text text="{i18n>historialAntes}" /></Column>
+						<Column><Text text="{i18n>historialDespues}" /></Column>
+					</columns>
+					<items>
+						<ColumnListItem>
+							<cells>
+								<Text text="{cli>fecha}" />
+								<Text text="{cli>usuario}" />
+								<Text text="{cli>campo}" />
+								<Text text="{cli>antes}" />
+								<Text text="{cli>despues}" />
+							</cells>
+						</ColumnListItem>
+					</items>
+				</Table>
 				<Title text="{i18n>areasVenta}" level="H4" class="sapUiSmallMarginBottom" />
 				<List items="{cli>/areas}" noDataText="{i18n>areasNinguna}">
 					<StandardListItem title="{cli>text}" icon="sap-icon://business-by-design" />

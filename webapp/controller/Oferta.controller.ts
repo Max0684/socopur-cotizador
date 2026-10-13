@@ -14,7 +14,7 @@ import { areasOrgCanal, textoSolicitudAmpliacion, type CondicionArea, type Opcio
 import { evaluarBloqueoPedido, type BloqueoPedido } from "com/socopur/cotizador/model/BloqueoPedido";
 import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type EntregaParaGuardar, ENVIO_UNICO, type VinAsignado, esperarVinculos, leerMotivoVinculo, anularGrupo } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
-import { crearClienteSap, leerBloqueoEdicion, modificarClienteSap, serviciosDeCliente, type CambiosCliente, type DatosAlta } from "com/socopur/cotizador/model/ClienteEscrituraService";
+import { crearClienteSap, leerBloqueoEdicion, leerCambiosCliente, modificarClienteSap, serviciosDeCliente, type CambiosCliente, type DatosAlta } from "com/socopur/cotizador/model/ClienteEscrituraService";
 import { buscarRepuestosConStock, disponibilidadPorAlmacen, motivoVacio } from "com/socopur/cotizador/model/MaterialesService";
 import { cargarPreciosLista, precioListaDisponible, textoPrecioLista } from "com/socopur/cotizador/model/PrecioListaService";
 import { textoOrganizacion } from "com/socopur/cotizador/model/VendedoresService";
@@ -1508,7 +1508,25 @@ export default class Oferta extends Controller {
 	public async onFichaCompleta(): Promise<void> {
 		const cl = this.clienteActual();
 		if (cl) {
-			await this.abrirCliente("FichaCliente", { ...cl, direcciones: this.direccionesDe(cl), areas: this.areasTexto(cl.areas ?? []) });
+			await this.abrirCliente("FichaCliente", { ...cl, direcciones: this.direccionesDe(cl), areas: this.areasTexto(cl.areas ?? []), cambios: [] });
+			void this.cargarHistorialCliente(cl);
+		}
+	}
+
+	/** Historial de cambios del cliente (quien, cuando y que campo) en la ficha. Solo con SAP real y si el servicio ya publica ClienteCambio. */
+	private async cargarHistorialCliente(cl: Cliente): Promise<void> {
+		if (!this.usarOData() || !cl.kunnr) {
+			return;
+		}
+		try {
+			const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel;
+			if (!(await serviciosDeCliente(odata)).historial) {
+				return;
+			}
+			const cambios = await leerCambiosCliente(odata, cl.kunnr);
+			(this.dialogosCliente["FichaCliente"]?.getModel("cli") as JSONModel | undefined)?.setProperty("/cambios", cambios);
+		} catch {
+			// el historial es informativo: si no se puede leer, la ficha se muestra sin el
 		}
 	}
 

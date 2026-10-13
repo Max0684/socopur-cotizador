@@ -1,6 +1,6 @@
 #Requires -Version 5.1
 <#
-  Arranca el Cotizador en local con el proxy hacia SAP Socopur DS4 (mandante 100) por el tunel HTTPS.
+  Arranca el Cotizador en local con el proxy hacia SAP Socopur DS4 (mandante 130 por defecto, -Client lo cambia) por el tunel HTTPS.
     .\start-sap.ps1 -Url https://<host-del-tunel>
   Pide usuario y contrasena por consola; solo viven en variables de entorno de este proceso.
   Ojo: cada peticion lleva las credenciales; si la contrasena es incorrecta, SAP puede bloquear el usuario.
