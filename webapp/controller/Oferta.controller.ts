@@ -420,7 +420,7 @@ export default class Oferta extends Controller {
 			this.dialogoBusqueda.setModel(new JSONModel(), "busqueda");
 		}
 		const tipo = (this.modeloMock().getProperty("/perfil/busqueda/tipo") as string) ?? "repuestos";
-		this.modeloBusqueda().setData(this.busquedaInicial(tipo, true));
+		this.modeloBusqueda().setData(this.busquedaInicial(tipo, false));
 		this.dialogoBusqueda.open();
 		void this.definirOrigenDeMateriales();
 	}
@@ -450,10 +450,10 @@ export default class Oferta extends Controller {
 		b.setData({ ...inicial, ...origen });
 	}
 
-	/** Al cambiar de tipo se limpian los segmentos (como hoy) y se precargan los del perfil. */
+	/** Al cambiar de tipo se limpian los segmentos y los filtros: la busqueda siempre empieza sin nada elegido. */
 	public onCambiaTipo(): void {
 		const tipo = this.modeloBusqueda().getProperty("/tipo") as string;
-		this.reiniciarBusqueda(this.busquedaInicial(tipo, true));
+		this.reiniciarBusqueda(this.busquedaInicial(tipo, false));
 		this.limpiarSeleccion();
 	}
 
