@@ -1,6 +1,6 @@
 # Despliegue al S/4 (aplicacion UI5 / BSP) para publicarla en el Fiori Launchpad del propio S/4.
 # Uso en BAS: npm run deploy:abap:prueba (compila y simula, no escribe) y luego npm run deploy:abap (sube la app).
-# El destino S4HANA_AROJAS2 y el mandante 130 sirven solo para llegar al sistema; la aplicacion es independiente del mandante.
+# Se sube por el mandante 100: ahi el Gateway tiene GATEWAY_VIRUSCAN_PROFILE = "-" (sin perfil de antivirus) y el 130 no. La app BSP es independiente del mandante.
 specVersion: "4.0"
 metadata:
   name: com.socopur.cotizador
@@ -12,7 +12,7 @@ builder:
       configuration:
         target:
           destination: S4HANA_AROJAS2
-          client: "130"
+          client: "100"
         app:
           name: YCOTIZADOR
           description: Cotizador Socopur
