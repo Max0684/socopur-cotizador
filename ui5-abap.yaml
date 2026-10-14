@@ -20,3 +20,4 @@ builder:
           transport: DS4K917450
         exclude:
           - /test/
+          - \.ts$
