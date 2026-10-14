@@ -60,7 +60,7 @@
 								width="17rem"
 								items="{busqueda>/familias}"
 								selectedKey="{busqueda>/familia}"
-								enabled="{= ${busqueda>/familias}.length > 1 }"
+								enabled="{= (${busqueda>/familias} || []).length > 1 }"
 								change=".onCambiaSegmento">
 								<core:Item key="{busqueda>key}" text="{busqueda>text}" />
 							</Select>

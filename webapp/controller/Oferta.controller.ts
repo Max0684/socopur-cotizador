@@ -1,5 +1,5 @@
 import Controller from "sap/ui/core/mvc/Controller";
-import Messaging from "sap/ui/core/Messaging";
+import { mensajesVigentes, quitarTodosLosMensajes } from "com/socopur/cotizador/model/Mensajes";
 import ODataModel from "sap/ui/model/odata/v4/ODataModel";
 import { cargarDetalleOferta } from "com/socopur/cotizador/model/OfertasService";
 import type { GrupoEstado } from "com/socopur/cotizador/model/odata/Entidades";
@@ -1666,7 +1666,7 @@ export default class Oferta extends Controller {
 			this.dialogoClienteActual?.close();
 			return;
 		}
-		Messaging.removeAllMessages();
+		quitarTodosLosMensajes();
 		this.dialogoClienteActual?.setBusy(true);
 		try {
 			await modificarClienteSap((this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel, cl.kunnr as string, cambios);
@@ -3321,7 +3321,7 @@ export default class Oferta extends Controller {
 		const oferta = this.modeloOferta();
 		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel;
 		// Sin errores viejos en el gestor de mensajes: el motivo que se muestra es el de esta busqueda.
-		Messaging.removeAllMessages();
+		quitarTodosLosMensajes();
 		try {
 			// El cliente se busca en TODAS las organizaciones: es de toda la empresa. Si no esta dado de alta en la organizacion y el canal
 			// de la oferta, la pantalla lo avisa y permite ampliar el area de ventas.
@@ -3763,7 +3763,7 @@ export default class Oferta extends Controller {
 		const i18n = this.i18n();
 		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel;
 		oferta.setProperty("/alta/errores", "");
-		Messaging.removeAllMessages();
+		quitarTodosLosMensajes();
 		this.getView()?.setBusy(true);
 		try {
 			if (!(await serviciosDeCliente(odata)).alta) {
@@ -3962,7 +3962,7 @@ export default class Oferta extends Controller {
 			return;
 		}
 		// Los mensajes de errores anteriores (p. ej. un PIN mal escrito al identificarse) no son de este guardado: si se dejan, el motivo sale equivocado.
-		Messaging.removeAllMessages();
+		quitarTodosLosMensajes();
 		const vista = this.getView();
 		vista?.setBusy(true);
 		try {
@@ -4008,7 +4008,7 @@ export default class Oferta extends Controller {
 		const e = error as Error & { cause?: Error };
 		const partes = [e.cause?.message ?? ""];
 		if (!partes[0] || e.message.includes("$batch failed")) {
-			const mensajes = (Messaging.getMessageModel().getData() as { message?: string; technical?: boolean; type?: string }[]) ?? [];
+			const mensajes = mensajesVigentes();
 			partes.push(...mensajes.filter((m) => m.type === "Error" && m.message && !m.message.includes("$batch failed")).map((m) => m.message as string));
 		}
 		const unicos = [...new Set(partes.filter(Boolean))];
