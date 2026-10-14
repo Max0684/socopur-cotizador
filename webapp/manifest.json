@@ -1,5 +1,5 @@
 {
-	"_version": "1.65.0",
+	"_version": "1.63.0",
 	"sap.app": {
 		"id": "com.socopur.cotizador",
 		"type": "application",
@@ -93,13 +93,7 @@
 					"operationMode": "Server",
 					"autoExpandSelect": true,
 					"earlyRequests": false,
-					"groupId": "$auto",
-					"metadataUrlParams": {
-						"sap-language": "ES"
-					},
-					"serviceUrlParams": {
-						"sap-language": "ES"
-					}
+					"groupId": "$auto"
 				}
 			}
 		},
