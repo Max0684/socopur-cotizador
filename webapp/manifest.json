@@ -93,7 +93,13 @@
 					"operationMode": "Server",
 					"autoExpandSelect": true,
 					"earlyRequests": false,
-					"groupId": "$auto"
+					"groupId": "$auto",
+					"metadataUrlParams": {
+						"sap-language": "ES"
+					},
+					"serviceUrlParams": {
+						"sap-language": "ES"
+					}
 				}
 			}
 		},
