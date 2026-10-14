@@ -83,3 +83,8 @@ Quita la app y sus servicios (repositorio, destino y xsuaa creados por este desp
 | `xs-security.json` | Seguridad (xsuaa) |
 | `ui5-deploy.yaml` | Compilación para Cloud Foundry (zip de la app) |
 | `webapp/manifest.json` | `sap.cloud.service = socopur.cotizador` y la navegación `Cotizador-display` para el Launchpad |
+
+## Direccion del servicio segun donde se publique
+
+- **Fiori Launchpad del S/4 (BSP) y desarrollo local:** la direccion del servicio en `webapp/manifest.json` es absoluta (`/sap/opu/odata4/...`). Es el valor normal del proyecto.
+- **BTP (esta guia):** detras del approuter debe ser relativa (`sap/opu/odata4/...`). `npm run build:cf` (y por tanto `build:mta`) la cambia solo durante la compilacion y la deja de nuevo absoluta. Si se edita a mano: `node scripts/uri-servicio.mjs relativa|absoluta`.

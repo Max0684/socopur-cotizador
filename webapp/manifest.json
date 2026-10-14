@@ -11,7 +11,7 @@
 		},
 		"dataSources": {
 			"mainService": {
-				"uri": "sap/opu/odata4/sap/yui_cotiz_v4/srvd_a2x/sap/yui_cotiz_srv/0001/",
+				"uri": "/sap/opu/odata4/sap/yui_cotiz_v4/srvd_a2x/sap/yui_cotiz_srv/0001/",
 				"type": "OData",
 				"settings": {
 					"odataVersion": "4.0",

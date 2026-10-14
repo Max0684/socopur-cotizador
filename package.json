@@ -11,10 +11,10 @@
     "gen:types": "node scripts/gen-odata-types.mjs",
     "start:sap": "ui5 serve --config ui5-sap.yaml --open index.html",
     "start:bas": "ui5 serve --config ui5-bas.yaml --port 8080 --accept-remote-connections",
-    "build:cf": "ui5 build preload --clean-dest --config ui5-deploy.yaml --include-task=generateCachebusterInfo",
+    "build:cf": "node scripts/build-cf.mjs",
     "build:mta": "mbt build",
     "deploy:cf": "cf deploy mta_archives/socopur-cotizador_0.1.0.mtar",
-    "build:abap": "ui5 build preload --config ui5-build-abap.yaml --clean-dest --dest dist --include-task=generateCachebusterInfo",
+    "build:abap": "node scripts/uri-servicio.mjs absoluta && ui5 build preload --config ui5-build-abap.yaml --clean-dest --dest dist --include-task=generateCachebusterInfo",
     "deploy:abap:prueba": "npm run build:abap && fiori deploy --config ui5-abap.yaml --test --yes",
     "deploy:abap": "npm run build:abap && fiori deploy --config ui5-abap.yaml --yes",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tests/helpers/registrar.mjs --test \"tests/**/*.test.ts\""
