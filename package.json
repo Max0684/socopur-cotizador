@@ -14,8 +14,9 @@
     "build:cf": "ui5 build preload --clean-dest --config ui5-deploy.yaml --include-task=generateCachebusterInfo",
     "build:mta": "mbt build",
     "deploy:cf": "cf deploy mta_archives/socopur-cotizador_0.1.0.mtar",
-    "deploy:abap:prueba": "fiori deploy --config ui5-abap.yaml --test --yes",
-    "deploy:abap": "fiori deploy --config ui5-abap.yaml --yes",
+    "build:abap": "ui5 build preload --config ui5-build-abap.yaml --clean-dest --dest dist --include-task=generateCachebusterInfo",
+    "deploy:abap:prueba": "npm run build:abap && fiori deploy --config ui5-abap.yaml --test --yes",
+    "deploy:abap": "npm run build:abap && fiori deploy --config ui5-abap.yaml --yes",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tests/helpers/registrar.mjs --test \"tests/**/*.test.ts\""
   },
   "devDependencies": {

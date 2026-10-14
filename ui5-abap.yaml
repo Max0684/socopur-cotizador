@@ -1,21 +1,12 @@
 # Despliegue al S/4 (aplicacion UI5 / BSP) para publicarla en el Fiori Launchpad del propio S/4.
-# Uso en BAS: npm run deploy:abap:prueba (simula, no escribe) y luego npm run deploy:abap (sube la app).
-# El destino S4HANA_AROJAS2 y el mandante 130 los usa solo para llegar al sistema; la aplicacion es independiente del mandante.
+# Uso en BAS: npm run deploy:abap:prueba (compila y simula, no escribe) y luego npm run deploy:abap (sube la app).
+# El destino S4HANA_AROJAS2 y el mandante 130 sirven solo para llegar al sistema; la aplicacion es independiente del mandante.
 specVersion: "4.0"
 metadata:
   name: com.socopur.cotizador
 type: application
-resources:
-  configuration:
-    propertiesFileSourceEncoding: UTF-8
 builder:
-  resources:
-    excludes:
-      - "/test/**"
-      - "/localService/**"
   customTasks:
-    - name: ui5-tooling-transpile-task
-      afterTask: replaceVersion
     - name: deploy-to-abap
       afterTask: generateCachebusterInfo
       configuration:
