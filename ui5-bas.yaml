@@ -1,0 +1,30 @@
+# Servidor de desarrollo en Business Application Studio: /sap sale a SAP por el destino S4HANA_AROJAS2 (Cloud Connector), mandante 130.
+# Uso (terminal de BAS): npm run start:bas   -> abrir la vista previa del puerto 8080. No lleva usuario ni clave: las pone el destino.
+specVersion: "4.0"
+metadata:
+  name: com.socopur.cotizador
+type: application
+framework:
+  name: SAPUI5
+  version: "1.120.52"
+  libraries:
+    - name: sap.m
+    - name: sap.ui.core
+    - name: sap.ui.layout
+    - name: sap.f
+    - name: sap.uxap
+    - name: sap.ui.unified
+    - name: themelib_sap_horizon
+server:
+  customMiddleware:
+    - name: ui5-tooling-transpile-middleware
+      afterMiddleware: compression
+    - name: fiori-tools-proxy
+      afterMiddleware: compression
+      configuration:
+        ignoreCertError: false
+        backend:
+          - path: /sap
+            url: http://vhpomds4ci.sap.socopur.com:44300
+            destination: S4HANA_AROJAS2
+            client: "130"
