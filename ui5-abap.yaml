@@ -17,7 +17,9 @@ builder:
           name: YCOTIZADOR
           description: Cotizador Socopur
           package: YSDCOTI001
-          transport: DS4K917450
+          transport: DS4K917487
         exclude:
           - /test/
           - \.ts$
+          - \.map$
+          - -dbg\.js$
