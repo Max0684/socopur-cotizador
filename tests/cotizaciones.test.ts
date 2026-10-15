@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { anularGrupo, asignarVinItem, ATNAM_VARIANTE, posicionMarcador, camposEntrega, ENVIO_UNICO, crearPedidoGrupo, esperarVinculos, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, OfertaEnProcesoError, liberarVinItem, renovarCotizacion, type GrupoParaGuardar, type OfertaParaGuardar } from "../webapp/model/CotizacionesService.ts";
+import { anularGrupo, asignarVinItem, datosGuardadosDe, ATNAM_VARIANTE, posicionMarcador, camposEntrega, ENVIO_UNICO, crearPedidoGrupo, esperarVinculos, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, OfertaEnProcesoError, liberarVinItem, renovarCotizacion, type GrupoParaGuardar, type OfertaParaGuardar } from "../webapp/model/CotizacionesService.ts";
 import { crearModeloFalso } from "./helpers/modeloFalso.ts";
 
 function grupo(extra: Partial<GrupoParaGuardar> = {}): GrupoParaGuardar {
@@ -448,4 +448,47 @@ test("anularGrupo: el motivo del job sale aunque el grupo sea '1' y el marcador 
 	const r = await anularGrupo(como(modelo), "COT-1", "1", "prueba", { pausa: async () => undefined, intervaloMs: 1 });
 	assert.equal(r.estado, "R");
 	assert.match(r.mensaje, /La clase Z311 no es de vehiculos/);
+});
+
+test("datosGuardadosDe: oferta con envio vuelve a mostrar destinatario, transportista, forma de pago, fecha y modalidad", () => {
+	const d = datosGuardadosDe({
+		TipoEntrega: "01",
+		Vsbed: "01",
+		FechaEntrega: "2026-10-20T00:00:00Z",
+		Zterm: "C030",
+		KunnrWe: "0100025848",
+		AddrnumberWe: "0000012345",
+		KunnrZt: "0100030001",
+		AddrnumberZt: "0000054321",
+		_Grupo: [{ GrupoNo: "1", VbelnOferta: "3100007401", Modalidad: "rep_mayorista" }]
+	});
+	assert.equal(d.entrega, "envio");
+	assert.equal(d.vsbed, "01");
+	assert.equal(d.fechaEntrega, "2026-10-20");
+	assert.equal(d.zterm, "C030");
+	assert.equal(d.kunnrWe, "0100025848");
+	assert.equal(d.addrnumberWe, "0000012345");
+	assert.equal(d.kunnrZt, "0100030001");
+	assert.equal(d.addrnumberZt, "0000054321");
+	assert.deepEqual(d.grupos, [{ grupoNo: "1", vbelnOferta: "3100007401", modalidad: "rep_mayorista" }]);
+});
+
+test("datosGuardadosDe: recojo no trae destinatario ni transportista y la condicion de expedicion sale 02", () => {
+	const d = datosGuardadosDe({ TipoEntrega: "02", Zterm: "C000" });
+	assert.equal(d.entrega, "recojo");
+	assert.equal(d.vsbed, "02");
+	assert.equal(d.kunnrZt, "");
+	assert.equal(d.fechaEntrega, "");
+	assert.deepEqual(d.grupos, []);
+});
+
+test("datosGuardadosDe: sin TipoEntrega se toma de la condicion de expedicion (01 = envio)", () => {
+	assert.equal(datosGuardadosDe({ Vsbed: "01" }).entrega, "envio");
+	assert.equal(datosGuardadosDe({}).entrega, "recojo");
+});
+
+test("datosGuardadosDe: direccion de un solo uso sale de la fila Direc con rol WE", () => {
+	const d = datosGuardadosDe({ TipoEntrega: "01", AddrnumberWe: ENVIO_UNICO, _Direc: [{ PartnRole: "RE", Street: "AV. OTRA 1" }, { PartnRole: "WE", Street: "JR. LOS OLIVOS 123" }] });
+	assert.equal(d.addrnumberWe, ENVIO_UNICO);
+	assert.equal(d.direccionUnica, "JR. LOS OLIVOS 123");
 });

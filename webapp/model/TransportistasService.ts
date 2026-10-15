@@ -103,6 +103,13 @@ export async function buscarTransportistas(modelo: ODataModel, texto: string, pa
 	return { filas: contextos.map((c) => aFilaTransportista(c.getObject() as TransportistaSap)), total: lista.getLength() };
 }
 
+/** El transportista que es cliente (interlocutor ZT) con ese KUNNR, para volver a mostrar el de una oferta guardada; undefined si no se encuentra. */
+export async function leerTransportistaPorKunnr(modelo: ODataModel, kunnr: string): Promise<FilaTransportista | undefined> {
+	const lista = modelo.bindList("/Transportista", undefined, undefined, undefined, { $filter: `Kunnr eq '${comillas(kunnr)}'`, $orderby: "UsosZT desc,Nombre" });
+	const contextos = await lista.requestContexts(0, 1);
+	return contextos.length > 0 ? aFilaTransportista(contextos[0].getObject() as TransportistaSap) : undefined;
+}
+
 export async function cargarSedes(modelo: ODataModel, id: string): Promise<SedeTransportista[]> {
 	const contextos = await modelo.bindList("/TransportistaSede", undefined, undefined, undefined, { $filter: `Id eq '${comillas(id)}'`, $orderby: "Addrnumber" }).requestContexts(0, 50);
 	return contextos.map((c) => aSede(c.getObject() as SedeSap));

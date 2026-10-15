@@ -12,7 +12,7 @@ import { type CondicionServicio, type FilaCondicion, descuentosAplicados, filasD
 import { agruparVehiculos, buscarVehiculos, filtrarVehiculos, textoDetalleVehiculo } from "com/socopur/cotizador/model/VehiculosService";
 import { areasOrgCanal, textoSolicitudAmpliacion, type CondicionArea, type OpcionAreaCliente, condicionDeArea, opcionesAreaCliente, almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, faltaSectorDeVentas, gruposParaGuardar, igvExonerado, modalidadPorDefecto, oficinaDe, orgVehiculosDe, puedeVenderOtroCentro, sectorDeCabecera, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
 import { evaluarBloqueoPedido, type BloqueoPedido } from "com/socopur/cotizador/model/BloqueoPedido";
-import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type EntregaParaGuardar, ENVIO_UNICO, type VinAsignado, esperarVinculos, leerMotivoVinculo, anularGrupo } from "com/socopur/cotizador/model/CotizacionesService";
+import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerDatosGuardados, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type EntregaParaGuardar, ENVIO_UNICO, type VinAsignado, esperarVinculos, leerMotivoVinculo, anularGrupo } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
 import { validarDocumento } from "com/socopur/cotizador/model/Documento";
 import { usarOData as usarODataActual } from "com/socopur/cotizador/model/Modo";
@@ -26,7 +26,7 @@ import { cargarContacto, cargarDirecciones, cargarMovimientos, type Movimiento }
 import { cargarCreditoCliente, fechaLocalISO, resumirCredito, textoPorMoneda, type EstadoCuenta, type ResumenCredito } from "com/socopur/cotizador/model/CreditoClienteService";
 import { cargarModalidades, type ModalidadPantalla } from "com/socopur/cotizador/model/ModalidadesService";
 import { ordenarPorTexto } from "com/socopur/cotizador/model/Orden";
-import { buscarTransportistas, buscarTransportistasMock, cargarSedes, type FilaTransportista, type SedeTransportista, type TransportistaMock } from "com/socopur/cotizador/model/TransportistasService";
+import { buscarTransportistas, buscarTransportistasMock, cargarSedes, leerTransportistaPorKunnr, type FilaTransportista, type SedeTransportista, type TransportistaMock } from "com/socopur/cotizador/model/TransportistasService";
 import UIComponent from "sap/ui/core/UIComponent";
 import Router from "sap/ui/core/routing/Router";
 import JSONModel from "sap/ui/model/json/JSONModel";
@@ -2984,6 +2984,84 @@ export default class Oferta extends Controller {
 		}
 	}
 
+	/**
+	 * Al abrir una oferta guardada, vuelve a mostrar lo que el vendedor eligio al guardarla: forma de pago, fecha y tipo de entrega (recojo o envio con
+	 * su direccion y transportista) y la modalidad de venta. El documento SAP solo trae el cliente y las posiciones; lo demas esta en la cotizacion.
+	 * Se llama cuando el cliente y sus direcciones ya estan cargados.
+	 */
+	private async restaurarDatosGuardados(cotizId: string, numeroOferta: string): Promise<void> {
+		const componente = this.getOwnerComponent() as UIComponent;
+		const odata = componente.getModel("odata") as ODataModel | undefined;
+		if (!odata) {
+			return;
+		}
+		try {
+			const datos = await leerDatosGuardados(odata, cotizId);
+			const oferta = this.modeloOferta();
+			oferta.setProperty("/entrega", datos.entrega);
+			oferta.setProperty("/perfil/expedicion", datos.vsbed);
+			if (datos.fechaEntrega) {
+				oferta.setProperty("/fechaEntrega", datos.fechaEntrega);
+			}
+			if (datos.zterm) {
+				const formas = (oferta.getProperty("/formasPago") as { key: string; text: string }[]) ?? [];
+				if (!formas.some((f) => f.key === datos.zterm)) {
+					oferta.setProperty("/formasPago", [...formas, { key: datos.zterm, text: datos.zterm }]);
+				}
+				oferta.setProperty("/perfil/formaPago", datos.zterm);
+			}
+			// Modalidad de la oferta abierta: se guarda por grupo y la pantalla la toma de aqui al recalcular.
+			const guardada = datos.grupos.find((g) => sinCeros(g.vbelnOferta) === sinCeros(numeroOferta));
+			const grupo = (oferta.getProperty("/grupos") as Grupo[] | undefined)?.[0];
+			if (guardada?.modalidad && grupo) {
+				(oferta.getProperty("/modalidadesGrupo") as Record<string, string>)[grupo.clave] = guardada.modalidad;
+			}
+			if (datos.entrega === "envio") {
+				await this.restaurarEnvio(odata, datos);
+			}
+			this.recalcular();
+		} catch (error) {
+			console.warn(`[Cotizador] datos guardados de la oferta ${numeroOferta}: ${(error as Error).message}`);
+		}
+	}
+
+	/** Vuelve a elegir la direccion de envio (o la de un solo uso) y el transportista con su sede, tal como se guardaron. */
+	private async restaurarEnvio(odata: ODataModel, datos: Awaited<ReturnType<typeof leerDatosGuardados>>): Promise<void> {
+		const oferta = this.modeloOferta();
+		const cl = oferta.getProperty("/cliente") as Cliente | null;
+		if (cl) {
+			if (datos.addrnumberWe === ENVIO_UNICO) {
+				oferta.setProperty("/entregaDatos/direccionId", "__unica__");
+				oferta.setProperty("/entregaDatos/direccionUnica", datos.direccionUnica);
+			} else {
+				const dir = this.direccionesDe(cl).find((d) => d.addrnumber === datos.addrnumberWe && (d.kunn2 || cl.kunnr) === (datos.kunnrWe || cl.kunnr));
+				if (dir) {
+					oferta.setProperty("/entregaDatos/direccionId", dir.id);
+				}
+			}
+			this.aplicarDireccionEnvio();
+		}
+		if (!datos.kunnrZt) {
+			return;
+		}
+		let fila: FilaTransportista | undefined;
+		let sedes: SedeTransportista[] = [];
+		try {
+			fila = await leerTransportistaPorKunnr(odata, datos.kunnrZt);
+			sedes = fila ? await cargarSedes(odata, fila.id) : [];
+		} catch {
+			fila = undefined;
+		}
+		const sede = sedes.find((s) => s.key === datos.addrnumberZt);
+		oferta.setProperty("/entregaDatos/transportista", fila?.id ?? datos.kunnrZt);
+		oferta.setProperty("/entregaDatos/transportistaTexto", fila?.nombre ?? datos.kunnrZt);
+		oferta.setProperty("/entregaDatos/transportistaRol", "ZT");
+		oferta.setProperty("/entregaDatos/transportistaKunnr", datos.kunnrZt);
+		oferta.setProperty("/entregaDatos/transportistaLifnr", fila?.lifnr ?? "");
+		oferta.setProperty("/entregaDatos/sede", datos.addrnumberZt);
+		oferta.setProperty("/entregaDatos/sedeDireccion", sede?.direccion ?? "");
+	}
+
 	/** Al abrir una oferta SAP sin pedido, deja lista la clave de cotizacion y grupo para habilitar Copiar a pedido. */
 	private async prepararPedidoDeOfertaAbierta(cotizId: string, numeroOferta: string): Promise<void> {
 		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel | undefined;
@@ -4347,7 +4425,9 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 				const sinPedido = cabecera?.estado !== this.i18n().getText("estadoPedido") && cabecera?.estado !== this.i18n().getText("estadoAnulada");
 				if (this.usarOData() && /^\d{10}$/.test(numeroSap)) {
 					// Con el detalle ya leido, una oferta sin pedido queda lista para Copiar a pedido (antes solo pasaba tras guardar en esta pantalla).
-					void this.cargarDetalleReal(numeroSap).then(() => (sinPedido && cabecera?.cotizId ? this.prepararPedidoDeOfertaAbierta(cabecera.cotizId, numeroSap) : undefined));
+					void this.cargarDetalleReal(numeroSap)
+						.then(() => (cabecera?.cotizId ? this.restaurarDatosGuardados(cabecera.cotizId, numeroSap) : undefined))
+						.then(() => (sinPedido && cabecera?.cotizId ? this.prepararPedidoDeOfertaAbierta(cabecera.cotizId, numeroSap) : undefined));
 				}
 				if (detalle) {
 					const clientes = mock.getProperty("/clientes") as Record<string, Cliente>;

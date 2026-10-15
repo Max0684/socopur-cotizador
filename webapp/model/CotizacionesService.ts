@@ -89,6 +89,56 @@ export function camposEntrega(e: EntregaParaGuardar | undefined): Record<string,
 	return campos;
 }
 
+/** Entrega, forma de pago y modalidad que quedaron guardadas en la cotizacion de una oferta (lo que el vendedor eligio al guardarla). */
+export interface DatosGuardados {
+	entrega: "envio" | "recojo";
+	/** Condicion de expedicion (01 envio, 02 recojo). */
+	vsbed: string;
+	fechaEntrega: string;
+	zterm: string;
+	kunnrWe: string;
+	addrnumberWe: string;
+	/** Texto de la direccion de un solo uso (AddrnumberWe "$"), tomado de la fila Direc con rol WE. */
+	direccionUnica: string;
+	kunnrZt: string;
+	addrnumberZt: string;
+	grupos: { grupoNo: string; vbelnOferta: string; modalidad: string }[];
+}
+
+type CotizacionLeida = Partial<Omit<Cotizacion, "_Grupo" | "_Direc">> & { _Grupo?: Partial<Grupo>[]; _Direc?: { PartnRole?: string; Street?: string }[] };
+
+/** Pasa la cotizacion leida del servicio a lo que la pantalla necesita para volver a mostrar la entrega, la forma de pago y la modalidad. */
+export function datosGuardadosDe(c: CotizacionLeida): DatosGuardados {
+	const vsbed = c.Vsbed ?? "";
+	const tipo = c.TipoEntrega || vsbed;
+	const entrega = tipo === "01" ? "envio" : "recojo";
+	const unica = (c._Direc ?? []).find((d) => d.PartnRole === "WE");
+	return {
+		entrega,
+		vsbed: vsbed || (entrega === "envio" ? "01" : "02"),
+		fechaEntrega: (c.FechaEntrega ?? "").slice(0, 10),
+		zterm: c.Zterm ?? "",
+		kunnrWe: c.KunnrWe ?? "",
+		addrnumberWe: c.AddrnumberWe ?? "",
+		direccionUnica: unica?.Street ?? "",
+		kunnrZt: c.KunnrZt ?? "",
+		addrnumberZt: c.AddrnumberZt ?? "",
+		grupos: (c._Grupo ?? []).map((g) => ({ grupoNo: g.GrupoNo ?? "", vbelnOferta: g.VbelnOferta ?? "", modalidad: g.Modalidad ?? "" }))
+	};
+}
+
+/** Lee de la cotizacion activa lo que se guardo: entrega, forma de pago y la modalidad de cada oferta generada. */
+export async function leerDatosGuardados(modelo: ODataModel, cotizId: string): Promise<DatosGuardados> {
+	const cot = (await modelo
+		.bindContext(`/Cotizacion(CotizId=${cotizId},IsActiveEntity=true)`, undefined, {
+			$select: "CotizId,Zterm,Vsbed,TipoEntrega,FechaEntrega,KunnrWe,AddrnumberWe,KunnrZt,AddrnumberZt",
+			$expand: { _Grupo: { $select: "GrupoNo,VbelnOferta,Modalidad" }, _Direc: { $select: "PartnRole,Street" } },
+			$$ownRequest: true
+		})
+		.requestObject()) as CotizacionLeida;
+	return datosGuardadosDe(cot);
+}
+
 /** El servicio recibe los decimales como texto (cabecera IEEE754Compatible del modelo V4). */
 function decimal(valor: number): string {
 	return String(valor);
