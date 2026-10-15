@@ -4,3 +4,13 @@ dist/
 *.log
 
 ui5-sap.local.yaml
+
+# Resultados de compilacion y despliegue
+mta_archives/
+resources/
+.*_mta_build_tmp/
+*.mtar
+comsocopurcotizador.zip
+
+# Variables locales (claves, tokens)
+.env
