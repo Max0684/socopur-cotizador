@@ -1568,7 +1568,7 @@
    "claseOferta": "Z300",
    "clasePedido": "Z323",
    "expedicion": "recojo",
-   "nota": "Z323 está habilitada en canales 10 y 12 con sectores 50–56 y 90, no con el 99: validar cómo se arma la oferta mayorista. El cliente debe estar ampliado a ese canal."
+   "nota": "Z323 en canales 10 y 12: la cabecera lleva el sector del material (50–56 y 90), no el 99. El cliente debe estar ampliado a ese canal y sector."
   },
   {
    "key": "rep_web",
