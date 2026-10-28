@@ -11,6 +11,8 @@ resources/
 .*_mta_build_tmp/
 *.mtar
 comsocopurcotizador.zip
+# Lo genera npm run deploy:abap con lo que sube al S/4
+archive.zip
 
 # Variables locales (claves, tokens)
 .env
