@@ -372,6 +372,8 @@ export interface Cotizacion {
 	AddrnumberWe: string;
 	KunnrZt: string;
 	AddrnumberZt: string;
+	/** Transportista que solo es proveedor (interlocutor SP); publicado el 28/10/2026, puede faltar en un servicio anterior. */
+	LifnrSp?: string;
 	Kostl: string;
 	Augru: string;
 	LocalCreatedAt?: string;

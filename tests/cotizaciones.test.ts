@@ -498,6 +498,29 @@ test("datosGuardadosDe: oferta con envio vuelve a mostrar destinatario, transpor
 	assert.deepEqual(d.grupos, [{ grupoNo: "1", vbelnOferta: "3100007401", modalidad: "rep_mayorista" }]);
 });
 
+test("camposEntrega: el transportista que solo es proveedor viaja como LifnrSp (interlocutor SP), sin KunnrZt", () => {
+	const c = camposEntrega({ tipo: "01", kunnrWe: "0100000001", addrnumberWe: "55", lifnrSp: "0000012345" });
+	assert.equal(c.LifnrSp, "0000012345");
+	assert.equal("KunnrZt" in c, false);
+	assert.equal("LifnrSp" in camposEntrega({ tipo: "02", lifnrSp: "0000012345" }), false);
+});
+
+test("guardarCotizacion envia LifnrSp solo si el servicio lo publica (un campo desconocido haria rechazar la oferta)", async () => {
+	const entrega = { tipo: "01" as const, kunnrWe: "0100000001", addrnumberWe: "55", lifnrSp: "0000012345" };
+	const con = crearModeloFalso({ gruposLeidos: [{ GrupoNo: "01", VbelnOferta: "3100007390" }], camposPublicados: ["Cotizacion/AddrnumberWe", "Cotizacion/LifnrSp"] });
+	await guardarCotizacion(como(con.modelo), { ...oferta(), entrega });
+	assert.equal(con.creadas[0].datos.LifnrSp, "0000012345");
+	const sin = crearModeloFalso({ gruposLeidos: [{ GrupoNo: "01", VbelnOferta: "3100007390" }], camposPublicados: ["Cotizacion/AddrnumberWe"] });
+	await guardarCotizacion(como(sin.modelo), { ...oferta(), entrega });
+	assert.equal("LifnrSp" in sin.creadas[0].datos, false);
+	assert.equal(sin.creadas[0].datos.KunnrWe, "0100000001");
+});
+
+test("datosGuardadosDe: devuelve el transportista proveedor (LifnrSp) para volver a mostrarlo", () => {
+	assert.equal(datosGuardadosDe({ TipoEntrega: "01", LifnrSp: "0000012345" }).lifnrSp, "0000012345");
+	assert.equal(datosGuardadosDe({ TipoEntrega: "01" }).lifnrSp, "");
+});
+
 test("datosGuardadosDe: recojo no trae destinatario ni transportista y la condicion de expedicion sale 02", () => {
 	const d = datosGuardadosDe({ TipoEntrega: "02", Zterm: "C000" });
 	assert.equal(d.entrega, "recojo");

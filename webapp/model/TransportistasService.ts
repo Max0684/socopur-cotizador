@@ -110,6 +110,12 @@ export async function leerTransportistaPorKunnr(modelo: ODataModel, kunnr: strin
 	return contextos.length > 0 ? aFilaTransportista(contextos[0].getObject() as TransportistaSap) : undefined;
 }
 
+/** El transportista que solo es proveedor (interlocutor SP) con ese numero de proveedor; undefined si no se encuentra. */
+export async function leerTransportistaPorLifnr(modelo: ODataModel, lifnr: string): Promise<FilaTransportista | undefined> {
+	const contextos = await modelo.bindList("/Transportista", undefined, undefined, undefined, { $filter: `Lifnr eq '${comillas(lifnr)}'` }).requestContexts(0, 1);
+	return contextos.length > 0 ? aFilaTransportista(contextos[0].getObject() as TransportistaSap) : undefined;
+}
+
 export async function cargarSedes(modelo: ODataModel, id: string): Promise<SedeTransportista[]> {
 	const contextos = await modelo.bindList("/TransportistaSede", undefined, undefined, undefined, { $filter: `Id eq '${comillas(id)}'`, $orderby: "Addrnumber" }).requestContexts(0, 50);
 	return contextos.map((c) => aSede(c.getObject() as SedeSap));

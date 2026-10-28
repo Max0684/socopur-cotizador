@@ -34,8 +34,8 @@ export interface GrupoParaGuardar {
 
 /**
  * Entrega de la cabecera. Con envio (01) viajan el destinatario WE (cliente + numero de direccion) y, si hay, el transportista ZT.
- * AddrnumberWe "$" = direccion de un solo uso: su texto va en una fila Direc con rol WE. El transportista que solo es proveedor (SP) no se
- * envia: el servicio aun no publica ese campo.
+ * AddrnumberWe "$" = direccion de un solo uso: su texto va en una fila Direc con rol WE. El transportista que solo es proveedor viaja como
+ * interlocutor SP con su numero de proveedor (LifnrSp, publicado el 28/10/2026): asi registra Socopur casi todos sus transportistas.
  */
 export interface EntregaParaGuardar {
 	/** 01 envio, 02 recojo. */
@@ -46,6 +46,8 @@ export interface EntregaParaGuardar {
 	direccionUnica?: { nombre: string; calle: string };
 	kunnrZt?: string;
 	addrnumberZt?: string;
+	/** Transportista que solo es proveedor (SP). */
+	lifnrSp?: string;
 }
 
 export interface OfertaParaGuardar {
@@ -88,6 +90,8 @@ export function camposEntrega(e: EntregaParaGuardar | undefined): Record<string,
 	if (e.tipo === "01" && e.kunnrZt) {
 		campos.KunnrZt = e.kunnrZt;
 		campos.AddrnumberZt = e.addrnumberZt ?? "";
+	} else if (e.tipo === "01" && e.lifnrSp) {
+		campos.LifnrSp = e.lifnrSp;
 	}
 	return campos;
 }
@@ -105,6 +109,7 @@ export interface DatosGuardados {
 	direccionUnica: string;
 	kunnrZt: string;
 	addrnumberZt: string;
+	lifnrSp: string;
 	grupos: { grupoNo: string; vbelnOferta: string; modalidad: string }[];
 }
 
@@ -126,15 +131,18 @@ export function datosGuardadosDe(c: CotizacionLeida): DatosGuardados {
 		direccionUnica: unica?.Street ?? "",
 		kunnrZt: c.KunnrZt ?? "",
 		addrnumberZt: c.AddrnumberZt ?? "",
+		lifnrSp: c.LifnrSp ?? "",
 		grupos: (c._Grupo ?? []).map((g) => ({ grupoNo: g.GrupoNo ?? "", vbelnOferta: g.VbelnOferta ?? "", modalidad: g.Modalidad ?? "" }))
 	};
 }
 
 /** Lee de la cotizacion activa lo que se guardo: entrega, forma de pago y la modalidad de cada oferta generada. */
 export async function leerDatosGuardados(modelo: ODataModel, cotizId: string): Promise<DatosGuardados> {
+	// Un campo que el servicio no publica en el $select hace fallar la lectura: LifnrSp se pide solo si el $metadata ya lo trae.
+	const conSp = await entidadTieneCampo(modelo, "Cotizacion", "LifnrSp");
 	const cot = (await modelo
 		.bindContext(`/Cotizacion(CotizId=${cotizId},IsActiveEntity=true)`, undefined, {
-			$select: "CotizId,Zterm,Vsbed,TipoEntrega,FechaEntrega,KunnrWe,AddrnumberWe,KunnrZt,AddrnumberZt",
+			$select: `CotizId,Zterm,Vsbed,TipoEntrega,FechaEntrega,KunnrWe,AddrnumberWe,KunnrZt,AddrnumberZt${conSp ? ",LifnrSp" : ""}`,
 			$expand: { _Grupo: { $select: "GrupoNo,VbelnOferta,Modalidad" }, _Direc: { $select: "PartnRole,Street" } },
 			$$ownRequest: true
 		})
@@ -210,7 +218,8 @@ export async function guardarCotizacion(modelo: ODataModel, datos: OfertaParaGua
 	const conPernr = !!datos.pernr && (await entidadTieneCampo(modelo, "Cotizacion", "Pernr"));
 	const conVsbed = !!datos.vsbed && (await entidadTieneCampo(modelo, "Cotizacion", "Vsbed"));
 	// Un campo desconocido en el create haria rechazar toda la oferta: la entrega viaja solo si el $metadata ya trae los campos WE/ZT.
-	const entrega = datos.entrega && (await entidadTieneCampo(modelo, "Cotizacion", "AddrnumberWe")) ? datos.entrega : undefined;
+	const conEntrega = datos.entrega && (await entidadTieneCampo(modelo, "Cotizacion", "AddrnumberWe")) ? datos.entrega : undefined;
+	const entrega = conEntrega?.lifnrSp && !(await entidadTieneCampo(modelo, "Cotizacion", "LifnrSp")) ? { ...conEntrega, lifnrSp: undefined } : conEntrega;
 	const cabecera = raiz.create(
 		{
 			Kunnr: datos.kunnr,

@@ -27,7 +27,7 @@ import { cargarContacto, cargarDirecciones, cargarMovimientos, type Movimiento }
 import { cargarCreditoCliente, fechaLocalISO, resumirCredito, textoPorMoneda, type EstadoCuenta, type ResumenCredito } from "com/socopur/cotizador/model/CreditoClienteService";
 import { cargarModalidades, type ModalidadPantalla } from "com/socopur/cotizador/model/ModalidadesService";
 import { ordenarPorTexto } from "com/socopur/cotizador/model/Orden";
-import { buscarTransportistas, buscarTransportistasMock, cargarSedes, leerTransportistaPorKunnr, type FilaTransportista, type SedeTransportista, type TransportistaMock } from "com/socopur/cotizador/model/TransportistasService";
+import { buscarTransportistas, buscarTransportistasMock, cargarSedes, leerTransportistaPorKunnr, leerTransportistaPorLifnr, type FilaTransportista, type SedeTransportista, type TransportistaMock } from "com/socopur/cotizador/model/TransportistasService";
 import UIComponent from "sap/ui/core/UIComponent";
 import Router from "sap/ui/core/routing/Router";
 import JSONModel from "sap/ui/model/json/JSONModel";
@@ -3431,6 +3431,18 @@ export default class Oferta extends Controller {
 			}
 			this.aplicarDireccionEnvio();
 		}
+		if (!datos.kunnrZt && datos.lifnrSp) {
+			// Transportista que solo es proveedor (SP): no tiene sedes de cliente, solo su nombre.
+			const sp = await leerTransportistaPorLifnr(odata, datos.lifnrSp).catch(() => undefined);
+			oferta.setProperty("/entregaDatos/transportista", sp?.id ?? datos.lifnrSp);
+			oferta.setProperty("/entregaDatos/transportistaTexto", sp?.nombre ?? datos.lifnrSp);
+			oferta.setProperty("/entregaDatos/transportistaRol", "SP");
+			oferta.setProperty("/entregaDatos/transportistaKunnr", "");
+			oferta.setProperty("/entregaDatos/transportistaLifnr", datos.lifnrSp);
+			oferta.setProperty("/entregaDatos/sede", "");
+			oferta.setProperty("/entregaDatos/sedeDireccion", "");
+			return;
+		}
 		if (!datos.kunnrZt) {
 			return;
 		}
@@ -4339,8 +4351,8 @@ export default class Oferta extends Controller {
 	}
 
 	/**
-	 * Entrega que viaja a SAP: con envio, el destinatario WE (la direccion elegida) y el transportista ZT; con recojo solo el tipo.
-	 * El transportista que solo es proveedor (SP) no se puede enviar todavia (el servicio no publica ese campo): se avisa en vez de callarlo.
+	 * Entrega que viaja a SAP: con envio, el destinatario WE (la direccion elegida) y el transportista: ZT con su numero de cliente o, si solo
+	 * es proveedor, SP con su numero de proveedor. Con recojo solo el tipo.
 	 */
 	private entregaParaGuardar(cliente: Cliente): { datos?: EntregaParaGuardar; error?: string } {
 		const oferta = this.modeloOferta();
@@ -4371,7 +4383,7 @@ export default class Oferta extends Controller {
 			datos.kunnrZt = (oferta.getProperty("/entregaDatos/transportistaKunnr") as string) || undefined;
 			datos.addrnumberZt = (oferta.getProperty("/entregaDatos/sede") as string) || undefined;
 		} else if (rol === "SP") {
-			MessageToast.show(i18n.getText("guardarTranspSpNoEnviado") as string);
+			datos.lifnrSp = (oferta.getProperty("/entregaDatos/transportistaLifnr") as string) || undefined;
 		}
 		return { datos };
 	}
