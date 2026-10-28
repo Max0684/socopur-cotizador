@@ -70,20 +70,22 @@
 				</HBox>
 
 				<HBox wrap="Wrap" alignItems="Start">
+					<!-- Tramos de precio por cantidad de SAP (Z300, Z323, Z324...): el precio de cada tramo lo calcula SAP con esa cantidad -->
 					<VBox class="sapUiSmallMarginEnd sapUiSmallMarginBottom" width="30rem">
 						<Title text="{i18n>detalleEscalas}" level="H5" class="sapUiTinyMarginBottom" />
-						<Table items="{detalle>/escalas}" noDataText="{i18n>detalleSinEscalas}">
+						<MessageStrip text="{detalle>/proximoTramo}" type="Information" showIcon="true" visible="{= !!${detalle>/proximoTramo} }" class="sapUiTinyMarginBottom" />
+						<Table items="{detalle>/escalas}" noDataText="{= ${detalle>/cargandoEscalas} ? ${i18n>escalaCargando} : ${i18n>detalleSinEscalas} }">
 							<columns>
-								<Column><Text text="{i18n>detalleNombre}" /></Column>
-								<Column hAlign="End"><Text text="{i18n>detalleDesde}" /></Column>
-								<Column hAlign="End"><Text text="{i18n>detalleDscto}" /></Column>
+								<Column width="5rem" hAlign="End"><Text text="{i18n>detalleDesde}" /></Column>
+								<Column minScreenWidth="28rem" demandPopin="true"><Text text="{i18n>escalaColCondicion}" /></Column>
+								<Column width="7rem" hAlign="End"><Text text="{i18n>escalaColPrecio}" /></Column>
 							</columns>
 							<items>
-								<ColumnListItem>
+								<ColumnListItem highlight="{detalle>highlight}">
 									<cells>
-										<Text text="{detalle>nombre}" />
 										<Text text="{detalle>desde}" />
-										<Text text="{detalle>descuento}" />
+										<Text text="{detalle>condiciones}" />
+										<Text text="{detalle>precio}" class="sapUiTinyMarginEnd" />
 									</cells>
 								</ColumnListItem>
 							</items>

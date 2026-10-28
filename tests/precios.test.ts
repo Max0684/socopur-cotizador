@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { consultarPrecio, filtroPrecio, impuestosDeCondiciones, type ConsultaPrecio } from "../webapp/model/PreciosService.ts";
+import { consultarEscalas, consultarPrecio, filtroEscala, filtroPrecio, impuestosDeCondiciones, siguienteTramo, tramosDeEscalas, tramoVigente, type ConsultaPrecio, type EscalaSap } from "../webapp/model/PreciosService.ts";
 import { crearModeloFalso } from "./helpers/modeloFalso.ts";
 
 const consulta: ConsultaPrecio = {
@@ -110,4 +110,54 @@ test("consultarPrecio manda solo el campo que el servicio publica", async () => 
 	await consultarPrecio(como(modelo), { ...consulta, vkbur: "2001", zterm: "C000" });
 	assert.match(llamadas[0], /Vkbur eq '2001'/);
 	assert.doesNotMatch(llamadas[0], /Zterm/);
+});
+
+
+// Filas reales de la entidad Escala en el 130 (28/10/2026): MOT112999, JYAS MOTORS 1103/10/55, contado (C000), en PEN.
+const filaEscala = (CondType: string, Descripcion: string, Desde: number, Valor: number, Moneda: string, PrecioDesde: number) => ({ CondType, Descripcion, Desde, Unidad: "UN", Valor, Moneda, PrecioDesde, MonedaPrecio: "PEN" });
+const filasMot = [
+	filaEscala("Z300", "Precio Lista", 1, 10, "USD", 34.06),
+	filaEscala("Z323", "Dsc.Pos Contado %", 1, 0, "%", 34.06),
+	filaEscala("Z324", "Dsc.Pos Contado Mont", 1, 0, "USD", 34.06),
+	filaEscala("Z300", "Precio Lista", 12, 8.7, "USD", 29.63),
+	filaEscala("Z300", "Precio Lista", 24, 7.7, "USD", 25.45),
+	filaEscala("Z323", "Dsc.Pos Contado %", 24, -3, "%", 25.45),
+	filaEscala("Z324", "Dsc.Pos Contado Mont", 24, -0.23, "USD", 25.45)
+];
+const escalasMot: EscalaSap[] = filasMot.map((f) => ({ condicion: f.CondType, descripcion: f.Descripcion, desde: f.Desde, unidad: f.Unidad, valor: f.Valor, moneda: f.Moneda, precioDesde: f.PrecioDesde, monedaPrecio: f.MonedaPrecio }));
+
+test("filtroEscala es el filtro de Precio sin la cantidad", () => {
+	const { cantidad: _c, ...sinCantidad } = consulta;
+	assert.equal(filtroEscala(sinCantidad), "Kunnr eq '0100024840' and Vkorg eq '1103' and Vtweg eq '10' and Spart eq '50' and Auart eq 'Z300' and Matnr eq 'SFX428H-150-MTK' and Werks eq '1101' and Waers eq 'PEN'");
+});
+
+test("consultarEscalas lee la entidad Escala y convierte las filas", async () => {
+	const { modelo, llamadas } = crearModeloFalso({ precios: filasMot });
+	const { cantidad: _c, ...sinCantidad } = consulta;
+	const escalas = await consultarEscalas(como(modelo), sinCantidad);
+	assert.equal(escalas.length, 7);
+	assert.deepEqual(escalas[5], { condicion: "Z323", descripcion: "Dsc.Pos Contado %", desde: 24, unidad: "UN", valor: -3, moneda: "%", precioDesde: 25.45, monedaPrecio: "PEN" });
+	assert.match(llamadas[0], /^read \/Escala Kunnr eq '0100024840'/);
+});
+
+test("tramosDeEscalas: un tramo por cantidad, sin los descuentos en 0, con el precio que da SAP", () => {
+	const tramos = tramosDeEscalas(escalasMot);
+	assert.deepEqual(
+		tramos.map((t) => [t.desde, t.condiciones.map((c) => c.condicion).join("+"), t.precio]),
+		[
+			[1, "Z300", 34.06],
+			[12, "Z300", 29.63],
+			[24, "Z300+Z323+Z324", 25.45]
+		]
+	);
+});
+
+test("tramoVigente y siguienteTramo: con 10 UN vale el de 1 y el siguiente es el de 12; con 30 no hay siguiente", () => {
+	const tramos = tramosDeEscalas(escalasMot);
+	assert.equal(tramoVigente(tramos, 10)?.desde, 1);
+	assert.equal(siguienteTramo(tramos, 10)?.desde, 12);
+	assert.equal(tramoVigente(tramos, 12)?.desde, 12);
+	assert.equal(siguienteTramo(tramos, 12)?.precio, 25.45);
+	assert.equal(siguienteTramo(tramos, 30), undefined);
+	assert.equal(tramoVigente([], 5), undefined);
 });

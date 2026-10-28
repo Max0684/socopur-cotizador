@@ -7,7 +7,7 @@ import { leerCentros, leerOficinas } from "com/socopur/cotizador/model/Catalogos
 import { buscarMateriales, cargarSegmentos, disponibilidadPorCentro, filasDeStockEnCentros, materialesDisponibles, stockEnCentros, type Disponibilidad } from "com/socopur/cotizador/model/MaterialesService";
 import { entidadTieneCampo } from "com/socopur/cotizador/model/CamposServicio";
 import { cargarFormasPago } from "com/socopur/cotizador/model/FormasPagoService";
-import { consultarCondiciones, consultarPrecio, impuestosDeCondiciones } from "com/socopur/cotizador/model/PreciosService";
+import { consultarCondiciones, consultarEscalas, consultarPrecio, impuestosDeCondiciones, siguienteTramo, tramosDeEscalas, tramoVigente, type EscalaSap, type TramoPrecio } from "com/socopur/cotizador/model/PreciosService";
 import { cantidadTxt, claveRegalos, consultarRegalos, regalosQueAplican, type ConsultaRegalo, type PromoRegalo } from "com/socopur/cotizador/model/RegalosService";
 import { type CondicionServicio, type FilaCondicion, descuentosAplicados, filasDeCondiciones } from "com/socopur/cotizador/model/Condiciones";
 import { agruparVehiculos, buscarVehiculos, filtrarVehiculos, textoDetalleVehiculo } from "com/socopur/cotizador/model/VehiculosService";
@@ -362,6 +362,9 @@ export default class Oferta extends Controller {
 	/** Cada consulta de regalos lleva un turno: si mientras tanto cambio la cantidad, la respuesta vieja se descarta. */
 	private turnoRegalos = 0;
 	private turnoRegalosDetalle = 0;
+	/** Tramos de precio por cantidad del material del detalle abierto: no dependen de la cantidad, se piden una vez al abrirlo. */
+	private tramosDetalle: TramoPrecio[] = [];
+	private turnoEscalasDetalle = 0;
 	/** Regalos ya avisados por linea, para avisar solo cuando cambian. */
 	private regalosAvisados = new Map<string, string>();
 	private instantanea = "[]";
@@ -1573,6 +1576,77 @@ export default class Oferta extends Controller {
 		}
 	}
 
+	/**
+	 * Tramos de precio por cantidad del material (entidad Escala de SAP): las condiciones con escala que SAP le aplica a este cliente (Z300
+	 * precio de lista, Z323 y Z324 descuento al contado) y el precio que da SAP en cada tramo. Pruebas del 28/10/2026: la tabla decia "Sin
+	 * escalas" aunque MOT112999 baja de 34,06 a 29,63 y 25,45 soles con 12 y 24 UN. Solo repuestos leidos de SAP.
+	 */
+	private async cargarEscalasDetalle(m: Vehiculo & Repuesto & { tipo: string }, cantidad: number): Promise<void> {
+		const modelo = this.dialogoDetalle?.getModel("detalle") as JSONModel | undefined;
+		const oferta = this.modeloOferta();
+		const kunnr = (oferta.getProperty("/cliente") as Cliente | null)?.kunnr;
+		if (!modelo || !kunnr || !this.usarOData() || m.tipo !== "repuestos" || m.origen !== "sap") {
+			return;
+		}
+		const canal = canalDe(String(oferta.getProperty("/perfil/busqueda/canal") ?? "11"));
+		const canalDoc = this.canalDeDocumento(m.orgVentas, m.sectorOferta, "repuestos") || canal;
+		const consulta = {
+			kunnr,
+			vkorg: m.orgVentas,
+			vtweg: canalDoc,
+			spart: sectorDeCabecera(canalDoc, m.sector, m.orgVentas),
+			auart: CLASE_OFERTA_PRECIO,
+			matnr: m.material,
+			werks: String(oferta.getProperty("/perfil/centro") ?? ""),
+			waers: (oferta.getProperty("/perfil/moneda") === "USD" ? "USD" : "PEN") as "PEN" | "USD",
+			...this.extrasPrecio()
+		};
+		const turno = ++this.turnoEscalasDetalle;
+		modelo.setProperty("/cargandoEscalas", true);
+		try {
+			const escalas = await consultarEscalas((this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel, consulta);
+			if (turno !== this.turnoEscalasDetalle) {
+				return;
+			}
+			this.tramosDetalle = tramosDeEscalas(escalas);
+			this.pintarEscalasDetalle(Math.max(1, Number(modelo.getProperty("/cantidad")) || cantidad));
+		} catch (error) {
+			// Las escalas son informativas: el precio de la cantidad elegida ya lo da SAP aunque esta consulta falle.
+			console.warn(`[Cotizador] escalas de ${m.material}: ${(error as Error).message}`);
+		} finally {
+			if (turno === this.turnoEscalasDetalle) {
+				modelo.setProperty("/cargandoEscalas", false);
+			}
+		}
+	}
+
+	/** Tabla de tramos con el de la cantidad elegida resaltado, y el aviso del siguiente tramo que baja el precio. */
+	private pintarEscalasDetalle(cantidad: number): void {
+		const modelo = this.dialogoDetalle?.getModel("detalle") as JSONModel | undefined;
+		if (!modelo) {
+			return;
+		}
+		const i18n = this.i18n();
+		const simbolo = (moneda: string): string => (moneda === "USD" ? "US$" : moneda === "PEN" ? "S/" : moneda);
+		const precioTxt = (importe: number, moneda: string): string => `${simbolo(moneda)} ${this.formatMonto(importe)}`;
+		const valorTxt = (c: EscalaSap): string => (c.moneda === "%" ? `${cantidadTxt(c.valor)} %` : `${this.formatMonto(c.valor)} ${c.moneda}`);
+		const vigente = tramoVigente(this.tramosDetalle, cantidad);
+		const siguiente = siguienteTramo(this.tramosDetalle, cantidad);
+		modelo.setProperty(
+			"/escalas",
+			this.tramosDetalle.map((t) => ({
+				desde: `${cantidadTxt(t.desde)} ${t.unidad || "UN"}`,
+				condiciones: t.condiciones.map((c) => `${c.descripcion}: ${valorTxt(c)}`).join(" · "),
+				precio: precioTxt(t.precio, t.moneda),
+				highlight: t === vigente ? "Success" : "None"
+			}))
+		);
+		modelo.setProperty(
+			"/proximoTramo",
+			siguiente ? (i18n.getText("escalaSiguiente", [cantidadTxt(siguiente.desde), siguiente.unidad || "UN", precioTxt(siguiente.precio, siguiente.moneda)]) as string) : ""
+		);
+	}
+
 	/** Linea de regalo (precio 0, solo lectura) colgada de la linea que la genera; va en su mismo grupo (= la misma oferta SAP). */
 	private lineaDeRegalo(padre: Linea, p: PromoRegalo): Linea {
 		const i18n = this.i18n();
@@ -2623,7 +2697,9 @@ export default class Oferta extends Controller {
 		const cantidad = Math.max(1, Number((material as { cantidad?: number }).cantidad) || 1);
 		(this.dialogoDetalle.getModel("detalle") as JSONModel).setData(this.datosDetalle(material, cantidad));
 		this.dialogoDetalle.open();
+		this.tramosDetalle = [];
 		void this.cargarRegalosDetalle(material, cantidad);
+		void this.cargarEscalasDetalle(material, cantidad);
 	}
 
 	/** Todo lo que se muestra sale de SAP: precios de lista (Mayorista/Retail), precio del cliente, condiciones de la simulacion y stock. */
@@ -2652,12 +2728,14 @@ export default class Oferta extends Controller {
 				{ nombre: i18n.getText("precioTuPrecio") as string, importe: tuPrecio, resaltado: true }
 			],
 			descuentos: descuentosAplicados(m.condiciones ?? []),
-			// Escalas por cantidad: aun no hay entidad en el servicio; se muestran vacias, sin inventar datos. Los articulos gratis los llena
-			// cargarRegalosDetalle con la entidad Regalo de SAP (todas las promociones vigentes del material, con la que aplica resaltada).
+			// Las escalas por cantidad las llena cargarEscalasDetalle (entidad Escala) y los articulos gratis cargarRegalosDetalle (entidad
+			// Regalo): las dos con lo que devuelve SAP, sin inventar datos.
 			escalas: [],
 			regalos: [],
 			avisoRegalo: "",
 			cargandoRegalos: false,
+			proximoTramo: "",
+			cargandoEscalas: false,
 			stock,
 			cantidad,
 			totalTxt: fila.totalTxt
@@ -2676,6 +2754,7 @@ export default class Oferta extends Controller {
 			return;
 		}
 		modelo.setData(this.datosDetalle(material, cantidad));
+		this.pintarEscalasDetalle(cantidad);
 		await this.cargarRegalosDetalle(material, cantidad);
 	}
 

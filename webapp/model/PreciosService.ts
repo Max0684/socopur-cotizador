@@ -151,3 +151,86 @@ export async function consultarCondiciones(modelo: ODataModel, consulta: Consult
 	const filas = await modelo.bindList("/PrecioCond", undefined, undefined, undefined, { $filter: filtro }).requestContexts(0, 100);
 	return filas.map((c) => c.getObject() as CondicionServicio);
 }
+
+/**
+ * Tramo de una condicion con escala por cantidad que SAP aplica al material (entidad Escala = YCL_COTIZ_ESCALA, publicada el 28/10/2026).
+ * precioDesde es el precio unitario que da SAP con la cantidad del tramo, con todas las condiciones juntas.
+ * Verificado por OData en el 130: MOT112999, JYAS MOTORS 1103/10/55, contado -> 34,06 (1 UN), 29,63 (12), 25,45 (24: Z300 7,70 USD,
+ * Z323 -3 % y Z324 -0,23 USD).
+ */
+export interface EscalaSap {
+	condicion: string;
+	descripcion: string;
+	desde: number;
+	unidad: string;
+	/** Importe en `moneda`, o porcentaje si `moneda` es "%". */
+	valor: number;
+	moneda: string;
+	precioDesde: number;
+	monedaPrecio: string;
+}
+
+/** Un tramo de la tabla: desde que cantidad, que condiciones cambian y el precio unitario que da SAP. */
+export interface TramoPrecio {
+	desde: number;
+	unidad: string;
+	condiciones: EscalaSap[];
+	precio: number;
+	moneda: string;
+}
+
+/** El mismo $filter de Precio sin la cantidad: las escalas son del material, no de la cantidad elegida. */
+export function filtroEscala(c: Omit<ConsultaPrecio, "cantidad">): string {
+	return filtroPrecio({ ...c, cantidad: 0 })
+		.split(" and ")
+		.filter((p) => !p.startsWith("Cantidad eq "))
+		.join(" and ");
+}
+
+export async function consultarEscalas(modelo: ODataModel, consulta: Omit<ConsultaPrecio, "cantidad">): Promise<EscalaSap[]> {
+	const filtro = filtroEscala(await quitarNoPublicados(modelo, "Escala", { ...consulta, cantidad: 0 }));
+	const filas = await modelo.bindList("/Escala", undefined, undefined, undefined, { $filter: filtro }).requestContexts(0, 100);
+	return filas.map((c) => {
+		const f = c.getObject() as Record<string, string | number | undefined>;
+		return {
+			condicion: String(f.CondType ?? ""),
+			descripcion: String(f.Descripcion ?? "").trim(),
+			desde: Number(f.Desde ?? 0),
+			unidad: String(f.Unidad ?? "").trim(),
+			valor: Number(f.Valor ?? 0),
+			moneda: String(f.Moneda ?? "").trim(),
+			precioDesde: Number(f.PrecioDesde ?? 0),
+			monedaPrecio: String(f.MonedaPrecio ?? "").trim()
+		};
+	});
+}
+
+/**
+ * Agrupa las filas por cantidad: un tramo por cada "desde", con las condiciones que tienen valor en ese tramo (un descuento en 0 no se
+ * muestra) y el precio que da SAP. Un material sin escalas (una sola fila por condicion) no llega: YCL_COTIZ_ESCALA ya lo descarta.
+ */
+export function tramosDeEscalas(escalas: EscalaSap[]): TramoPrecio[] {
+	const porDesde = new Map<number, TramoPrecio>();
+	for (const e of [...escalas].sort((a, b) => a.desde - b.desde)) {
+		let tramo = porDesde.get(e.desde);
+		if (!tramo) {
+			tramo = { desde: e.desde, unidad: e.unidad, condiciones: [], precio: e.precioDesde, moneda: e.monedaPrecio };
+			porDesde.set(e.desde, tramo);
+		}
+		if (e.valor !== 0) {
+			tramo.condiciones.push(e);
+		}
+	}
+	return [...porDesde.values()];
+}
+
+/** El tramo que vale con la cantidad (el de "desde" mas alto que la cantidad alcanza). */
+export function tramoVigente(tramos: TramoPrecio[], cantidad: number): TramoPrecio | undefined {
+	return [...tramos].reverse().find((t) => cantidad >= t.desde);
+}
+
+/** El siguiente tramo que baja el precio, para avisar "llevando N el precio baja a X". */
+export function siguienteTramo(tramos: TramoPrecio[], cantidad: number): TramoPrecio | undefined {
+	const actual = tramoVigente(tramos, cantidad);
+	return tramos.find((t) => t.desde > cantidad && (!actual || t.precio < actual.precio));
+}
