@@ -2,6 +2,7 @@ import ODataModel from "sap/ui/model/odata/v4/ODataModel";
 import type { Cotizacion, Item } from "./odata/Entidades";
 import type { CondicionServicio } from "./Condiciones";
 import { entidadTieneCampo } from "./CamposServicio";
+import { precioFinalDePosicion } from "./Reglas";
 
 /** Forma que usa hoy la lista de ofertas del prototipo (mock.json: /ofertas). */
 export interface OfertaLista {
@@ -193,7 +194,10 @@ export interface LineaDetalle {
 	denominacion: string;
 	detalle: string;
 	cantidad: number;
+	/** Neto unitario de SAP (Netpr), sin impuestos: es lo que se muestra como precio de la posicion del documento. */
 	precio: number;
+	/** Precio unitario con impuestos (neto + ISC + IGV): el que se guarda si la oferta se graba otra vez. */
+	precioFinal?: number;
 	total: number;
 	bonificacion: boolean;
 	sinTalla: boolean;
@@ -254,6 +258,7 @@ export async function cargarDetalleOferta(modelo: ODataModel, numeroOferta: stri
 			detalle: "",
 			cantidad: Number(p.Kwmeng ?? 0),
 			precio: Number(p.Netpr ?? 0),
+			precioFinal: precioFinalDePosicion(Number(p.Netwr ?? 0), Number(p.Mwsbp ?? 0), Number(p.Kwmeng ?? 0)),
 			total: Number(p.Netwr ?? 0),
 			bonificacion: esRegalo,
 			sinTalla: esRegalo,

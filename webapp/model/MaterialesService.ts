@@ -388,3 +388,59 @@ export async function disponibilidadPorAlmacen(modelo: ODataModel, vkorg: string
 	const contextos = await modelo.bindList("/MaterialAtp", undefined, undefined, undefined, { $filter: filtroStock(vkorg, vtweg, werks, [matnr]) }).requestContexts(0, 50);
 	return disponibilidadPorAlmacenDeFilas(contextos.map((c) => c.getObject() as Parameters<typeof disponibilidadPorAlmacenDeFilas>[0][number]), matnr);
 }
+
+export interface StockEnCentro {
+	werks: string;
+	lgort: string;
+	libre: number;
+	disponible: number;
+}
+
+type FilaAtp = { Matnr: string; Werks?: string; Lgort?: string; StockLibre: number | string; Disponible: number | string; Respuesta?: number | string };
+
+/** Filas de MaterialAtp de todos los centros; las que SAP no pudo calcular (Respuesta != 0) se omiten, como en un solo centro. */
+export function stockEnCentrosDeFilas(filas: FilaAtp[], matnr: string): StockEnCentro[] {
+	return filas
+		.filter((f) => f.Matnr === matnr && f.Werks && f.Lgort && Number(f.Respuesta ?? 0) === 0)
+		.map((f) => ({ werks: f.Werks as string, lgort: f.Lgort as string, libre: Number(f.StockLibre), disponible: Number(f.Disponible) }));
+}
+
+/**
+ * Stock libre y DISPONIBLE (ATP) de un material en TODOS los centros de la organizacion y el canal: MaterialAtp sin Werks recorre los centros
+ * de TVKWZ que tienen el material (YCL_COTIZ_MATERIALATP_QUERY, hasta 50 filas). Una sola llamada.
+ */
+export async function stockEnCentros(modelo: ODataModel, vkorg: string, vtweg: string, matnr: string): Promise<StockEnCentro[]> {
+	const filtro = `Vkorg eq '${comillas(vkorg)}' and Vtweg eq '${comillas(vtweg)}' and Matnr eq '${comillas(matnr)}'`;
+	const contextos = await modelo.bindList("/MaterialAtp", undefined, undefined, undefined, { $filter: filtro }).requestContexts(0, 50);
+	return stockEnCentrosDeFilas(contextos.map((c) => c.getObject() as FilaAtp), matnr);
+}
+
+export interface FilaStockCentro {
+	ubicacion: string;
+	esMio: boolean;
+	fisico: number;
+	disponible: number;
+	transito: number;
+}
+
+/**
+ * Filas del dialogo de stock (pruebas del 28/10/2026: sin stock propio no se veia donde habia). Primero el almacen del vendedor, aunque no
+ * tenga stock (si SAP no lo devolvio, con lo que dio la busqueda); despues los demas almacenes con stock, de mas a menos disponible. Es solo
+ * para ver: el pedido sigue saliendo del almacen del vendedor.
+ */
+export function filasDeStockEnCentros(
+	stock: StockEnCentro[],
+	propio: { werks: string; lgort: string; fisico: number; disponible: number },
+	nombreCentro: (werks: string) => string
+): FilaStockCentro[] {
+	const ubicacion = (werks: string, lgort: string): string => [werks, nombreCentro(werks), lgort].filter(Boolean).join(" · ");
+	const esPropio = (s: StockEnCentro): boolean => s.werks === propio.werks && s.lgort === propio.lgort;
+	const mio = stock.find(esPropio);
+	const otros = stock
+		.filter((s) => !esPropio(s) && (s.libre > 0 || s.disponible > 0))
+		.sort((a, b) => b.disponible - a.disponible || a.werks.localeCompare(b.werks) || a.lgort.localeCompare(b.lgort));
+	return [
+		{ ubicacion: ubicacion(propio.werks, propio.lgort), esMio: true, fisico: mio?.libre ?? propio.fisico, disponible: mio?.disponible ?? propio.disponible, transito: 0 },
+		...otros.map((s) => ({ ubicacion: ubicacion(s.werks, s.lgort), esMio: false, fisico: s.libre, disponible: s.disponible, transito: 0 }))
+	];
+}

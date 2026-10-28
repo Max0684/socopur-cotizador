@@ -1,6 +1,6 @@
 {
   "name": "com.socopur.cotizador",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Cotizador Socopur (YCOTIZ) - UI5 Freestyle + TypeScript",
   "scripts": {
@@ -13,7 +13,7 @@
     "start:bas": "ui5 serve --config ui5-bas.yaml --port 8080 --accept-remote-connections",
     "build:cf": "node scripts/build-cf.mjs",
     "build:mta": "mbt build",
-    "deploy:cf": "cf deploy mta_archives/socopur-cotizador_0.2.0.mtar",
+    "deploy:cf": "cf deploy mta_archives/socopur-cotizador_0.3.0.mtar",
     "build:abap": "node scripts/uri-servicio.mjs absoluta && ui5 build preload --config ui5-build-abap.yaml --clean-dest --dest dist --include-task=generateCachebusterInfo",
     "deploy:abap:prueba": "npm run build:abap && fiori deploy --config ui5-abap.yaml --test --yes",
     "deploy:abap": "npm run build:abap && fiori deploy --config ui5-abap.yaml --yes",

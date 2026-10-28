@@ -1,7 +1,7 @@
 _schema-version: "3.2"
 ID: socopur-cotizador
 description: Cotizador Socopur (UI5 Freestyle) publicado en el repositorio HTML5 de BTP
-version: 0.2.0
+version: 0.3.0
 modules:
   - name: socopur-cotizador-destination-content
     type: com.sap.application.content

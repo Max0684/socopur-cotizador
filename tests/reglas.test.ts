@@ -373,3 +373,31 @@ test("textoSolicitudAmpliacion arma el asunto y el cuerpo con cliente, area pedi
 	assert.ok(r.cuerpo.includes("Solicitante: 99000258"));
 	assert.ok(!textoSolicitudAmpliacion({ cliente: "X", kunnr: "1", documento: "", areaNueva: "A", vendedor: "V", motivo: "" }).cuerpo.includes("Copiar condiciones"));
 });
+
+test("gruposParaGuardar: una linea leida de SAP guarda su precio con impuestos, no el neto (3100007407 grabo 14.83 en vez de 17.50)", () => {
+	const grupo = { ...grupoMayorista(), lineas: [{ orgVentas: "1103", sector: "50", material: "SFX428H-150-MTK", cantidad: 1, precio: 14.83, precioFinal: 17.5 }] };
+	const [g] = gruposParaGuardar([grupo], perfil, "0001");
+	assert.equal(g.lineas[0].precio, 17.5);
+});
+
+test("precioFinalDePosicion: neto mas impuestos entre la cantidad; sin cantidad no hay precio", async () => {
+	const { precioFinalDePosicion } = await import("../webapp/model/Reglas.ts");
+	assert.equal(precioFinalDePosicion(14.83, 2.67, 1), 17.5);
+	// Envio: SAP no determino IGV y dejo todo como neto; el precio final sigue siendo el de lista.
+	assert.equal(precioFinalDePosicion(17.5, 0, 1), 17.5);
+	assert.equal(precioFinalDePosicion(1483.05, 266.95, 100), 17.5);
+	assert.equal(precioFinalDePosicion(0, 0, 0), undefined);
+});
+
+test("modalidadParaEntrega: envio pasa a despacho; al volver a recojo el despacho vuelve a la por defecto; las de envio no se tocan", async () => {
+	const { modalidadParaEntrega, MODALIDAD_DESPACHO } = await import("../webapp/model/Reglas.ts");
+	const mostrador = { key: "rep_mostrador", expedicion: "recojo" };
+	const web = { key: "rep_web", expedicion: "envio" };
+	assert.equal(modalidadParaEntrega(mostrador, true, "rep_mostrador"), MODALIDAD_DESPACHO);
+	assert.equal(modalidadParaEntrega({ key: "rep_mayorista", expedicion: "recojo" }, true, "rep_mostrador"), MODALIDAD_DESPACHO);
+	assert.equal(modalidadParaEntrega(undefined, true, "rep_mostrador"), MODALIDAD_DESPACHO);
+	assert.equal(modalidadParaEntrega(web, true, "rep_mostrador"), undefined);
+	assert.equal(modalidadParaEntrega({ key: MODALIDAD_DESPACHO, expedicion: "envio" }, false, "rep_mayorista"), "rep_mayorista");
+	assert.equal(modalidadParaEntrega(mostrador, false, "rep_mostrador"), undefined);
+	assert.equal(modalidadParaEntrega(web, false, "rep_mostrador"), undefined);
+});

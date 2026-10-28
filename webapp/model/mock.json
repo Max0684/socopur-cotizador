@@ -1554,11 +1554,11 @@
    "key": "rep_despacho",
    "texto": "Repuestos – despacho a cliente",
    "tipo": "repuestos",
-   "canal": "por confirmar",
+   "canal": "10 Mayorista",
    "claseOferta": "Z300",
    "clasePedido": "Z310",
    "expedicion": "envio",
-   "nota": "La clase Z310 no figura en canal 11 de la org. 1103: falta confirmar en qué canal se usa. La entrega nace bloqueada y pasa por el almacén (EWM)."
+   "nota": "Se elige sola al marcar Envío. Canal 10 (YCOTIZ_MODAL): el cliente debe estar ampliado a ese canal. La entrega nace bloqueada y pasa por el almacén (EWM)."
   },
   {
    "key": "rep_mayorista",

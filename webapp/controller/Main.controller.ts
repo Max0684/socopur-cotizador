@@ -24,6 +24,9 @@ import { cargarOfertas } from "com/socopur/cotizador/model/OfertasService";
 export default class Main extends Controller {
 	private router!: Router;
 	private forzado = false;
+	/** PERNR con el que se leyo la lista de SAP; si no es el del vendedor identificado, se vuelve a leer antes de mostrarla. */
+	private pernrDeLista: string | undefined;
+	private cargaEnCurso: Promise<void> | undefined;
 
 	public onInit(): void {
 		this.router = (this.getOwnerComponent() as UIComponent).getRouter();
@@ -31,11 +34,40 @@ export default class Main extends Controller {
 		this.getView()?.setModel(new JSONModel({ consultado: false }), "vista");
 		const mock = (this.getOwnerComponent() as UIComponent).getModel("mock") as JSONModel;
 		mock.dataLoaded().then(async () => {
-			if (this.usarOData()) {
+			// Sin vendedor identificado no se lee SAP: sin PERNR la lista traeria las ofertas de todos los vendedores (pruebas 28/10/2026).
+			if (this.usarOData() && this.pernrActual()) {
 				await this.cargarDesdeOData(mock);
 			}
 			this.actualizarVigencias(mock);
 		});
+		// Usuario SAP compartido: al cambiar de vendedor, lo que habia en pantalla era del anterior.
+		mock.bindProperty("/perfil/pernr").attachChange(() => this.olvidarLista());
+	}
+
+	private pernrActual(): string {
+		const mock = (this.getOwnerComponent() as UIComponent).getModel("mock") as JSONModel;
+		return String(mock.getProperty("/perfil/pernr") ?? "");
+	}
+
+	private olvidarLista(): void {
+		this.pernrDeLista = undefined;
+		this.forzado = false;
+		(this.getView()?.getModel("vista") as JSONModel | undefined)?.setProperty("/consultado", false);
+	}
+
+	/**
+	 * Lee la lista de SAP si la que hay no es del vendedor identificado; si ya hay una lectura en curso, la espera en vez de repetirla. El
+	 * segundo intento cubre un cambio de vendedor mientras se leia la lista del anterior.
+	 */
+	private async asegurarListaDelVendedor(mock: JSONModel): Promise<void> {
+		for (let intento = 0; intento < 2 && this.pernrDeLista !== this.pernrActual(); intento++) {
+			if (!this.cargaEnCurso) {
+				this.cargaEnCurso = this.cargarDesdeOData(mock)
+					.then(() => this.actualizarVigencias(mock))
+					.finally(() => (this.cargaEnCurso = undefined));
+			}
+			await this.cargaEnCurso;
+		}
 	}
 
 	public onAdministrarVendedores(): void {
@@ -61,13 +93,22 @@ export default class Main extends Controller {
 		if (!odata) {
 			return;
 		}
+		const pernr = this.pernrActual();
+		if (!pernr) {
+			mock.setProperty("/ofertas", []);
+			this.pernrDeLista = "";
+			return;
+		}
 		try {
-			const ofertas = await cargarOfertas(odata, textos.getText("estadoPedido"), (mock.getProperty("/perfil/pernr") as string) || undefined);
+			const ofertas = await cargarOfertas(odata, textos.getText("estadoPedido"), pernr);
 			mock.setProperty("/ofertas", ofertas);
 		} catch (error) {
-			// Si el servicio falla se conservan los datos simulados y se avisa; no se bloquea la pantalla.
+			// Si el servicio falla se avisa y la lista queda vacia: lo que habia era de ejemplo o de otro vendedor. No se reintenta en cada
+			// tecla del buscador; "Ver mis ofertas" vuelve a leer.
+			mock.setProperty("/ofertas", []);
 			MessageToast.show(textos.getText("odataError", [(error as Error).message]));
 		}
+		this.pernrDeLista = pernr;
 	}
 
 	/** La vigencia es fecha de la oferta + dias del perfil (en SAP: ZTSD_CONFIG_OFER, hoy 7 dias). Vencida si ya paso y no tiene pedido. */
@@ -134,7 +175,7 @@ export default class Main extends Controller {
 			await this.cargarDesdeOData(mock);
 			this.actualizarVigencias(mock);
 		}
-		this.onFiltrar();
+		await this.onFiltrar();
 	}
 
 	public onNuevaOferta(): void {
@@ -152,8 +193,11 @@ export default class Main extends Controller {
 		this.router.navTo("oferta", { numero });
 	}
 
-	/** Los filtros son siempre visibles (UX): se aplican al escribir o al cambiar. */
-	public onFiltrar(): void {
+	/**
+	 * Los filtros son siempre visibles (UX): se aplican al escribir o al cambiar. Con SAP real filtran solo las ofertas del vendedor
+	 * identificado: la lista se vuelve a leer si es de otro vendedor (o se leyo antes de que se identificara).
+	 */
+	public async onFiltrar(): Promise<void> {
 		const texto = (this.byId("filtroTexto") as SearchField).getValue().trim();
 		const estado = (this.byId("filtroEstado") as Select).getSelectedKey();
 		const rango = this.byId("filtroFechas") as DateRangeSelection;
@@ -193,7 +237,14 @@ export default class Main extends Controller {
 		if (filtros.length) {
 			this.forzado = false;
 		}
-		vista.setProperty("/consultado", filtros.length > 0 || this.forzado);
+		const mostrar = filtros.length > 0 || this.forzado;
+		if (mostrar && this.usarOData()) {
+			if (this.sinVendedor()) {
+				return;
+			}
+			await this.asegurarListaDelVendedor((this.getOwnerComponent() as UIComponent).getModel("mock") as JSONModel);
+		}
+		vista.setProperty("/consultado", mostrar);
 		const binding = (this.byId("tabla") as List).getBinding("items") as ListBinding;
 		binding.filter(filtros);
 	}

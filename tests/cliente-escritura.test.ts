@@ -138,3 +138,18 @@ test("crearClienteSap: si no termina en el tiempo de espera avisa que sigue en p
 	const { modelo } = modeloAlta({ Id: "abc", Creado: false, Mensaje: "Solicitud en proceso" }, [{ Creado: false, Mensaje: "Solicitud en proceso" }]);
 	await assert.rejects(() => crearClienteSap(como(modelo), alta, { ...sinPausa, intervaloMs: 1000, maximoMs: 3000 }), AltaEnProcesoError);
 });
+
+test("partirRazon: un solo campo se reparte entre palabras en partes de 35 (SAP las une con un espacio)", async () => {
+	const { partirRazon } = await import("../webapp/model/ClienteEscrituraService.ts");
+	assert.deepEqual(partirRazon("SOCIEDAD GASTRO AQP"), ["SOCIEDAD GASTRO AQP"]);
+	assert.deepEqual(partirRazon("  IMPORTADORA   Y DISTRIBUIDORA DE REPUESTOS DEL ORIENTE S.A.C. "), ["IMPORTADORA Y DISTRIBUIDORA DE", "REPUESTOS DEL ORIENTE S.A.C."]);
+	assert.deepEqual(partirRazon(""), []);
+});
+
+test("partirRazon: una palabra de mas de 35 se corta donde cae; mas de 3 partes es que no entra en SAP", async () => {
+	const { partirRazon } = await import("../webapp/model/ClienteEscrituraService.ts");
+	assert.deepEqual(partirRazon(`${"A".repeat(40)} SAC`), ["A".repeat(35), "AAAAA SAC"]);
+	const doce = Array.from({ length: 12 }, () => "PALABRA").join(" ");
+	assert.equal(partirRazon(doce).length, 3);
+	assert.equal(partirRazon(`${doce} OTRA MAS`).length, 4);
+});

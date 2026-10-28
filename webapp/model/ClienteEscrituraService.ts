@@ -92,6 +92,42 @@ export async function serviciosDeCliente(modelo: ODataModel): Promise<ServiciosD
 	return { alta, edicion, bloqueo, historial, ubigeo };
 }
 
+/** Largo de cada parte del nombre en SAP (NAME1, NAME2 y NAME3 del BP; KNA1 guarda 35). */
+export const LARGO_PARTE_RAZON = 35;
+
+/**
+ * Reparte el nombre o la razon social que el vendedor escribe en UN solo campo en las partes de 35 caracteres que guarda SAP, cortando
+ * entre palabras: SAP las muestra unidas con un espacio, y una palabra partida quedaria con un espacio en medio. Una palabra de mas de
+ * 35 caracteres se corta donde cae. Devuelve todas las partes que hagan falta: mas de 3 = no entra en SAP.
+ * Antes eran tres campos y en las pruebas del 28/10/2026 se leyeron como nombre, apellido y segundo nombre.
+ */
+export function partirRazon(texto: string, largo = LARGO_PARTE_RAZON): string[] {
+	const partes: string[] = [];
+	let actual = "";
+	for (const palabra of texto.trim().split(/\s+/).filter(Boolean)) {
+		let resto = palabra;
+		while (resto.length > largo) {
+			if (actual) {
+				partes.push(actual);
+				actual = "";
+			}
+			partes.push(resto.slice(0, largo));
+			resto = resto.slice(largo);
+		}
+		const junto = actual ? `${actual} ${resto}` : resto;
+		if (junto.length <= largo) {
+			actual = junto;
+		} else {
+			partes.push(actual);
+			actual = resto;
+		}
+	}
+	if (actual) {
+		partes.push(actual);
+	}
+	return partes;
+}
+
 /** Cuerpo del create de ClienteAlta: todo recortado y con el largo de los campos de SAP. */
 export function cuerpoAlta(a: DatosAlta): Record<string, string> {
 	const corto = (v: string, largo: number): string => texto(v).trim().slice(0, largo);

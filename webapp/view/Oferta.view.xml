@@ -112,9 +112,8 @@
 									<Label text="" />
 									<Button text="{i18n>altaConsultarApi}" icon="sap-icon://search" press=".onConsultarApi" width="14rem" enabled="{= ${oferta>/pedidos}.length === 0 }" />
 									<Label text="{i18n>altaRazon}" required="true" />
-									<Input value="{oferta>/alta/razon1}" maxLength="35" enabled="{= ${oferta>/pedidos}.length === 0 }" />
-									<Input value="{oferta>/alta/razon2}" maxLength="35" enabled="{= ${oferta>/pedidos}.length === 0 }" />
-									<Input value="{oferta>/alta/razon3}" maxLength="35" enabled="{= ${oferta>/pedidos}.length === 0 }" />
+									<!-- Un solo campo: al crear se reparte entre palabras en las 3 partes de 35 de SAP (107 = 3 x 35 + los 2 espacios del corte) -->
+									<Input value="{oferta>/alta/razon}" maxLength="107" enabled="{= ${oferta>/pedidos}.length === 0 }" />
 									<Label text="{i18n>altaPais}" />
 									<Input value="Perú" editable="false" />
 									<Label text="{i18n>altaDepartamento}" required="true" />
@@ -415,7 +414,8 @@
 										<MessageStrip text="{oferta>areaAviso}" type="Warning" showIcon="true" class="sapUiSmallMarginEnd" />
 										<Button text="{i18n>ampliarArea}" press=".onAmpliarAbrir" />
 									</HBox>
-									<Table items="{oferta>lineas}" sticky="ColumnHeaders" contextualWidth="Auto">
+									<!-- Elegir una fila muestra su determinacion de precio en el panel de abajo -->
+									<Table items="{oferta>lineas}" sticky="ColumnHeaders" contextualWidth="Auto" mode="SingleSelectMaster" selectionChange=".onElegirLineaPrecio">
 										<columns>
 											<Column width="8rem"><Text text="{i18n>colMaterial}" /></Column>
 											<Column minScreenWidth="30rem" demandPopin="true"><Text text="{i18n>colDescripcion}" /></Column>
@@ -429,7 +429,7 @@
 											<Column width="3rem" hAlign="Center"><Text text="" /></Column>
 										</columns>
 										<items>
-											<ColumnListItem>
+											<ColumnListItem selected="{oferta>verCondiciones}">
 												<cells>
 													<ObjectIdentifier title="{= ${oferta>bonificacion} ? ${oferta>denominacion} : ${oferta>material} }" text="{= ${oferta>bonificacion} ? ( ${oferta>sinTalla} ? ${i18n>regaloPromoEtq} : ${i18n>regaloEtq} ) : '' }" />
 													<Text text="{oferta>denominacion}" />
@@ -451,13 +451,15 @@
 										</items>
 									</Table>
 									<!-- Determinacion de precio de cada linea (condiciones de SAP: precio, descuentos, ISC, IGV, totales), como en repuestos -->
-									<Panel headerText="{i18n>determinacionPrecio}" expandable="true" expanded="true" class="sapUiSmallMarginTop" visible="{= ${oferta>/hayCondiciones} }">
-										<Select selectedKey="{oferta>/filtroCondiciones}" change=".onCambiaFiltroCondiciones" width="18rem" class="sapUiTinyMarginBottom">
+									<!-- Plegado hasta que se elige una fila de la tabla; muestra solo la linea elegida -->
+									<Panel headerText="{i18n>determinacionPrecio}" expandable="true" expanded="{oferta>verPrecio}" expand=".onExpandirPrecio" class="sapUiSmallMarginTop" visible="{= ${oferta>/hayCondiciones} }">
+										<Text text="{i18n>precioElegirLinea}" visible="{= !${oferta>lineaPrecio} }" />
+										<Select selectedKey="{oferta>/filtroCondiciones}" change=".onCambiaFiltroCondiciones" width="18rem" class="sapUiTinyMarginBottom" visible="{= !!${oferta>lineaPrecio} }">
 											<core:Item key="todos" text="{i18n>condTodos}" />
 											<core:Item key="relevantes" text="{i18n>condRelevantes}" />
 										</Select>
 										<VBox items="{oferta>lineas}">
-											<VBox class="sapUiTinyMarginTop" visible="{= !${oferta>bonificacion} }">
+											<VBox class="sapUiTinyMarginTop" visible="{= !${oferta>bonificacion} &amp;&amp; !!${oferta>verCondiciones} }">
 												<ObjectStatus text="{oferta>material} · {oferta>denominacion}" state="Information" />
 												<core:Fragment fragmentName="com.socopur.cotizador.view.fragment.CondicionesTabla" type="XML" />
 											</VBox>

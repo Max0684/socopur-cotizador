@@ -18,9 +18,7 @@
 					<Label text="{i18n>documento}" />
 					<Input value="{cli>/tipoDoc} {cli>/doc}" editable="false" />
 					<Label text="{i18n>editarRazon}" required="true" />
-					<Input value="{cli>/razon1}" maxLength="35" editable="{= !${cli>/nombreBloqueado} }" />
-					<Input value="{cli>/razon2}" maxLength="35" editable="{= !${cli>/nombreBloqueado} }" />
-					<Input value="{cli>/razon3}" maxLength="35" editable="{= !${cli>/nombreBloqueado} }" />
+					<Input value="{cli>/razon}" maxLength="107" editable="{= !${cli>/nombreBloqueado} }" />
 					<Label text="{i18n>telefono}" required="true" />
 					<Input value="{cli>/telefono}" type="Tel" maxLength="9" />
 					<Label text="{i18n>correo}" required="true" />

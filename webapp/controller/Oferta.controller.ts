@@ -4,19 +4,19 @@ import ODataModel from "sap/ui/model/odata/v4/ODataModel";
 import { cargarDetalleOferta } from "com/socopur/cotizador/model/OfertasService";
 import type { GrupoEstado } from "com/socopur/cotizador/model/odata/Entidades";
 import { leerCentros, leerOficinas } from "com/socopur/cotizador/model/CatalogosService";
-import { buscarMateriales, cargarSegmentos, disponibilidadPorCentro, materialesDisponibles, type Disponibilidad } from "com/socopur/cotizador/model/MaterialesService";
+import { buscarMateriales, cargarSegmentos, disponibilidadPorCentro, filasDeStockEnCentros, materialesDisponibles, stockEnCentros, type Disponibilidad } from "com/socopur/cotizador/model/MaterialesService";
 import { entidadTieneCampo } from "com/socopur/cotizador/model/CamposServicio";
 import { cargarFormasPago } from "com/socopur/cotizador/model/FormasPagoService";
 import { consultarCondiciones, consultarPrecio, impuestosDeCondiciones } from "com/socopur/cotizador/model/PreciosService";
 import { type CondicionServicio, type FilaCondicion, descuentosAplicados, filasDeCondiciones } from "com/socopur/cotizador/model/Condiciones";
 import { agruparVehiculos, buscarVehiculos, filtrarVehiculos, textoDetalleVehiculo } from "com/socopur/cotizador/model/VehiculosService";
-import { areasOrgCanal, textoSolicitudAmpliacion, type CondicionArea, type OpcionAreaCliente, condicionDeArea, opcionesAreaCliente, almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, faltaSectorDeVentas, gruposParaGuardar, igvExonerado, modalidadPorDefecto, oficinaDe, orgVehiculosDe, puedeVenderOtroCentro, sectorDeCabecera, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
+import { areasOrgCanal, textoSolicitudAmpliacion, type CondicionArea, type OpcionAreaCliente, condicionDeArea, opcionesAreaCliente, almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, faltaSectorDeVentas, gruposParaGuardar, igvExonerado, MODALIDAD_DESPACHO, modalidadParaEntrega, modalidadPorDefecto, oficinaDe, orgVehiculosDe, puedeVenderOtroCentro, sectorDeCabecera, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
 import { evaluarBloqueoPedido, type BloqueoPedido } from "com/socopur/cotizador/model/BloqueoPedido";
 import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerDatosGuardados, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type EntregaParaGuardar, ENVIO_UNICO, type VinAsignado, esperarVinculos, leerMotivoVinculo, anularGrupo } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
 import { validarDocumento } from "com/socopur/cotizador/model/Documento";
 import { usarOData as usarODataActual } from "com/socopur/cotizador/model/Modo";
-import { AltaEnProcesoError, cargarUbigeo, crearClienteSap, leerBloqueoEdicion, leerCambiosCliente, modificarClienteSap, serviciosDeCliente, type CambiosCliente, type DatosAlta } from "com/socopur/cotizador/model/ClienteEscrituraService";
+import { AltaEnProcesoError, cargarUbigeo, crearClienteSap, leerBloqueoEdicion, leerCambiosCliente, modificarClienteSap, partirRazon, serviciosDeCliente, type CambiosCliente, type DatosAlta } from "com/socopur/cotizador/model/ClienteEscrituraService";
 import { buscarRepuestosConStock, disponibilidadPorAlmacen, motivoVacio } from "com/socopur/cotizador/model/MaterialesService";
 import { cargarPreciosLista, precioListaDisponible, textoPrecioLista } from "com/socopur/cotizador/model/PrecioListaService";
 import { textoOrganizacion } from "com/socopur/cotizador/model/VendedoresService";
@@ -50,6 +50,7 @@ import MessageBox from "sap/m/MessageBox";
 import FileUploader from "sap/ui/unified/FileUploader";
 import Fragment from "sap/ui/core/Fragment";
 import { ListBase$SelectionChangeEvent } from "sap/m/ListBase";
+import { Panel$ExpandEvent } from "sap/m/Panel";
 import { Route$PatternMatchedEvent } from "sap/ui/core/routing/Route";
 import ObjectPageLayout from "sap/uxap/ObjectPageLayout";
 
@@ -229,6 +230,10 @@ interface Linea extends LineaMock {
 	/** Precios unitarios reales de SAP (solo lineas de materiales leidos de SAP). */
 	precioPenSap?: number;
 	precioUsdSap?: number;
+	/** Solo lineas leidas de un documento SAP: precio unitario con impuestos (en ellas `precio` es el neto). Es el que se guarda. */
+	precioFinal?: number;
+	/** Linea elegida en la tabla: la determinacion de precio muestra solo esta (con 20 lineas o mas, todas juntas no se podian revisar). */
+	verCondiciones?: boolean;
 	/** true si al cambiar canal o cliente SAP no pudo dar el precio de esta linea: el precio mostrado es el anterior y no vale. */
 	sinPrecioVigente?: boolean;
 	/** Impuesto (IGV) real leido de SAP; sin valor mientras la oferta no se haya guardado. */
@@ -325,6 +330,9 @@ interface Grupo {
 	isc?: number;
 	igv?: number;
 	totalConImp?: number;
+	/** Hay una linea elegida en la tabla: la determinacion de precio se abre y muestra solo esa. Sin elegir, el panel queda plegado. */
+	lineaPrecio?: boolean;
+	verPrecio?: boolean;
 }
 
 /**
@@ -1177,6 +1185,7 @@ export default class Oferta extends Controller {
 	public onCambiaEntrega(): void {
 		const oferta = this.modeloOferta();
 		oferta.setProperty("/perfil/expedicion", oferta.getProperty("/entrega") === "envio" ? "01" : "02");
+		this.aplicarModalidadDeEntrega();
 		// La lista de transportistas se pide la primera vez que se elige Envio.
 		if (oferta.getProperty("/entrega") === "envio" && !oferta.getProperty("/transp/cargado")) {
 			void this.cargarTransportistas();
@@ -1223,6 +1232,40 @@ export default class Oferta extends Controller {
 		const oferta = this.modeloOferta();
 		oferta.setProperty("/entrega", oferta.getProperty("/perfil/expedicion") === "01" ? "envio" : "recojo");
 		oferta.setProperty("/guardado", { visible: false, texto: "" });
+		this.aplicarModalidadDeEntrega();
+	}
+
+	/**
+	 * Repuestos: la modalidad sigue a la entrega (pruebas del 28/10/2026). Envio -> despacho a cliente; al volver a recojo, el grupo que estaba en
+	 * despacho toma la modalidad por defecto del canal del vendedor. Si alguna cambia, cambian el canal del documento y el precio.
+	 */
+	private aplicarModalidadDeEntrega(): void {
+		const oferta = this.modeloOferta();
+		const modalidades = (oferta.getProperty("/modalidades") as Modalidad[]) ?? [];
+		if (!modalidades.some((m) => m.key === MODALIDAD_DESPACHO)) {
+			return;
+		}
+		const envio = oferta.getProperty("/entrega") === "envio";
+		const elegidas = (oferta.getProperty("/modalidadesGrupo") as Record<string, string>) ?? {};
+		const porDefecto = modalidadPorDefecto("repuestos", canalDe(String(oferta.getProperty("/perfil/canal") ?? ""))) ?? "rep_mostrador";
+		let cambio = false;
+		((oferta.getProperty("/grupos") as Grupo[]) ?? [])
+			.filter((g) => !g.lineas.some((l) => l.unica))
+			.forEach((g) => {
+				const actual = modalidades.find((m) => m.key === (elegidas[g.clave] ?? g.modalidad));
+				const nueva = modalidadParaEntrega(actual, envio, porDefecto);
+				if (nueva && nueva !== actual?.key) {
+					elegidas[g.clave] = nueva;
+					cambio = true;
+				}
+			});
+		if (!cambio) {
+			return;
+		}
+		oferta.setProperty("/modalidadesGrupo", elegidas);
+		oferta.setProperty("/guardado", { visible: false, texto: "" });
+		this.recalcular();
+		void this.repreciarLineasSap();
 	}
 
 	/**
@@ -1362,6 +1405,8 @@ export default class Oferta extends Controller {
 		if (existente) {
 			existente.cantidad += cantidad;
 			existente.precio = final;
+			// El precio ya es el de la busqueda (con impuestos): el del documento SAP leido antes deja de valer.
+			existente.precioFinal = undefined;
 			existente.condicionesSap = m.condicionesSap ?? existente.condicionesSap;
 			existente.condiciones = m.condiciones ?? existente.condiciones;
 			this.repreciarPorEscala(existente);
@@ -1562,12 +1607,10 @@ export default class Oferta extends Controller {
 			bloqueoAviso,
 			tipoDoc: cl.tipoDoc,
 			doc: cl.doc,
-			razon1: nombre.slice(0, 35),
-			razon2: nombre.slice(35, 70),
-			razon3: nombre.slice(70, 105),
+			razon: nombre,
 			telefono: cl.telefono,
 			correo: cl.correo,
-			original: { razon1: nombre.slice(0, 35), razon2: nombre.slice(35, 70), razon3: nombre.slice(70, 105), telefono: cl.telefono, correo: cl.correo },
+			original: { razon: nombre, telefono: cl.telefono, correo: cl.correo },
 			direcciones: this.direccionesDe(cl).map((x) => ({ ...x })),
 			tiposDireccion: [
 				{ key: "Fiscal", text: this.i18n().getText("direccionFiscal") },
@@ -1592,14 +1635,21 @@ export default class Oferta extends Controller {
 		}
 	}
 
+	/** Nombre o razon social como se compara y se guarda: sin espacios de mas. */
+	private razonLimpia(valor: unknown): string {
+		return String(valor ?? "").replace(/\s+/g, " ").trim();
+	}
+
 	/** Con el servicio de edicion publicado guarda en SAP (nombre, telefono y correo); si no, queda simulado (en SAP lo hace ZSDSCPP002). */
 	public onGuardarCliente(): void {
 		const modelo = this.dialogoClienteActual?.getModel("cli") as JSONModel;
 		const i18n = this.i18n();
 		const errores: string[] = [];
-		const razon = [1, 2, 3].map((n) => String(modelo.getProperty(`/razon${n}`) ?? "")).join("").trim();
+		const razon = this.razonLimpia(modelo.getProperty("/razon"));
 		if (!razon) {
 			errores.push(i18n.getText("altaErrRazon") as string);
+		} else if (partirRazon(razon).length > 3) {
+			errores.push(i18n.getText("altaErrRazonLarga") as string);
 		}
 		if (!/^9\d{8}$/.test(String(modelo.getProperty("/telefono") ?? "").replace(/\s/g, ""))) {
 			errores.push(i18n.getText("altaErrCelular") as string);
@@ -1649,18 +1699,20 @@ export default class Oferta extends Controller {
 		const i18n = this.i18n();
 		const orig = modelo.getProperty("/original") as Record<string, string>;
 		const actual: Record<string, string> = {
-			razon1: String(modelo.getProperty("/razon1") ?? ""),
-			razon2: String(modelo.getProperty("/razon2") ?? ""),
-			razon3: String(modelo.getProperty("/razon3") ?? ""),
 			celular: String(modelo.getProperty("/telefono") ?? "").replace(/\s/g, ""),
 			email: String(modelo.getProperty("/correo") ?? "")
 		};
-		const origen: Record<string, string> = { razon1: orig.razon1, razon2: orig.razon2, razon3: orig.razon3, celular: orig.telefono, email: orig.correo };
+		const origen: Record<string, string> = { celular: orig.telefono, email: orig.correo };
 		const cambios: CambiosCliente = {};
 		for (const [k, v] of Object.entries(actual)) {
 			if (v !== origen[k]) {
 				(cambios as Record<string, string>)[k] = v;
 			}
+		}
+		// El nombre viaja completo (las tres partes, aunque alguna quede vacia): la particion de SAP puede no coincidir con la de aqui.
+		if (razon !== this.razonLimpia(orig.razon)) {
+			const [razon1 = "", razon2 = "", razon3 = ""] = partirRazon(razon);
+			Object.assign(cambios, { razon1, razon2, razon3 });
 		}
 		if (Object.keys(cambios).length === 0) {
 			this.dialogoClienteActual?.close();
@@ -1954,6 +2006,26 @@ export default class Oferta extends Controller {
 		this.recalcular();
 	}
 
+	/**
+	 * Elegir una linea en la tabla del detalle abre su determinacion de precio, solo la de esa linea (pruebas del 28/10/2026: con 20 lineas o
+	 * mas, todas abiertas a la vez no se podian revisar).
+	 */
+	public onElegirLineaPrecio(event: ListBase$SelectionChangeEvent): void {
+		this.mostrarPrecioDe(event.getParameter("listItem")?.getBindingContext("oferta")?.getObject() as Linea | undefined);
+	}
+
+	/** Plegar el panel suelta la linea elegida; desplegarlo sin linea elegida muestra como elegir una. */
+	public onExpandirPrecio(event: Panel$ExpandEvent): void {
+		if (!event.getParameter("expand")) {
+			this.mostrarPrecioDe(undefined);
+		}
+	}
+
+	private mostrarPrecioDe(linea: Linea | undefined): void {
+		((this.modeloOferta().getProperty("/lineas") as Linea[]) ?? []).forEach((l) => (l.verCondiciones = l === linea));
+		this.recalcular();
+	}
+
 	/* ---------- Modalidad por oferta generada (define clase de oferta/pedido y el camino posterior) ---------- */
 
 	/** Cada grupo (= una oferta) lleva su modalidad; por defecto la estandar de su tipo. */
@@ -1967,7 +2039,10 @@ export default class Oferta extends Controller {
 		const canalPerfil = canalDe(String(oferta.getProperty("/perfil/canal") ?? ""));
 		const porDefecto = modalidadPorDefecto(tipo, canalPerfil) ?? (tipo === "vehiculos" ? "veh_retail" : "rep_mostrador");
 		const opciones = modalidades.filter((m) => m.tipo === tipo || m.tipo === "ambos");
-		let clave = elegidas[grupo.clave] ?? porDefecto;
+		// Repuestos con envio ya elegido: el grupo nuevo nace en despacho a cliente, igual que si se eligiera Envio despues.
+		const porEntrega =
+			tipo === "repuestos" && oferta.getProperty("/entrega") === "envio" && opciones.some((m) => m.key === MODALIDAD_DESPACHO) ? MODALIDAD_DESPACHO : porDefecto;
+		let clave = elegidas[grupo.clave] ?? porEntrega;
 		if (!opciones.some((m) => m.key === clave)) {
 			clave = porDefecto;
 		}
@@ -1984,10 +2059,14 @@ export default class Oferta extends Controller {
 		let sectorCabecera = "";
 		if (primera) {
 			const canalGrupo = canalDe(m.canal);
-			const sectorCab = sectorDeCabecera(canalGrupo, primera.sector, primera.orgVentas);
+			// Con el sector PROPIO del material, como al guardar (gruposParaGuardar): en el canal 10 la cabecera lleva el del material (p. ej. 50),
+			// no el 99 de mostrador con el que se agrupo la linea. Antes el aviso de area se calculaba con el 99 y bloqueaba el guardado.
+			const sectorMaterial = primera.sectorMaterial ?? primera.sector;
+			const sectorCab = sectorDeCabecera(canalGrupo, sectorMaterial, primera.orgVentas);
 			sectorCabecera = sectorCab;
-			const base = `${primera.grupo} · ${i18n.getText("grupoOrg", [primera.orgVentas, primera.sector]) as string}`;
-			grupo.titulo = canalGrupo && sectorCab !== primera.sector ? `${base} · ${i18n.getText("grupoSectorCab", [sectorCab]) as string}` : base;
+			const sectorTitulo = canalGrupo && sectorCab === sectorMaterial ? sectorCab : primera.sector;
+			const base = `${primera.grupo} · ${i18n.getText("grupoOrg", [primera.orgVentas, sectorTitulo]) as string}`;
+			grupo.titulo = canalGrupo && sectorCab !== sectorTitulo ? `${base} · ${i18n.getText("grupoSectorCab", [sectorCab]) as string}` : base;
 		}
 		// El cliente debe estar dado de alta en el area de ventas (organizacion + canal) de la modalidad
 		const cliente = oferta.getProperty("/cliente") as Cliente | null;
@@ -2460,6 +2539,49 @@ export default class Oferta extends Controller {
 		}
 		(this.dialogoStock.getModel("stock") as JSONModel).setData(this.datosStock(material));
 		this.dialogoStock.open();
+		void this.cargarStockEnCentros(material);
+	}
+
+	/**
+	 * Con SAP real, el stock de repuestos se completa con los demas centros de la organizacion del vendedor, con su disponible (ATP). Es solo
+	 * para ver donde hay; si la lectura falla queda la fila del almacen propio que ya se mostraba.
+	 */
+	private async cargarStockEnCentros(m: Vehiculo & Repuesto & { tipo: string }): Promise<void> {
+		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel | undefined;
+		const modelo = this.dialogoStock?.getModel("stock") as JSONModel | undefined;
+		if (!odata || !modelo || !this.usarOData() || m.tipo !== "repuestos" || !m.orgVentas) {
+			return;
+		}
+		const canal = canalDe(String(this.modeloOferta().getProperty("/perfil/busqueda/canal") ?? "11"));
+		const vtweg = this.canalDeDocumento(m.orgVentas, m.sectorOferta, "repuestos") || canal;
+		const mio = ((modelo.getProperty("/filas") as FilaStock[]) ?? []).find((f) => f.esMio);
+		modelo.setProperty("/cargando", true);
+		try {
+			const stock = await stockEnCentros(odata, m.orgVentas, vtweg, m.material);
+			if (modelo.getProperty("/material") !== m) {
+				return; // mientras tanto se abrio el stock de otro material
+			}
+			const filas = filasDeStockEnCentros(stock, this.almacenPropio(mio?.fisico ?? 0, mio?.disponible ?? 0), (w) => this.nombreCentro(w)).map((f) => ({
+				...f,
+				comprometido: f.fisico - f.disponible
+			}));
+			modelo.setProperty("/filas", filas);
+			modelo.setProperty("/totalDisponible", filas.reduce((acc, f) => acc + f.disponible, 0));
+			modelo.setProperty("/alerta", filas[0].disponible > 0 ? "" : (this.i18n().getText("sinStockMio") as string));
+		} catch {
+			// informativo: queda la fila del almacen propio
+		} finally {
+			modelo.setProperty("/cargando", false);
+		}
+	}
+
+	/** Centro y almacen del perfil del vendedor, con el stock que ya se conoce de ese almacen. */
+	private almacenPropio(fisico: number, disponible: number): { werks: string; lgort: string; fisico: number; disponible: number } {
+		return { werks: String(this.modeloOferta().getProperty("/perfil/centro") ?? ""), lgort: this.almacenDelPerfil(), fisico, disponible };
+	}
+
+	private nombreCentro(werks: string): string {
+		return ((this.modeloMock().getProperty("/opciones/centros") as Record<string, string>) ?? {})[werks] ?? "";
 	}
 
 	public onCerrarStock(): void {
@@ -2482,14 +2604,20 @@ export default class Oferta extends Controller {
 						{ ubicacion: "1101 · Pucallpa-Centenario · 0004 TDA CENTEN", esMio: true, fisico: m.stockMio, disponible: m.stockMio, transito: 0 },
 						{ ubicacion: "Otros centros", esMio: false, fisico: m.stockOtros, disponible: m.stockOtros, transito: 0 }
 					]
-				: [
-						{ ubicacion: "1101 · Pucallpa-Centenario · 0001 CENTENARIO", esMio: true, fisico: m.total, disponible: m.disponible, transito: 0 }
-					]);
+				: this.usarOData()
+					? // Con SAP real, el centro y almacen del perfil (antes decia siempre 1101 Pucallpa, tambien a un vendedor de Lima).
+						filasDeStockEnCentros([], this.almacenPropio(m.total, m.disponible), (w) => this.nombreCentro(w))
+					: [
+							{ ubicacion: "1101 · Pucallpa-Centenario · 0001 CENTENARIO", esMio: true, fisico: m.total, disponible: m.disponible, transito: 0 }
+						]);
 		const filas = base.map((f) => ({ ...f, comprometido: f.fisico - f.disponible }));
 		const mio = filas.find((f) => f.esMio);
 		return {
 			titulo: i18n.getText("stockDe", [`${m.material} · ${m.denominacion}`]) as string,
 			material: m,
+			// La solicitud de traslado todavia es simulada (numero inventado): con SAP real no se ofrece.
+			puedeSolicitar: !this.usarOData(),
+			cargando: false,
 			filas,
 			transito: (mock.getProperty(`/transito/${m.material}`) as unknown[]) ?? [],
 			totalDisponible: filas.reduce((acc, f) => acc + f.disponible, 0),
@@ -3690,9 +3818,8 @@ export default class Oferta extends Controller {
 			tipoCliente: esRuc ? "0003" : "0001",
 			tipoDoc: esRuc ? "RUC" : "DNI",
 			doc,
-			razon1: "",
-			razon2: "",
-			razon3: "",
+			// Un solo campo; al crear se reparte en las tres partes de SAP (partirRazon).
+			razon: "",
 			dep: "",
 			prov: "",
 			dist: "",
@@ -3773,11 +3900,8 @@ export default class Oferta extends Controller {
 			return;
 		}
 		const partir = (t: string, n: number): string[] => [t.slice(0, n), t.slice(n, 2 * n), t.slice(2 * n, 3 * n)];
-		const [r1, r2, r3] = partir(r.razon, 35);
 		const [d1, d2, d3] = partir(r.direccion, 35);
-		oferta.setProperty("/alta/razon1", r1);
-		oferta.setProperty("/alta/razon2", r2);
-		oferta.setProperty("/alta/razon3", r3);
+		oferta.setProperty("/alta/razon", r.razon);
 		oferta.setProperty("/alta/dir1", d1);
 		oferta.setProperty("/alta/dir2", d2);
 		oferta.setProperty("/alta/dir3", d3);
@@ -3806,8 +3930,12 @@ export default class Oferta extends Controller {
 		if (!this.usarOData() && clientes[doc]) {
 			errores.push(i18n.getText("altaErrExiste") as string);
 		}
-		if (!(a.razon1 ?? "").trim()) {
+		const razon = this.razonLimpia(a.razon);
+		const partesRazon = partirRazon(razon);
+		if (!razon) {
 			errores.push(i18n.getText("altaErrRazon") as string);
+		} else if (partesRazon.length > 3) {
+			errores.push(i18n.getText("altaErrRazonLarga") as string);
 		}
 		if (!a.dep || !a.prov || !a.dist) {
 			errores.push(i18n.getText("altaErrUbigeo") as string);
@@ -3825,11 +3953,13 @@ export default class Oferta extends Controller {
 		if (errores.length) {
 			return;
 		}
+		const [razon1 = "", razon2 = "", razon3 = ""] = partesRazon;
+		const datos = { ...a, razon1, razon2, razon3 };
 		if (this.usarOData()) {
-			void this.crearClienteEnSap(a as unknown as DatosAlta, doc);
+			void this.crearClienteEnSap(datos as unknown as DatosAlta, doc);
 			return;
 		}
-		this.crearClienteSimulado(a, doc);
+		this.crearClienteSimulado(datos, doc);
 	}
 
 	/**
@@ -3877,7 +4007,8 @@ export default class Oferta extends Controller {
 		const oferta = this.modeloOferta();
 		const i18n = this.i18n();
 		const clientes = this.modeloMock().getProperty("/clientes") as Record<string, Cliente>;
-		const nombre = [a.razon1, a.razon2, a.razon3].map((t) => t.trim()).join("").length ? `${a.razon1}${a.razon2}${a.razon3}`.trim() : "";
+		// Las partes se cortaron entre palabras: SAP las muestra unidas con un espacio.
+		const nombre = [a.razon1, a.razon2, a.razon3].map((t) => (t ?? "").trim()).filter(Boolean).join(" ");
 		const nuevo: Cliente = {
 			doc,
 			tipoDoc: a.tipoDoc,
@@ -4552,6 +4683,8 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 		const grupos = Array.from(mapa.values());
 		grupos.forEach((g) => this.aplicarModalidadGrupo(g));
 		grupos.forEach((g) => {
+			g.lineaPrecio = g.lineas.some((l) => l.verCondiciones && !l.bonificacion);
+			g.verPrecio = g.lineaPrecio;
 			const conImpuesto = g.lineas.length > 0 && g.lineas.every((l) => l.isc !== undefined && l.igvImporte !== undefined);
 			g.isc = conImpuesto ? this.redondear(g.lineas.reduce((a, l) => a + (l.isc ?? 0), 0)) : undefined;
 			g.igv = conImpuesto ? this.redondear(g.lineas.reduce((a, l) => a + (l.igvImporte ?? 0), 0)) : undefined;

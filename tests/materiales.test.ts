@@ -261,3 +261,49 @@ test("buscarRepuestosConStock con solo stock: un material con stock fisico pero 
 	const sin = await buscarRepuestosConStock(modelo, { vkorg: "1203", vtweg: "10" }, "2001", false, undefined, undefined, undefined, "0004");
 	assert.deepEqual(sin.filas.map((f) => f.material), ["A", "B"]);
 });
+
+test("stockEnCentrosDeFilas: todos los centros del material, sin las filas que SAP no pudo calcular", async () => {
+	const { stockEnCentrosDeFilas } = await import("../webapp/model/MaterialesService.ts");
+	const r = stockEnCentrosDeFilas(
+		[
+			{ Matnr: "F02-01-LF110-26H", Werks: "1001", Lgort: "0001", StockLibre: "0", Disponible: "0", Respuesta: 0 },
+			{ Matnr: "F02-01-LF110-26H", Werks: "1501", Lgort: "0001", StockLibre: "100.000", Disponible: "98.000", Respuesta: 0 },
+			{ Matnr: "F02-01-LF110-26H", Werks: "1502", Lgort: "0001", StockLibre: "5", Disponible: "0", Respuesta: 1 },
+			{ Matnr: "OTRO", Werks: "1001", Lgort: "0001", StockLibre: "9", Disponible: "9", Respuesta: 0 }
+		],
+		"F02-01-LF110-26H"
+	);
+	assert.deepEqual(r, [
+		{ werks: "1001", lgort: "0001", libre: 0, disponible: 0 },
+		{ werks: "1501", lgort: "0001", libre: 100, disponible: 98 }
+	]);
+});
+
+test("filasDeStockEnCentros: primero el almacen del vendedor aunque no tenga stock, luego los demas con stock de mas a menos disponible", async () => {
+	const { filasDeStockEnCentros } = await import("../webapp/model/MaterialesService.ts");
+	const nombres: Record<string, string> = { "1001": "LIMA - ATE", "1501": "PUERTO MALDONADO - CACERES" };
+	const filas = filasDeStockEnCentros(
+		[
+			{ werks: "1101", lgort: "0001", libre: 3, disponible: 3 },
+			{ werks: "1001", lgort: "0001", libre: 0, disponible: 0 },
+			{ werks: "1501", lgort: "0001", libre: 100, disponible: 98 },
+			{ werks: "1302", lgort: "0001", libre: 0, disponible: 0 }
+		],
+		{ werks: "1001", lgort: "0001", fisico: 7, disponible: 7 },
+		(w) => nombres[w] ?? ""
+	);
+	assert.deepEqual(
+		filas.map((f) => [f.ubicacion, f.esMio, f.fisico, f.disponible]),
+		[
+			["1001 · LIMA - ATE · 0001", true, 0, 0],
+			["1501 · PUERTO MALDONADO - CACERES · 0001", false, 100, 98],
+			["1101 · 0001", false, 3, 3]
+		]
+	);
+});
+
+test("filasDeStockEnCentros: si SAP no devuelve el almacen del vendedor, se muestra con el stock que dio la busqueda", async () => {
+	const { filasDeStockEnCentros } = await import("../webapp/model/MaterialesService.ts");
+	const [mio] = filasDeStockEnCentros([], { werks: "1001", lgort: "0001", fisico: 7, disponible: 5 }, () => "");
+	assert.deepEqual(mio, { ubicacion: "1001 · 0001", esMio: true, fisico: 7, disponible: 5, transito: 0 });
+});

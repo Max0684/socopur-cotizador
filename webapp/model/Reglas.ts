@@ -13,6 +13,11 @@ export interface LineaCarrito {
 	material: string;
 	cantidad: number;
 	precio: number;
+	/**
+	 * Solo lineas leidas de un documento SAP (oferta guardada o reabierta): precio unitario CON impuestos. En ellas `precio` es el neto de SAP
+	 * (Netpr); si la oferta se vuelve a guardar, el precio de lista que viaja es este y no el neto (si no, se pierde el IGV: 17.50 -> 14.83).
+	 */
+	precioFinal?: number;
 	bonificacion?: boolean;
 	/** Solo vehiculos de SAP: variante, centro y almacen del vehiculo elegido. */
 	variante?: string;
@@ -198,7 +203,7 @@ export function gruposParaGuardar(grupos: GrupoCarrito[], perfil: PerfilVenta, a
 					// Un vehiculo se vende desde el centro y el almacen donde esta, no desde el centro del perfil.
 					centro: l.centroVeh || perfil.centro || "",
 					almacen: l.almacenVeh || (typeof almacen === "function" ? almacen(perfil.centro ?? "") : almacen),
-					precio: l.precio,
+					precio: l.precioFinal ?? l.precio,
 					...(l.variante ? { variante: l.variante } : {})
 				}))
 		};
@@ -233,6 +238,20 @@ export function modalidadPorDefecto(tipo: "repuestos" | "vehiculos", canal: stri
 	return MODALIDAD_POR_DEFECTO[tipo][canal];
 }
 
+/** Modalidad de repuestos con envio al cliente (YCOTIZ_MODAL en DS4/130: canal 10, pedido Z310). */
+export const MODALIDAD_DESPACHO = "rep_despacho";
+
+/**
+ * Modalidad de un grupo de REPUESTOS cuando el vendedor cambia la entrega (pruebas del 28/10/2026). Con envio pasa a despacho a cliente, salvo
+ * que la suya ya sea de envio (p. ej. web); al volver a recojo, la de despacho vuelve a la por defecto del canal. undefined = no cambia.
+ */
+export function modalidadParaEntrega(actual: { key: string; expedicion: string } | undefined, envio: boolean, porDefectoRecojo: string): string | undefined {
+	if (envio) {
+		return actual?.expedicion === "envio" ? undefined : MODALIDAD_DESPACHO;
+	}
+	return actual?.key === MODALIDAD_DESPACHO ? porDefectoRecojo : undefined;
+}
+
 export interface LineaTotales {
 	total: number;
 	iscPct?: number;
@@ -262,6 +281,11 @@ export interface TotalesOferta {
 }
 
 const redondear = (v: number): number => Math.round(v * 100) / 100;
+
+/** Precio unitario con impuestos de una posicion de un documento SAP: (valor neto + ISC + IGV) / cantidad. Sin cantidad no hay precio. */
+export function precioFinalDePosicion(netwr: number, impuesto: number, cantidad: number): number | undefined {
+	return cantidad > 0 ? redondear((netwr + impuesto) / cantidad) : undefined;
+}
 
 /**
  * Totales de la oferta. El IGV sale de SAP (VBAP-MWSBP por posicion): si alguna linea no lo trae, el IGV se
