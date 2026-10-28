@@ -34,6 +34,7 @@ test("promoDeFila convierte la fila de SAP: numeros, promocion sin ceros y estad
 		matnrRegalo: "PM-13008-C",
 		descRegalo: "FILTRO COMB CB125/CG125",
 		unidadRegalo: "UN",
+		spartRegalo: "",
 		tipo: "2",
 		estado: "A",
 		cantidadRegalo: 20,
@@ -41,6 +42,10 @@ test("promoDeFila convierte la fila de SAP: numeros, promocion sin ceros y estad
 	});
 	assert.equal(promoDeFila(filas200[2]).mecanismo, "ZETA");
 	assert.equal(promoDeFila({ Estado: "X" }).estado, "");
+});
+
+test("promoDeFila lee el sector del material de regalo (lapicero de venta cruzada: sector 90)", () => {
+	assert.equal(promoDeFila({ Mecanismo: "ZETA", MatnrRegalo: "MPPA-ARP-HI-00001", SpartRegalo: "90" }).spartRegalo, "90");
 });
 
 test("regalosQueAplican: con 200 UN solo el filtro (la bateria no alcanza y el candado Zeta queda excluido)", () => {

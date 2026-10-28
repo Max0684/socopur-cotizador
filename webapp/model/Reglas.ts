@@ -21,6 +21,8 @@ export interface LineaCarrito {
 	bonificacion?: boolean;
 	/** Regalo de promocion de repuestos: ZNA0 (SAP lo agrega solo) o ZETA (venta cruzada, lo envia el Cotizador). */
 	mecanismo?: string;
+	/** Solo regalos de promocion: sector del material de regalo. */
+	sectorRegalo?: string;
 	/** Identificador de la linea y, en un regalo, el de la linea que lo genera. */
 	uid?: string;
 	origen?: string;
@@ -378,6 +380,15 @@ export function faltaSectorDeVentas(areasCliente: string[] | undefined, orgVenta
  * el sector de cada posicion: en mostrador (cabecera 99) rechazo la oferta de OSANTRAK, ampliado a 1103/11/99 pero no a 1103/11/51, con
  * "Sold-to party ... not maintained for sales area 1103 11 51" (27/10/2026). undefined = no falta ninguno o no se puede saber.
  */
+/**
+ * Sectores de un grupo que SAP revisa en el area de ventas del cliente: el propio de cada material y el de cada regalo de venta cruzada (Zeta),
+ * que el Cotizador envia como posicion. La oferta de JYAS MOTORS del 28/10/2026 se rechazo por el lapicero y la franela de la llanta
+ * SFX-18X300-C051, de sector 90: "No se ha creado el solicitante 100024840 para area de ventas 1103 10 90". El regalo ZNA0 lo agrega SAP.
+ */
+export function sectoresDeLineas(lineas: LineaCarrito[]): string[] {
+	return lineas.flatMap((l) => (!l.bonificacion ? [l.sectorMaterial ?? l.sector] : l.mecanismo === "ZETA" && l.sectorRegalo ? [l.sectorRegalo] : []));
+}
+
 export function sectorQueFalta(
 	areasCliente: string[] | undefined,
 	orgVentas: string | undefined,

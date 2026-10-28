@@ -18,9 +18,12 @@ import {
 	modalidadPorDefecto,
 	oficinaDe,
 	sectorDeCabecera,
+	sectoresDeLineas,
+	sectorQueFalta,
 	igvExonerado,
 	totalesDeOferta,
-	type GrupoCarrito
+	type GrupoCarrito,
+	type LineaCarrito
 } from "../webapp/model/Reglas.ts";
 
 test("canalDe toma los dos digitos iniciales", () => {
@@ -135,6 +138,26 @@ test("gruposParaGuardar envia el regalo Zeta colgado de su linea; el ZNA0 no (SA
 			["MPTX-ARP-MU-00001", 0, "Z", 2]
 		]
 	);
+});
+
+test("sectoresDeLineas: el regalo de venta cruzada suma su sector; el ZNA0 no (lo agrega SAP)", () => {
+	const lineas: LineaCarrito[] = [
+		{ uid: "L1", orgVentas: "1103", sector: "50", sectorMaterial: "50", material: "SFX-18X300-C051", cantidad: 10, precio: 65.3 },
+		{ uid: "L2", origen: "L1", mecanismo: "ZETA", sectorRegalo: "90", bonificacion: true, orgVentas: "1103", sector: "50", material: "MPPA-ARP-HI-00001", cantidad: 1, precio: 0 },
+		{ uid: "L3", orgVentas: "1103", sector: "50", material: "SFX428H-150-MTK", cantidad: 200, precio: 17.5 },
+		{ uid: "L4", origen: "L3", mecanismo: "ZNA0", sectorRegalo: "51", bonificacion: true, orgVentas: "1103", sector: "50", material: "PM-13008-C", cantidad: 20, precio: 0 }
+	];
+	assert.deepEqual(sectoresDeLineas(lineas), ["50", "90", "50"]);
+});
+
+test("sectorQueFalta avisa el 1103/10/90 del regalo de venta cruzada (caso real JYAS MOTORS, 28/10/2026)", () => {
+	const areas = ["1103/10/50", "1103/10/55", "1103/11/99"];
+	const lineas: LineaCarrito[] = [
+		{ uid: "L1", orgVentas: "1103", sector: "50", material: "SFX-18X300-C051", cantidad: 10, precio: 65.3 },
+		{ uid: "L2", origen: "L1", mecanismo: "ZETA", sectorRegalo: "90", bonificacion: true, orgVentas: "1103", sector: "50", material: "MPTX-ARP-MU-00001", cantidad: 1, precio: 0 }
+	];
+	assert.equal(sectorQueFalta(areas, "1103", "10", "50", sectoresDeLineas(lineas)), "90");
+	assert.equal(sectorQueFalta(areas, "1103", "10", "50", sectoresDeLineas(lineas.slice(0, 1))), undefined);
 });
 
 test("gruposParaGuardar no envia un regalo Zeta cuya linea ya no esta en la oferta", () => {

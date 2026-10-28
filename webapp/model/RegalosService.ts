@@ -34,6 +34,8 @@ export interface PromoRegalo {
 	matnrRegalo: string;
 	descRegalo: string;
 	unidadRegalo: string;
+	/** Sector del material de regalo: si el cliente no esta en el area de ese sector, SAP rechaza la oferta (visto el 28/10/2026 con sector 90). */
+	spartRegalo: string;
 	/** 1 gratis incluida en la cantidad, 2 gratis adicional, 3 incluida sin posicion propia. */
 	tipo: string;
 	estado: EstadoRegalo;
@@ -52,6 +54,7 @@ interface FilaRegalo {
 	MatnrRegalo?: string;
 	DescRegalo?: string;
 	UnidadRegalo?: string;
+	SpartRegalo?: string;
 	Tipo?: string;
 	Estado?: string;
 	CantidadRegalo?: string | number;
@@ -88,6 +91,7 @@ export function promoDeFila(f: FilaRegalo): PromoRegalo {
 		matnrRegalo: texto(f.MatnrRegalo),
 		descRegalo: texto(f.DescRegalo),
 		unidadRegalo: texto(f.UnidadRegalo),
+		spartRegalo: texto(f.SpartRegalo),
 		tipo: texto(f.Tipo),
 		estado: estado === "A" || estado === "N" || estado === "E" ? estado : "",
 		cantidadRegalo: Number(f.CantidadRegalo ?? 0),

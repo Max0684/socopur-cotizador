@@ -11,7 +11,7 @@ import { consultarCondiciones, consultarPrecio, impuestosDeCondiciones } from "c
 import { cantidadTxt, claveRegalos, consultarRegalos, regalosQueAplican, type ConsultaRegalo, type PromoRegalo } from "com/socopur/cotizador/model/RegalosService";
 import { type CondicionServicio, type FilaCondicion, descuentosAplicados, filasDeCondiciones } from "com/socopur/cotizador/model/Condiciones";
 import { agruparVehiculos, buscarVehiculos, filtrarVehiculos, textoDetalleVehiculo } from "com/socopur/cotizador/model/VehiculosService";
-import { areasOrgCanal, textoSolicitudAmpliacion, type CondicionArea, type OpcionAreaCliente, condicionDeArea, opcionesAreaCliente, almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, gruposParaGuardar, igvExonerado, MODALIDAD_DESPACHO, modalidadParaEntrega, modalidadPorDefecto, oficinaDe, orgVehiculosDe, puedeVenderOtroCentro, sectorDeCabecera, sectorQueFalta, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
+import { areasOrgCanal, textoSolicitudAmpliacion, type CondicionArea, type OpcionAreaCliente, condicionDeArea, opcionesAreaCliente, almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, gruposParaGuardar, igvExonerado, MODALIDAD_DESPACHO, modalidadParaEntrega, modalidadPorDefecto, oficinaDe, orgVehiculosDe, puedeVenderOtroCentro, sectorDeCabecera, sectoresDeLineas, sectorQueFalta, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
 import { evaluarBloqueoPedido, type BloqueoPedido } from "com/socopur/cotizador/model/BloqueoPedido";
 import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerDatosGuardados, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type EntregaParaGuardar, ENVIO_UNICO, type VinAsignado, esperarVinculos, leerMotivoVinculo, anularGrupo } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
@@ -263,6 +263,8 @@ interface Linea extends LineaMock {
 	sinTalla?: boolean;
 	/** Solo regalos de promocion calculados antes de guardar: ZNA0 (SAP lo agrega solo) o ZETA (se envia). */
 	mecanismo?: string;
+	/** Solo regalos de promocion: sector del material de regalo (el de un regalo Zeta tambien se revisa en el area del cliente). */
+	sectorRegalo?: string;
 	origen?: string;
 	talla?: string;
 	tallas?: { key: string; text: string; enabled: boolean }[];
@@ -1597,6 +1599,7 @@ export default class Oferta extends Controller {
 			bonificacion: true,
 			sinTalla: true,
 			mecanismo: p.mecanismo,
+			...(p.spartRegalo ? { sectorRegalo: p.spartRegalo } : {}),
 			origen: padre.uid
 		};
 	}
@@ -2246,8 +2249,9 @@ export default class Oferta extends Controller {
 		const canalNum = canalDe(m.canal);
 		const area = canalNum ? `${grupo.lineas[0]?.orgVentas}/${canalNum}` : "";
 		grupo.areaFalta = !!cliente && !!area && faltaAreaDeVentas(cliente.areas, grupo.lineas[0]?.orgVentas, canalNum);
-		// Dado de alta en la organizacion y el canal, pero no en el sector de la cabecera o en el de algun material: SAP rechaza la oferta.
-		const sectoresLineas = grupo.lineas.filter((l) => !l.bonificacion).map((l) => l.sectorMaterial ?? l.sector);
+		// Dado de alta en la organizacion y el canal, pero no en el sector de la cabecera, en el de algun material o en el de un regalo de venta
+		// cruzada que se envia: SAP rechaza la oferta.
+		const sectoresLineas = sectoresDeLineas(grupo.lineas);
 		const sectorFalta = !grupo.areaFalta && !!cliente && !!area ? sectorQueFalta(cliente.areas, grupo.lineas[0]?.orgVentas, canalNum, sectorCabecera, sectoresLineas) : undefined;
 		if (grupo.areaFalta) {
 			const nombre = (this.modeloMock().getProperty("/canalesArea") as { key: string; text: string }[]).find((x) => x.key === area)?.text ?? area;
