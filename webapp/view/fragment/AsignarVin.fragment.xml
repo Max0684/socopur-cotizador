@@ -3,6 +3,7 @@
 	xmlns:core="sap.ui.core">
 	<Dialog
 		id="dlgVin"
+		stretch="{= ${device>/ancho} &lt; 600 }"
 		title="{i18n>vinTitulo}"
 		contentWidth="62rem"
 		draggable="true"
@@ -18,10 +19,11 @@
 					showIcon="true"
 					class="sapUiSmallMarginBottom" />
 
-				<Table items="{asignar>/filas}">
+				<!-- En un telefono el VIN baja debajo del vehiculo en vez de quedar aplastado -->
+				<Table items="{asignar>/filas}" contextualWidth="Auto">
 					<columns>
 						<Column width="20rem"><Text text="{i18n>colVehiculo}" /></Column>
-						<Column><Text text="{i18n>colVin}" /></Column>
+						<Column minScreenWidth="36rem" demandPopin="true"><Text text="{i18n>colVin}" /></Column>
 					</columns>
 					<items>
 						<ColumnListItem>

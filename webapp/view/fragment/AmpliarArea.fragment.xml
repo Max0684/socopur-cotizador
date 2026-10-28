@@ -15,9 +15,10 @@
 				<List items="{cli>/areas}" noDataText="{i18n>areasNinguna}" class="sapUiSmallMarginBottom">
 					<StandardListItem title="{cli>text}" icon="sap-icon://business-by-design" />
 				</List>
-				<HBox alignItems="Center">
+				<HBox alignItems="Center" wrap="Wrap">
 					<Label text="{i18n>ampliarNueva}" class="sapUiSmallMarginEnd" />
-					<Select selectedKey="{cli>/nueva}" forceSelection="false" width="20rem" items="{cli>/disponibles}">
+					<Select selectedKey="{cli>/nueva}" forceSelection="false" width="20rem" items="{cli>/disponibles}" class="cotizAnchoMax">
+						<layoutData><FlexItemData styleClass="cotizAnchoMax" /></layoutData>
 						<core:Item key="{cli>key}" text="{cli>text}" />
 					</Select>
 				</HBox>

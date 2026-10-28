@@ -4,6 +4,7 @@
 	xmlns:u="sap.ui.unified">
 	<Dialog
 		id="dlgExcel"
+		stretch="{= ${device>/ancho} &lt; 600 }"
 		title="{i18n>excelTitulo}"
 		contentWidth="58rem"
 		draggable="true"
@@ -19,9 +20,11 @@
 						placeholder="{i18n>excelSinArchivo}"
 						uploadOnChange="false"
 						change=".onExcelElegido"
-						width="24rem" />
+						width="{= ${device>/ancho} &lt; 600 ? '100%' : '24rem' }">
+						<u:layoutData><FlexItemData styleClass="cotizAnchoMax" /></u:layoutData>
+					</u:FileUploader>
 				</HBox>
-				<HBox alignItems="Center" class="sapUiSmallMarginBottom">
+				<HBox alignItems="Center" wrap="Wrap" class="sapUiSmallMarginBottom">
 					<Label text="{i18n>excelModo}" class="sapUiSmallMarginEnd" />
 					<SegmentedButton selectedKey="{excel>/modo}" selectionChange=".onCambiaModoExcel">
 						<items>
@@ -41,13 +44,14 @@
 					<ObjectStatus text="{excel>/txtAdvertencias}" state="Warning" class="sapUiMediumMarginEnd" />
 					<ObjectStatus text="{excel>/txtErrores}" state="Error" />
 				</HBox>
-				<Table visible="{excel>/hayArchivo}" items="{excel>/filas}" sticky="ColumnHeaders">
+				<!-- En un telefono quedan material y cantidad; fila, descripcion y resultado bajan debajo de la fila -->
+				<Table visible="{excel>/hayArchivo}" items="{excel>/filas}" sticky="ColumnHeaders" contextualWidth="Auto">
 					<columns>
-						<Column width="4rem"><Text text="{i18n>excelFila}" /></Column>
+						<Column width="4rem" minScreenWidth="40rem" demandPopin="true"><Text text="{i18n>excelFila}" /></Column>
 						<Column width="9rem"><Text text="{i18n>colMaterial}" /></Column>
-						<Column><Text text="{i18n>colDescripcion}" /></Column>
+						<Column minScreenWidth="40rem" demandPopin="true"><Text text="{i18n>colDescripcion}" /></Column>
 						<Column width="6rem" hAlign="End"><Text text="{i18n>colCantidad}" /></Column>
-						<Column width="20rem"><Text text="{i18n>excelResultado}" /></Column>
+						<Column width="20rem" minScreenWidth="40rem" demandPopin="true"><Text text="{i18n>excelResultado}" /></Column>
 					</columns>
 					<items>
 						<ColumnListItem highlight="{excel>estado}">

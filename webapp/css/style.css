@@ -1,0 +1,18 @@
+/* Ajustes de pantallas angostas (revision responsive del 28/10/2026). Lo demas lo resuelven los controles de UI5. */
+
+/* Buscador de la lista de ofertas: hasta 22rem, pero en un telefono se achica en vez de tapar el titulo "Ofertas". */
+.cotizBuscador {
+	max-width: 22rem;
+}
+
+/* Campos de ancho fijo en dialogos (selector de area, archivo Excel): en un telefono no pasan del ancho disponible. */
+.cotizAnchoMax {
+	max-width: 100%;
+}
+
+/* Nombres de cliente en la lista: UI5 los parte en cualquier letra ("Gutierre / z"); se cortan entre palabras. */
+.cotizLista .sapMObjLTitle,
+.cotizLista .sapMObjLTitle .sapMTextMaxLine {
+	word-break: normal;
+	overflow-wrap: anywhere;
+}

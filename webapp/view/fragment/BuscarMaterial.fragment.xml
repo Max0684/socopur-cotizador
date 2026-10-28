@@ -3,6 +3,7 @@
 	xmlns:core="sap.ui.core">
 	<Dialog
 		id="dlgBuscarMaterial"
+		stretch="{= ${device>/ancho} &lt; 600 }"
 		title="{i18n>materialBuscarTitulo}"
 		contentWidth="90%"
 		contentHeight="40rem"
@@ -24,7 +25,7 @@
 					class="sapUiSmallMarginBottom" />
 
 				<!-- Tipo de busqueda: hoy solo hay dos (Repuestos y Vehiculos) -->
-				<HBox alignItems="Center" class="sapUiSmallMarginBottom">
+				<HBox alignItems="Center" wrap="Wrap" class="sapUiSmallMarginBottom">
 					<Label text="{i18n>tipoBusqueda}" class="sapUiSmallMarginEnd" />
 					<SegmentedButton selectedKey="{busqueda>/tipo}" selectionChange=".onCambiaTipo">
 						<items>
@@ -148,18 +149,20 @@
 					growing="true"
 					growingThreshold="30"
 					contextualWidth="Auto"
+					popinLayout="GridSmall"
 					sticky="ColumnHeaders">
 					<columns>
+						<!-- En un telefono quedan material, stock y el boton; descripcion, centro y precio bajan debajo de la fila -->
 						<Column width="8rem"><Text text="{i18n>colMaterial}" /></Column>
-						<Column><Text text="{i18n>colDescripcion}" /></Column>
+						<Column minScreenWidth="40rem" demandPopin="true"><Text text="{i18n>colDescripcion}" /></Column>
 						<Column width="12rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colVariante}" /></Column>
 						<Column width="7rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colMarca}" /></Column>
 						<Column width="8rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colColor}" /></Column>
 						<Column width="3.5rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colAnio}" /></Column>
 						<Column width="6rem" minScreenWidth="68rem" demandPopin="true"><Text text="{i18n>colCondicion}" /></Column>
-						<Column width="9rem"><Text text="{i18n>colCentroAlmacen}" /></Column>
+						<Column width="9rem" minScreenWidth="40rem" demandPopin="true"><Text text="{i18n>colCentroAlmacen}" /></Column>
 						<Column width="6rem" hAlign="End"><Text text="{i18n>colStockMio}" /></Column>
-						<Column width="9rem" hAlign="End"><Text text="{i18n>colPrecioLista}" /></Column>
+						<Column width="9rem" hAlign="End" minScreenWidth="36rem" demandPopin="true"><Text text="{i18n>colPrecioLista}" /></Column>
 						<Column width="3rem" hAlign="Center"><Text text="" /></Column>
 					</columns>
 					<items>
@@ -203,10 +206,12 @@
 					growing="true"
 					growingThreshold="30"
 					contextualWidth="Auto"
+					popinLayout="GridSmall"
 					sticky="ColumnHeaders">
 					<columns>
+						<!-- En un telefono quedan material, disponible y el boton; descripcion y precio bajan debajo de la fila -->
 						<Column width="8rem"><Text text="{i18n>colMaterial}" /></Column>
-						<Column><Text text="{i18n>colDescripcion}" /></Column>
+						<Column minScreenWidth="40rem" demandPopin="true"><Text text="{i18n>colDescripcion}" /></Column>
 						<Column width="7rem" minScreenWidth="64rem" demandPopin="true"><Text text="{i18n>colSector}" /></Column>
 						<Column width="6rem" minScreenWidth="64rem" demandPopin="true"><Text text="{i18n>colMarca}" /></Column>
 						<Column width="6rem" hAlign="End"><Text text="{i18n>colDisponible}" /></Column>
@@ -219,7 +224,7 @@
 						<Column width="8rem" hAlign="End" visible="{busqueda>/hayPrecioLista}" minScreenWidth="60rem" demandPopin="true">
 							<VBox alignItems="End"><Text text="{i18n>colRetail}" tooltip="{i18n>colRetailTip}" /><ObjectStatus text="{i18n>canal11}" inverted="false" state="None" /></VBox>
 						</Column>
-						<Column width="9rem" hAlign="End"><Text text="{i18n>colPrecioCliente}" tooltip="{i18n>colPrecioClienteTip}" /></Column>
+						<Column width="9rem" hAlign="End" minScreenWidth="36rem" demandPopin="true"><Text text="{i18n>colPrecioCliente}" tooltip="{i18n>colPrecioClienteTip}" /></Column>
 						<Column width="3rem" hAlign="Center"><Text text="" /></Column>
 					</columns>
 					<items>

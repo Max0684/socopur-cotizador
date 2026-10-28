@@ -3,6 +3,7 @@
 	xmlns:core="sap.ui.core">
 	<Dialog
 		id="dlgStock"
+		stretch="{= ${device>/ancho} &lt; 600 }"
 		title="{stock>/titulo}"
 		contentWidth="62rem"
 		draggable="true"
@@ -17,14 +18,15 @@
 					class="sapUiSmallMarginBottom" />
 
 				<!-- Con SAP real: primero el almacen del vendedor y luego los demas centros de su organizacion con stock (se leen al abrir) -->
-				<Table items="{stock>/filas}" sticky="ColumnHeaders" busy="{= !!${stock>/cargando} }" busyIndicatorDelay="0">
+				<!-- En un telefono quedan ubicacion y disponible; fisico, comprometido y transito bajan debajo de la fila -->
+				<Table items="{stock>/filas}" sticky="ColumnHeaders" busy="{= !!${stock>/cargando} }" busyIndicatorDelay="0" contextualWidth="Auto">
 					<columns>
 						<Column><Text text="{i18n>ubicacion}" /></Column>
-						<Column width="6rem" hAlign="End"><Text text="{i18n>colFisico}" /></Column>
-						<Column width="8rem" hAlign="End"><Text text="{i18n>colComprometido}" /></Column>
+						<Column width="6rem" hAlign="End" minScreenWidth="40rem" demandPopin="true"><Text text="{i18n>colFisico}" /></Column>
+						<Column width="8rem" hAlign="End" minScreenWidth="40rem" demandPopin="true"><Text text="{i18n>colComprometido}" /></Column>
 						<Column width="7rem" hAlign="End"><Text text="{i18n>colDisponible}" /></Column>
-						<Column width="7rem" hAlign="End"><Text text="{i18n>colTransito}" /></Column>
-						<Column width="10rem" hAlign="End"><Text text="" /></Column>
+						<Column width="7rem" hAlign="End" minScreenWidth="40rem" demandPopin="true"><Text text="{i18n>colTransito}" /></Column>
+						<Column width="10rem" hAlign="End" minScreenWidth="40rem" demandPopin="true" popinDisplay="WithoutHeader"><Text text="" /></Column>
 					</columns>
 					<items>
 						<ColumnListItem highlight="{= ${stock>esMio} ? 'Information' : 'None' }">
@@ -55,13 +57,13 @@
 
 				<VBox visible="{= ${stock>/transito}.length > 0 }">
 					<Title text="{i18n>transitoTitulo}" level="H4" class="sapUiSmallMarginTop sapUiTinyMarginBottom" />
-					<Table items="{stock>/transito}">
+					<Table items="{stock>/transito}" contextualWidth="Auto">
 						<columns>
 							<Column width="8rem" hAlign="End"><Text text="{i18n>colCantPendiente}" /></Column>
 							<Column><Text text="{i18n>colOrigen}" /></Column>
-							<Column><Text text="{i18n>colDestino}" /></Column>
-							<Column width="11rem"><Text text="{i18n>colPedidoTraslado}" /></Column>
-							<Column width="10rem"><Text text="{i18n>colLlega}" /></Column>
+							<Column minScreenWidth="40rem" demandPopin="true"><Text text="{i18n>colDestino}" /></Column>
+							<Column width="11rem" minScreenWidth="40rem" demandPopin="true"><Text text="{i18n>colPedidoTraslado}" /></Column>
+							<Column width="10rem" minScreenWidth="40rem" demandPopin="true"><Text text="{i18n>colLlega}" /></Column>
 						</columns>
 						<items>
 							<ColumnListItem>

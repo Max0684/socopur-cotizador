@@ -47,6 +47,9 @@
 		}
 	},
 	"sap.ui5": {
+		"resources": {
+			"css": [{ "uri": "css/style.css" }]
+		},
 		"rootView": {
 			"viewName": "com.socopur.cotizador.view.App",
 			"type": "XML",

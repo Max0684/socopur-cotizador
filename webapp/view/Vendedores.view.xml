@@ -13,7 +13,8 @@
 				items="{adm>/visibles}"
 				growing="true"
 				growingThreshold="50"
-				noDataText="{i18n>vendIdNinguno}">
+				noDataText="{i18n>vendIdNinguno}"
+				contextualWidth="Auto">
 				<headerToolbar>
 					<OverflowToolbar>
 						<SearchField width="20rem" placeholder="{i18n>vendIdBuscar}" liveChange=".onBuscar" search=".onBuscar" />
@@ -25,15 +26,16 @@
 						<Button text="{i18n>vendAdmNuevo}" icon="sap-icon://add" type="Emphasized" press=".onNuevo" />
 					</OverflowToolbar>
 				</headerToolbar>
+				<!-- En un telefono quedan codigo, nombre y activo; el resto baja debajo de la fila -->
 				<columns>
 					<Column><Text text="{i18n>vendAdmPernr}" /></Column>
 					<Column><Text text="{i18n>vendAdmNombre}" /></Column>
-					<Column><Text text="{i18n>vendAdmSociedad}" /></Column>
-					<Column><Text text="{i18n>vendAdmTipo}" /></Column>
-					<Column><Text text="{i18n>vendAdmOrg}" /></Column>
-					<Column><Text text="{i18n>vendAdmCentro}" /></Column>
-					<Column><Text text="{i18n>vendAdmRol}" /></Column>
-					<Column><Text text="{i18n>vendAdmPin}" /></Column>
+					<Column minScreenWidth="48rem" demandPopin="true"><Text text="{i18n>vendAdmSociedad}" /></Column>
+					<Column minScreenWidth="48rem" demandPopin="true"><Text text="{i18n>vendAdmTipo}" /></Column>
+					<Column minScreenWidth="48rem" demandPopin="true"><Text text="{i18n>vendAdmOrg}" /></Column>
+					<Column minScreenWidth="48rem" demandPopin="true"><Text text="{i18n>vendAdmCentro}" /></Column>
+					<Column minScreenWidth="48rem" demandPopin="true"><Text text="{i18n>vendAdmRol}" /></Column>
+					<Column minScreenWidth="48rem" demandPopin="true"><Text text="{i18n>vendAdmPin}" /></Column>
 					<Column hAlign="End"><Text text="{i18n>vendAdmActivo}" /></Column>
 				</columns>
 				<items>

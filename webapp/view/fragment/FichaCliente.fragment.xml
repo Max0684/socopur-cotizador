@@ -4,6 +4,7 @@
 	xmlns:form="sap.ui.layout.form">
 	<Dialog
 		id="dlgFicha"
+		stretch="{= ${device>/ancho} &lt; 600 }"
 		title="{i18n>fichaTitulo}"
 		contentWidth="46rem"
 		draggable="true"
@@ -33,13 +34,14 @@
 					<StandardListItem title="{cli>alias}" description="{cli>texto}" icon="sap-icon://addresses" />
 				</List>
 				<Title text="{i18n>historialTitulo}" level="H4" class="sapUiSmallMarginBottom" visible="{= ${cli>/cambios}.length > 0 }" />
-				<Table items="{cli>/cambios}" visible="{= ${cli>/cambios}.length > 0 }" class="sapUiSmallMarginBottom">
+				<!-- En un telefono quedan fecha y campo; usuario, antes y despues bajan debajo de la fila -->
+				<Table items="{cli>/cambios}" visible="{= ${cli>/cambios}.length > 0 }" class="sapUiSmallMarginBottom" contextualWidth="Auto">
 					<columns>
 						<Column width="7rem"><Text text="{i18n>historialFecha}" /></Column>
-						<Column width="8rem"><Text text="{i18n>historialUsuario}" /></Column>
+						<Column width="8rem" minScreenWidth="40rem" demandPopin="true"><Text text="{i18n>historialUsuario}" /></Column>
 						<Column><Text text="{i18n>historialCampo}" /></Column>
-						<Column><Text text="{i18n>historialAntes}" /></Column>
-						<Column><Text text="{i18n>historialDespues}" /></Column>
+						<Column minScreenWidth="40rem" demandPopin="true"><Text text="{i18n>historialAntes}" /></Column>
+						<Column minScreenWidth="40rem" demandPopin="true"><Text text="{i18n>historialDespues}" /></Column>
 					</columns>
 					<items>
 						<ColumnListItem>

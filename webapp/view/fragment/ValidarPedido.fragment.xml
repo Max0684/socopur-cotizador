@@ -3,6 +3,7 @@
 	xmlns:core="sap.ui.core">
 	<Dialog
 		id="dlgValidar"
+		stretch="{= ${device>/ancho} &lt; 600 }"
 		title="{i18n>validarTitulo}"
 		contentWidth="66rem"
 		draggable="true"
@@ -21,13 +22,15 @@
 					type="Error"
 					showIcon="true"
 					class="sapUiSmallMarginBottom" />
-				<Table items="{validar>/filas}">
+				<!-- En un telefono quedan oferta y total; modalidad, clase y liberacion bajan debajo de la fila -->
+				<Table items="{validar>/filas}" contextualWidth="Auto">
 					<columns>
 						<Column><Text text="{i18n>validarOferta}" /></Column>
-						<Column width="14rem"><Text text="{i18n>modalidad}" /></Column>
-						<Column width="6rem"><Text text="{i18n>clasePedido}" /></Column>
+						<!-- Umbral por encima de la suma de anchos fijos (48rem): si no, la tabla se ensancha sola y nunca baja a popin -->
+						<Column width="14rem" minScreenWidth="64rem" demandPopin="true"><Text text="{i18n>modalidad}" /></Column>
+						<Column width="6rem" minScreenWidth="64rem" demandPopin="true"><Text text="{i18n>clasePedido}" /></Column>
 						<Column width="8rem" hAlign="End"><Text text="{i18n>colTotalLinea}" /></Column>
-						<Column width="20rem"><Text text="{i18n>validarLiberacion}" /></Column>
+						<Column width="20rem" minScreenWidth="64rem" demandPopin="true"><Text text="{i18n>validarLiberacion}" /></Column>
 					</columns>
 					<items>
 						<ColumnListItem>

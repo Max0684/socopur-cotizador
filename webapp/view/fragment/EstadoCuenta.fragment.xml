@@ -4,6 +4,7 @@
 	xmlns:form="sap.ui.layout.form">
 	<Dialog
 		id="dlgEstadoCuenta"
+		stretch="{= ${device>/ancho} &lt; 600 }"
 		title="{i18n>cuentaTitulo}"
 		contentWidth="46rem"
 		draggable="true"
@@ -18,15 +19,15 @@
 				</HBox>
 				<MessageStrip text="{i18n>cuentaSimulada}" type="Information" showIcon="true" class="sapUiSmallMarginBottom" visible="{= !${cli>/real} }" />
 				<MessageStrip text="{i18n>cuentaReal}" type="Information" showIcon="true" class="sapUiSmallMarginBottom" visible="{= !!${cli>/real} }" />
-				<Table items="{cli>/segmentos}" visible="{= !!${cli>/real} }" class="sapUiSmallMarginBottom">
+				<Table items="{cli>/segmentos}" visible="{= !!${cli>/real} }" class="sapUiSmallMarginBottom" contextualWidth="Auto">
 					<headerToolbar>
 						<Toolbar><Title text="{i18n>credSegmentos}" level="H4" /></Toolbar>
 					</headerToolbar>
 					<columns>
 						<Column width="6rem"><Text text="{i18n>credSegmento}" /></Column>
 						<Column hAlign="End"><Text text="{i18n>credLimite}" /></Column>
-						<Column><Text text="{i18n>credVigenciaHasta}" /></Column>
-						<Column><Text text="{i18n>colEstado}" /></Column>
+						<Column minScreenWidth="32rem" demandPopin="true"><Text text="{i18n>credVigenciaHasta}" /></Column>
+						<Column minScreenWidth="32rem" demandPopin="true"><Text text="{i18n>colEstado}" /></Column>
 					</columns>
 					<items>
 						<ColumnListItem>
@@ -39,12 +40,13 @@
 						</ColumnListItem>
 					</items>
 				</Table>
-				<Table items="{cli>/movimientos}" noDataText="{i18n>cuentaSinMovimientos}">
+				<!-- En un telefono quedan documento e importe; fecha y estado bajan debajo de la fila -->
+				<Table items="{cli>/movimientos}" noDataText="{i18n>cuentaSinMovimientos}" contextualWidth="Auto">
 					<columns>
-						<Column width="7rem"><Text text="{i18n>colFecha}" /></Column>
+						<Column width="7rem" minScreenWidth="32rem" demandPopin="true"><Text text="{i18n>colFecha}" /></Column>
 						<Column><Text text="{i18n>cuentaDocumento}" /></Column>
 						<Column width="8rem" hAlign="End"><Text text="{i18n>colTotalLinea}" /></Column>
-						<Column width="8rem"><Text text="{i18n>colEstado}" /></Column>
+						<Column width="8rem" minScreenWidth="32rem" demandPopin="true"><Text text="{i18n>colEstado}" /></Column>
 					</columns>
 					<items>
 						<ColumnListItem>

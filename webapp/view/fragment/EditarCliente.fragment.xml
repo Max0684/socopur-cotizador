@@ -4,6 +4,7 @@
 	xmlns:form="sap.ui.layout.form">
 	<Dialog
 		id="dlgEditarCliente"
+		stretch="{= ${device>/ancho} &lt; 600 }"
 		title="{i18n>editarTitulo}"
 		contentWidth="56rem"
 		draggable="true"
@@ -31,9 +32,10 @@
 				</Toolbar>
 				<Table items="{cli>/direcciones}" contextualWidth="Auto">
 					<columns>
+						<!-- En un telefono quedan el nombre y el boton; tipo y direccion bajan debajo de la fila -->
 						<Column width="13rem"><Text text="{i18n>direccionAlias}" /></Column>
-						<Column width="10rem"><Text text="{i18n>direccionTipo}" /></Column>
-						<Column><Text text="{i18n>direccion}" /></Column>
+						<Column width="10rem" minScreenWidth="40rem" demandPopin="true"><Text text="{i18n>direccionTipo}" /></Column>
+						<Column minScreenWidth="30rem" demandPopin="true"><Text text="{i18n>direccion}" /></Column>
 						<Column width="3rem" />
 					</columns>
 					<items>

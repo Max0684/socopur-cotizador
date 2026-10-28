@@ -251,15 +251,16 @@
 								<Title text="{i18n>materialesElegidos}" level="H4" class="sapUiTinyMarginBottom" />
 								<Table items="{oferta>/elegidosLista}" sticky="ColumnHeaders" contextualWidth="Auto">
 									<columns>
+										<!-- En un telefono quedan material y total; lo demas baja debajo de cada fila (popin) -->
 										<Column width="8rem"><Text text="{i18n>colMaterial}" /></Column>
-										<Column minScreenWidth="30rem" demandPopin="false"><Text text="{i18n>colDescripcion}" /></Column>
+										<Column minScreenWidth="30rem" demandPopin="true"><Text text="{i18n>colDescripcion}" /></Column>
 										<Column width="8rem" hAlign="End" minScreenWidth="70rem" demandPopin="true"><Text text="{i18n>colPrecioLista}" /></Column>
 										<Column width="15rem" minScreenWidth="70rem" demandPopin="true"><Text text="{i18n>condicionPrecio}" /></Column>
 										<Column width="12rem" hAlign="End" minScreenWidth="70rem" demandPopin="true"><Text text="{i18n>promocion}" /></Column>
-										<Column width="8rem" hAlign="End"><Text text="{i18n>colPrecioFinal}" /></Column>
-										<Column width="9rem" hAlign="Center"><Text text="{i18n>cantidad}" /></Column>
+										<Column width="8rem" hAlign="End" minScreenWidth="40rem" demandPopin="true"><Text text="{i18n>colPrecioFinal}" /></Column>
+										<Column width="9rem" hAlign="Center" minScreenWidth="40rem" demandPopin="true"><Text text="{i18n>cantidad}" /></Column>
 										<Column width="8rem" hAlign="End"><Text text="{i18n>colTotalLinea}" /></Column>
-										<Column width="7rem" hAlign="Center"><Text text="" /></Column>
+										<Column width="7rem" hAlign="Center" minScreenWidth="40rem" demandPopin="true" popinDisplay="WithoutHeader"><Text text="" /></Column>
 									</columns>
 									<items>
 										<ColumnListItem>
@@ -285,8 +286,8 @@
 									</items>
 								</Table>
 								<!-- Determinacion de precio: una linea por condicion de SAP (precio, descuentos, impuestos, subtotales) de cada material elegido -->
-								<HBox alignItems="Center" justifyContent="SpaceBetween" class="sapUiSmallMarginTop">
-									<Title text="{i18n>determinacionPrecio}" level="H4" />
+								<HBox alignItems="Center" justifyContent="SpaceBetween" wrap="Wrap" class="sapUiSmallMarginTop">
+									<Title text="{i18n>determinacionPrecio}" level="H4" class="sapUiTinyMarginEnd" />
 									<Select selectedKey="{oferta>/filtroCondiciones}" change=".onCambiaFiltroCondiciones" width="18rem">
 										<core:Item key="todos" text="{i18n>condTodos}" />
 										<core:Item key="relevantes" text="{i18n>condRelevantes}" />
@@ -393,15 +394,20 @@
 							<VBox items="{oferta>/grupos}">
 								<Panel class="sapUiSmallMarginBottom">
 									<headerToolbar>
+										<!-- En un telefono la modalidad no se va al menu "...": se achica; el titulo completo se repite abajo -->
 										<OverflowToolbar>
-											<Title text="{oferta>titulo}" />
+											<Title text="{oferta>titulo}">
+												<layoutData><OverflowToolbarLayoutData shrinkable="true" /></layoutData>
+											</Title>
 											<ToolbarSpacer />
-											<Label text="{i18n>modalidad}" />
+											<Label text="{i18n>modalidad}" visible="{= ${device>/ancho} >= 600 }" />
 											<Select selectedKey="{oferta>modalidad}" width="18rem" change=".onCambiaModalidadGrupo" enabled="{= ${oferta>/pedidos}.length === 0 }" items="{oferta>opciones}">
 												<core:Item key="{oferta>key}" text="{oferta>texto}" />
+												<layoutData><OverflowToolbarLayoutData priority="NeverOverflow" shrinkable="true" minWidth="10rem" /></layoutData>
 											</Select>
 										</OverflowToolbar>
 									</headerToolbar>
+									<Text text="{oferta>titulo}" visible="{= ${device>/ancho} &lt; 600 }" class="sapUiTinyMarginBottom" />
 									<HBox wrap="Wrap" class="sapUiTinyMarginBottom">
 										<ObjectStatus title="{i18n>canalVenta}" text="{oferta>canal}" class="sapUiMediumMarginEnd" />
 										<ObjectStatus title="{i18n>claseOferta}" text="{oferta>claseOferta}" class="sapUiMediumMarginEnd" />
@@ -498,7 +504,7 @@
 									<Label text="{i18n>puntoRecojo}" />
 									<Text text="{i18n>centro} {oferta>/perfil/centro} · {oferta>/perfil/sede}" />
 									<Label text="{i18n>direccionFactura}" visible="{= (${oferta>/opcionesFactura} || []).length > 0 }" />
-									<Select selectedKey="{oferta>/entregaDatos/facturaId}" items="{oferta>/opcionesFactura}" change=".onCambiaDireccionFactura" visible="{= (${oferta>/opcionesFactura} || []).length > 0 }" enabled="{= ${oferta>/pedidos}.length === 0 }">
+									<Select selectedKey="{oferta>/entregaDatos/facturaId}" items="{oferta>/opcionesFactura}" change=".onCambiaDireccionFactura" visible="{= (${oferta>/opcionesFactura} || []).length > 0 }" enabled="{= ${oferta>/pedidos}.length === 0 }" width="100%">
 										<core:Item key="{oferta>id}" text="{= ${oferta>texto} ? ${oferta>alias} + ' · ' + ${oferta>texto} : ${oferta>alias} }" />
 									</Select>
 								</form:SimpleForm>
@@ -506,11 +512,11 @@
 							<VBox visible="{= ${oferta>/entrega} === 'envio' }">
 								<form:SimpleForm editable="true" layout="ColumnLayout" columnsM="1" columnsL="1" columnsXL="2">
 									<Label text="{i18n>direccionFactura}" visible="{= (${oferta>/opcionesFactura} || []).length > 0 }" />
-									<Select selectedKey="{oferta>/entregaDatos/facturaId}" items="{oferta>/opcionesFactura}" change=".onCambiaDireccionFactura" visible="{= (${oferta>/opcionesFactura} || []).length > 0 }" enabled="{= ${oferta>/pedidos}.length === 0 }">
+									<Select selectedKey="{oferta>/entregaDatos/facturaId}" items="{oferta>/opcionesFactura}" change=".onCambiaDireccionFactura" visible="{= (${oferta>/opcionesFactura} || []).length > 0 }" enabled="{= ${oferta>/pedidos}.length === 0 }" width="100%">
 										<core:Item key="{oferta>id}" text="{= ${oferta>texto} ? ${oferta>alias} + ' · ' + ${oferta>texto} : ${oferta>alias} }" />
 									</Select>
 									<Label text="{i18n>direccionEnvio}" />
-									<Select selectedKey="{oferta>/entregaDatos/direccionId}" items="{oferta>/opcionesDireccion}" change=".onCambiaDireccionEnvio" enabled="{= ${oferta>/pedidos}.length === 0 }">
+									<Select selectedKey="{oferta>/entregaDatos/direccionId}" items="{oferta>/opcionesDireccion}" change=".onCambiaDireccionEnvio" enabled="{= ${oferta>/pedidos}.length === 0 }" width="100%">
 										<core:Item key="{oferta>id}" text="{= ${oferta>texto} ? ${oferta>alias} + ' · ' + ${oferta>texto} : ${oferta>alias} }" />
 									</Select>
 									<Label text="" visible="{= ${oferta>/entregaDatos/direccionId} === '__unica__' }" />
@@ -521,14 +527,14 @@
 									<Button text="{i18n>direccionesAdministrar}" type="Transparent" icon="sap-icon://add" press=".onEditarCliente" width="18rem" enabled="{= ${oferta>/pedidos}.length === 0 }" />
 									</form:SimpleForm>
 									<VBox class="sapUiSmallMarginBottom">
-										<Title text="{i18n>transpBuscarTitulo}" level="H5" class="sapUiTinyMarginBottom" />
+										<Title text="{i18n>transpBuscarTitulo}" level="H5" wrapping="true" class="sapUiTinyMarginBottom" />
 										<SearchField width="100%" placeholder="{i18n>transpBuscarPh}" search=".onBuscarTransportista" enabled="{= ${oferta>/pedidos}.length === 0 }" class="sapUiTinyMarginBottom" />
 										<MessageStrip text="{oferta>/transp/error}" visible="{= !!${oferta>/transp/error} }" type="Error" showIcon="true" class="sapUiTinyMarginBottom" />
-										<Table items="{oferta>/transp/filas}" busy="{oferta>/transp/cargando}" noDataText="{i18n>transpSinResultados}">
+										<Table items="{oferta>/transp/filas}" busy="{oferta>/transp/cargando}" noDataText="{i18n>transpSinResultados}" contextualWidth="Auto">
 											<columns>
-												<Column width="11rem"><Text text="{i18n>transpColDoc}" /></Column>
+												<Column width="11rem" minScreenWidth="36rem" demandPopin="true"><Text text="{i18n>transpColDoc}" /></Column>
 												<Column><Text text="{i18n>transpColNombre}" /></Column>
-												<Column width="11rem" hAlign="End"><Text text="{i18n>transpColAcciones}" /></Column>
+												<Column width="11rem" hAlign="End" minScreenWidth="28rem" demandPopin="true" popinDisplay="WithoutHeader"><Text text="{i18n>transpColAcciones}" /></Column>
 											</columns>
 											<items>
 												<ColumnListItem highlight="{= ${oferta>id} === ${oferta>/entregaDatos/transportista} ? 'Success' : 'None' }">
@@ -584,12 +590,13 @@
 								<columns>
 									<Column width="8rem"><Text text="{i18n>colPedido}" /></Column>
 									<Column width="8rem" minScreenWidth="72rem" demandPopin="true"><Text text="{i18n>colOfertaOrigen}" /></Column>
-									<Column width="12rem"><Text text="{i18n>colVehiculo}" /></Column>
-									<Column width="11rem"><Text text="{i18n>colVin}" /></Column>
+									<!-- En un telefono quedan pedido y estado; vehiculo, VIN, clase y liberacion bajan debajo de la fila -->
+									<Column width="12rem" minScreenWidth="48rem" demandPopin="true"><Text text="{i18n>colVehiculo}" /></Column>
+									<Column width="11rem" minScreenWidth="48rem" demandPopin="true"><Text text="{i18n>colVin}" /></Column>
 									<Column width="10rem" minScreenWidth="84rem" demandPopin="true"><Text text="{i18n>colBloqueoHasta}" /></Column>
-									<Column width="5rem"><Text text="{i18n>clasePedido}" /></Column>
+									<Column width="5rem" minScreenWidth="48rem" demandPopin="true"><Text text="{i18n>clasePedido}" /></Column>
 									<Column width="7rem"><Text text="{i18n>colEstado}" /></Column>
-									<Column width="14rem"><Text text="{i18n>colLiberacionSap}" /></Column>
+									<Column width="14rem" minScreenWidth="60rem" demandPopin="true"><Text text="{i18n>colLiberacionSap}" /></Column>
 									<Column width="16rem" minScreenWidth="90rem" demandPopin="true"><Text text="{i18n>colTotalSap}" /></Column>
 								</columns>
 								<items>

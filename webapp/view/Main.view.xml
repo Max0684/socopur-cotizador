@@ -7,14 +7,16 @@
 	xmlns:mvc="sap.ui.core.mvc">
 	<f:DynamicPage id="listaPage" headerExpanded="false" toggleHeaderOnTitleClick="true">
 		<f:title>
-			<f:DynamicPageTitle>
+			<!-- El titulo no se achica (0): en un telefono cede el buscador, que va al 100 % hasta 22rem (css/style.css) -->
+			<f:DynamicPageTitle areaShrinkRatio="0:1:1.6">
 				<f:heading>
 					<Title text="{i18n>listaTitulo}" />
 				</f:heading>
 				<f:content>
 					<SearchField
 						id="filtroTexto"
-						width="22rem"
+						width="100%"
+						class="cotizBuscador"
 						placeholder="{i18n>buscarPlaceholder}"
 						liveChange=".onFiltrar"
 						search=".onFiltrar" />
@@ -93,6 +95,7 @@
 			</VBox>
 						<List
 				id="tabla"
+				class="cotizLista"
 				visible="{vista>/consultado}"
 				items="{mock>/ofertas}"
 				mode="SingleSelectMaster"
@@ -110,9 +113,10 @@
 						<ObjectAttribute text="{mock>doc}" />
 						<ObjectAttribute text="{path: 'mock>vence', formatter: '.formatVence'}" visible="{= !!${mock>vence} &amp;&amp; ${mock>estado} !== 'Pedido generado' }" />
 					</attributes>
-					<firstStatus>
+					<!-- El estado va en la fila del documento (corto): en la del numero y la fecha la cortaba en un telefono -->
+					<secondStatus>
 						<ObjectStatus text="{mock>estado}" state="{mock>estadoState}" />
-					</firstStatus>
+					</secondStatus>
 				</ObjectListItem>
 			</List>
 			</VBox>
