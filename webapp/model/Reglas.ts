@@ -19,6 +19,11 @@ export interface LineaCarrito {
 	 */
 	precioFinal?: number;
 	bonificacion?: boolean;
+	/** Regalo de promocion de repuestos: ZNA0 (SAP lo agrega solo) o ZETA (venta cruzada, lo envia el Cotizador). */
+	mecanismo?: string;
+	/** Identificador de la linea y, en un regalo, el de la linea que lo genera. */
+	uid?: string;
+	origen?: string;
 	/** Solo vehiculos de SAP: variante, centro y almacen del vehiculo elegido. */
 	variante?: string;
 	centroVeh?: string;
@@ -180,12 +185,16 @@ export function faltaAreaDeVentas(areasCliente: string[] | undefined, orgVentas:
 }
 
 /**
- * Convierte los grupos del carrito en lo que recibe el servicio. Los regalos (bonificaciones) NO se envian:
- * SAP agrega solo la linea ZNA0 al crear la oferta y enviarla la duplicaria.
+ * Convierte los grupos del carrito en lo que recibe el servicio. Los regalos ZNA0 (y los de la moto) NO se envian: SAP agrega solo la linea
+ * ZNA0 al crear la oferta y enviarla la duplicaria. Los de venta cruzada (Zeta) SI: SAP no los genera, y el job de la oferta los manda como
+ * posicion CSEL colgada de su linea (Bonif "Z" + PosnrPadre, YCL_COTIZ_BG->armar_input).
  */
 export function gruposParaGuardar(grupos: GrupoCarrito[], perfil: PerfilVenta, almacen: string | ((centro: string) => string), unidad = "UN"): GrupoParaGuardar[] {
 	return grupos.map((g) => {
 		const canal = canalDe(g.canal);
+		const delCarrito = g.lineas.filter((l) => !l.bonificacion || (l.mecanismo === "ZETA" && !!l.origen));
+		// Un regalo cuya linea ya no esta no se puede colgar de nada en SAP.
+		const enviadas = delCarrito.filter((l) => !l.bonificacion || delCarrito.some((p) => !p.bonificacion && p.uid === l.origen));
 		return {
 			vkorg: g.lineas[0]?.orgVentas ?? "",
 			vtweg: canal,
@@ -194,18 +203,17 @@ export function gruposParaGuardar(grupos: GrupoCarrito[], perfil: PerfilVenta, a
 			claseOferta: g.claseOferta ?? "",
 			clasePedido: g.clasePedido ?? "",
 			modalidad: g.modalidad ?? "",
-			lineas: g.lineas
-				.filter((l) => !l.bonificacion)
-				.map((l) => ({
-					material: l.material,
-					cantidad: l.cantidad,
-					um: unidad,
-					// Un vehiculo se vende desde el centro y el almacen donde esta, no desde el centro del perfil.
-					centro: l.centroVeh || perfil.centro || "",
-					almacen: l.almacenVeh || (typeof almacen === "function" ? almacen(perfil.centro ?? "") : almacen),
-					precio: l.precioFinal ?? l.precio,
-					...(l.variante ? { variante: l.variante } : {})
-				}))
+			lineas: enviadas.map((l) => ({
+				material: l.material,
+				cantidad: l.cantidad,
+				um: unidad,
+				// Un vehiculo se vende desde el centro y el almacen donde esta, no desde el centro del perfil.
+				centro: l.centroVeh || perfil.centro || "",
+				almacen: l.almacenVeh || (typeof almacen === "function" ? almacen(perfil.centro ?? "") : almacen),
+				precio: l.bonificacion ? 0 : (l.precioFinal ?? l.precio),
+				...(l.variante ? { variante: l.variante } : {}),
+				...(l.bonificacion ? { bonif: "Z" as const, padre: enviadas.findIndex((p) => !p.bonificacion && p.uid === l.origen) } : {})
+			}))
 		};
 	});
 }

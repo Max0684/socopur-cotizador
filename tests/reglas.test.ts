@@ -114,6 +114,40 @@ test("gruposParaGuardar NO envia los regalos: SAP los genera y se duplicarian", 
 	assert.equal(g.lineas.some((l) => l.material === "REGALO"), false);
 });
 
+test("gruposParaGuardar envia el regalo Zeta colgado de su linea; el ZNA0 no (SAP lo agrega solo)", () => {
+	const grupo: GrupoCarrito = {
+		canal: "10 Mayorista",
+		lineas: [
+			{ uid: "L1", orgVentas: "1103", sector: "50", material: "SFX-18X300-C051", cantidad: 25, precio: 30 },
+			{ uid: "L2", origen: "L1", mecanismo: "ZETA", bonificacion: true, orgVentas: "1103", sector: "50", material: "MPPA-ARP-HI-00001", cantidad: 2, precio: 0 },
+			{ uid: "L3", orgVentas: "1103", sector: "50", material: "SFX428H-150-MTK", cantidad: 200, precio: 17.5 },
+			{ uid: "L4", origen: "L3", mecanismo: "ZNA0", bonificacion: true, orgVentas: "1103", sector: "50", material: "PM-13008-C", cantidad: 20, precio: 0 },
+			{ uid: "L5", origen: "L3", mecanismo: "ZETA", bonificacion: true, orgVentas: "1103", sector: "50", material: "MPTX-ARP-MU-00001", cantidad: 2, precio: 0 }
+		]
+	};
+	const [g] = gruposParaGuardar([grupo], perfil, "0001");
+	assert.deepEqual(
+		g.lineas.map((l) => [l.material, l.precio, l.bonif ?? "", l.padre ?? -1]),
+		[
+			["SFX-18X300-C051", 30, "", -1],
+			["MPPA-ARP-HI-00001", 0, "Z", 0],
+			["SFX428H-150-MTK", 17.5, "", -1],
+			["MPTX-ARP-MU-00001", 0, "Z", 2]
+		]
+	);
+});
+
+test("gruposParaGuardar no envia un regalo Zeta cuya linea ya no esta en la oferta", () => {
+	const grupo: GrupoCarrito = {
+		lineas: [
+			{ uid: "L1", orgVentas: "1103", sector: "99", material: "A", cantidad: 1, precio: 10 },
+			{ uid: "L9", origen: "L7", mecanismo: "ZETA", bonificacion: true, orgVentas: "1103", sector: "99", material: "HUERFANO", cantidad: 1, precio: 0 }
+		]
+	};
+	const [g] = gruposParaGuardar([grupo], perfil, "0001");
+	assert.deepEqual(g.lineas.map((l) => l.material), ["A"]);
+});
+
 test("gruposParaGuardar: mostrador (canal 11) usa sector de cabecera 99", () => {
 	const grupo = { ...grupoMayorista(), canal: "11 Retail", clasePedido: "Z311", modalidad: "rep_mostrador" };
 	const [g] = gruposParaGuardar([grupo], perfil, "0001");

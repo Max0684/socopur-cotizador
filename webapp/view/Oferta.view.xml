@@ -437,10 +437,11 @@
 										<items>
 											<ColumnListItem selected="{oferta>verCondiciones}">
 												<cells>
-													<ObjectIdentifier title="{= ${oferta>bonificacion} ? ${oferta>denominacion} : ${oferta>material} }" text="{= ${oferta>bonificacion} ? ( ${oferta>sinTalla} ? ${i18n>regaloPromoEtq} : ${i18n>regaloEtq} ) : '' }" />
+													<!-- El regalo de la moto no tiene codigo SAP (se ve su nombre); el de promocion si (ZNA0/Zeta): se ve el material -->
+													<ObjectIdentifier title="{= ${oferta>bonificacion} &amp;&amp; !${oferta>sinTalla} ? ${oferta>denominacion} : ${oferta>material} }" text="{= ${oferta>bonificacion} ? ( ${oferta>sinTalla} ? ${i18n>regaloPromoEtq} : ${i18n>regaloEtq} ) : '' }" />
 													<Text text="{oferta>denominacion}" />
 													<VBox>
-														<Text text="{oferta>detalle}" visible="{= !${oferta>bonificacion} }" />
+														<Text text="{oferta>detalle}" visible="{= !${oferta>bonificacion} || !!${oferta>sinTalla} }" />
 														<Select visible="{= !!${oferta>bonificacion} &amp;&amp; !${oferta>sinTalla} }" selectedKey="{oferta>talla}" forceSelection="false" width="9rem" change=".onCambiaTalla" enabled="{= ${oferta>/pedidos}.length === 0 }" items="{oferta>tallas}">
 															<core:Item key="{oferta>key}" text="{oferta>text}" enabled="{oferta>enabled}" />
 														</Select>

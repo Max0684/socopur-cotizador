@@ -154,6 +154,31 @@ test("guardarCotizacion: un vehiculo guarda su variante como caracteristica ZVAR
 	assert.equal(creadas.find((c) => c.ruta === "_Item")?.datos.Werks, "1008");
 });
 
+test("guardarCotizacion: el regalo Zeta viaja con Bonif Z y la posicion que SAP dio a su linea", async () => {
+	const { modelo, creadas } = crearModeloFalso({ gruposLeidos: [{ GrupoNo: "01", VbelnOferta: "3100000001" }] });
+	const lineas = [
+		{ material: "SFX-18X300-C051", cantidad: 25, um: "UN", centro: "1101", almacen: "0001", precio: 30 },
+		{ material: "MPPA-ARP-HI-00001", cantidad: 2, um: "UN", centro: "1101", almacen: "0001", precio: 0, bonif: "Z" as const, padre: 0 }
+	];
+	await guardarCotizacion(como(modelo), oferta([grupo({ lineas })]));
+	const items = creadas.filter((c) => c.ruta === "_Item");
+	assert.equal("Bonif" in items[0].datos, false);
+	assert.deepEqual([items[1].datos.Matnr, items[1].datos.Bonif, items[1].datos.PosnrPadre, items[1].datos.PrecioLista], ["MPPA-ARP-HI-00001", "Z", "000010", "0"]);
+});
+
+test("guardarCotizacion: un regalo Zeta sin la posicion de su linea no se envia (iria como venta a precio 0)", async () => {
+	const { modelo, creadas } = crearModeloFalso({ gruposLeidos: [{ GrupoNo: "01", VbelnOferta: "3100000001" }] });
+	const lineas = [
+		{ material: "A", cantidad: 1, um: "UN", centro: "1101", almacen: "0001", precio: 10 },
+		{ material: "HUERFANO", cantidad: 1, um: "UN", centro: "1101", almacen: "0001", precio: 0, bonif: "Z" as const, padre: 5 }
+	];
+	await guardarCotizacion(como(modelo), oferta([grupo({ lineas })]));
+	assert.deepEqual(
+		creadas.filter((c) => c.ruta === "_Item").map((c) => c.datos.Matnr),
+		["A"]
+	);
+});
+
 test("guardarCotizacion: una linea sin variante no crea caracteristicas", async () => {
 	const { modelo, creadas } = crearModeloFalso({ gruposLeidos: [{ GrupoNo: "01", VbelnOferta: "3100000001" }] });
 	await guardarCotizacion(como(modelo), oferta());

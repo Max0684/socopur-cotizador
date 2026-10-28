@@ -89,20 +89,25 @@
 							</items>
 						</Table>
 					</VBox>
+					<!-- Todas las promociones vigentes del material en SAP (ZNA0 y Zeta); la que aplica con la cantidad elegida va resaltada -->
 					<VBox class="sapUiSmallMarginBottom" width="30rem">
 						<Title text="{i18n>detalleRegalos}" level="H5" class="sapUiTinyMarginBottom" />
-						<Table items="{detalle>/regalos}" noDataText="{i18n>detalleSinRegalos}">
+						<MessageStrip text="{detalle>/avisoRegalo}" type="Success" showIcon="true" visible="{= !!${detalle>/avisoRegalo} }" class="sapUiTinyMarginBottom" />
+						<Table items="{detalle>/regalos}" noDataText="{= ${detalle>/cargandoRegalos} ? ${i18n>regaloCargando} : ${i18n>detalleSinRegalos} }">
 							<columns>
 								<Column width="5rem" hAlign="End"><Text text="{i18n>detalleMinimo}" /></Column>
 								<Column><Text text="{i18n>detalleArticuloGratis}" /></Column>
-								<Column width="5rem" hAlign="End"><Text text="{i18n>cantidad}" /></Column>
+								<Column hAlign="End" minScreenWidth="28rem" demandPopin="true"><Text text="{i18n>regaloColRegalo}" /></Column>
 							</columns>
 							<items>
-								<ColumnListItem>
+								<ColumnListItem highlight="{detalle>highlight}">
 									<cells>
 										<Text text="{detalle>minimo}" />
-										<Text text="{detalle>articulo}" />
-										<Text text="{detalle>cantidad}" />
+										<ObjectIdentifier title="{detalle>articulo}" text="{detalle>descripcion}" />
+										<VBox>
+											<Text text="{detalle>regla}" />
+											<ObjectStatus text="{detalle>estadoTxt}" state="{detalle>estadoState}" visible="{= !!${detalle>estadoTxt} }" />
+										</VBox>
 									</cells>
 								</ColumnListItem>
 							</items>

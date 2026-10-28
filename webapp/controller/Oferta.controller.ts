@@ -8,6 +8,7 @@ import { buscarMateriales, cargarSegmentos, disponibilidadPorCentro, filasDeStoc
 import { entidadTieneCampo } from "com/socopur/cotizador/model/CamposServicio";
 import { cargarFormasPago } from "com/socopur/cotizador/model/FormasPagoService";
 import { consultarCondiciones, consultarPrecio, impuestosDeCondiciones } from "com/socopur/cotizador/model/PreciosService";
+import { cantidadTxt, claveRegalos, consultarRegalos, regalosQueAplican, type ConsultaRegalo, type PromoRegalo } from "com/socopur/cotizador/model/RegalosService";
 import { type CondicionServicio, type FilaCondicion, descuentosAplicados, filasDeCondiciones } from "com/socopur/cotizador/model/Condiciones";
 import { agruparVehiculos, buscarVehiculos, filtrarVehiculos, textoDetalleVehiculo } from "com/socopur/cotizador/model/VehiculosService";
 import { areasOrgCanal, textoSolicitudAmpliacion, type CondicionArea, type OpcionAreaCliente, condicionDeArea, opcionesAreaCliente, almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, gruposParaGuardar, igvExonerado, MODALIDAD_DESPACHO, modalidadParaEntrega, modalidadPorDefecto, oficinaDe, orgVehiculosDe, puedeVenderOtroCentro, sectorDeCabecera, sectorQueFalta, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
@@ -260,6 +261,8 @@ interface Linea extends LineaMock {
 	bonificacion?: boolean;
 	/** Regalo de promocion de repuestos (ZNA0/Zeta): no tiene talla. */
 	sinTalla?: boolean;
+	/** Solo regalos de promocion calculados antes de guardar: ZNA0 (SAP lo agrega solo) o ZETA (se envia). */
+	mecanismo?: string;
 	origen?: string;
 	talla?: string;
 	tallas?: { key: string; text: string; enabled: boolean }[];
@@ -354,6 +357,11 @@ export default class Oferta extends Controller {
 	private dialogosCliente: Record<string, Dialog> = {};
 	private dialogoClienteActual?: Dialog;
 	private contadorLinea = 0;
+	/** Cada consulta de regalos lleva un turno: si mientras tanto cambio la cantidad, la respuesta vieja se descarta. */
+	private turnoRegalos = 0;
+	private turnoRegalosDetalle = 0;
+	/** Regalos ya avisados por linea, para avisar solo cuando cambian. */
+	private regalosAvisados = new Map<string, string>();
 	private instantanea = "[]";
 	private dialogoSolicitud?: Dialog;
 	private dialogoVin?: Dialog;
@@ -1279,6 +1287,8 @@ export default class Oferta extends Controller {
 		const delSap = lineas.filter((l) => l.precioPenSap !== undefined && !l.bonificacion);
 		const kunnr = (oferta.getProperty("/cliente") as Cliente | null)?.kunnr;
 		if (delSap.length === 0 || !kunnr || !this.usarOData()) {
+			// Las lineas leidas de una oferta guardada no se reprecian, pero sus regalos si dependen de la cantidad.
+			await this.actualizarRegalos();
 			return;
 		}
 		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel;
@@ -1331,6 +1341,7 @@ export default class Oferta extends Controller {
 			);
 			oferta.setProperty("/lineas", lineas);
 			this.recalcular();
+			await this.actualizarRegalos();
 		} catch (error) {
 			// El precio que queda en pantalla es el anterior (de otro canal o cliente): se marca para no guardar con un precio que no vale.
 			delSap.forEach((l) => (l.sinPrecioVigente = true));
@@ -1481,6 +1492,168 @@ export default class Oferta extends Controller {
 	public onCambiaTalla(): void {
 		this.modeloOferta().setProperty("/guardado", { visible: false, texto: "" });
 		this.recalcular();
+	}
+
+	/* ---------- Regalos de promocion de repuestos (ZNA0 y Zeta, entidad Regalo de SAP) ---------- */
+
+	/** Lo que se pregunta a SAP: el area de ventas es la misma con la que se pide el precio del material (canal de la modalidad, sector de cabecera). */
+	private consultaRegalo(m: { orgVentas: string; sector: string; sectorMaterial?: string; material: string }, cantidad: number): ConsultaRegalo | undefined {
+		const oferta = this.modeloOferta();
+		const kunnr = (oferta.getProperty("/cliente") as Cliente | null)?.kunnr;
+		if (!kunnr || !this.usarOData()) {
+			return undefined;
+		}
+		const canal = canalDe(String(oferta.getProperty("/perfil/busqueda/canal") ?? "11"));
+		const canalDoc = this.canalDeDocumento(m.orgVentas, m.sector, "repuestos") || canal;
+		const vkbur = oficinaDe((oferta.getProperty("/perfil") as Record<string, string> | undefined)?.oficina);
+		return {
+			kunnr,
+			vkorg: m.orgVentas,
+			vtweg: canalDoc,
+			matnr: m.material,
+			spart: sectorDeCabecera(canalDoc, m.sectorMaterial ?? m.sector, m.orgVentas),
+			...(vkbur ? { vkbur } : {}),
+			cantidad
+		};
+	}
+
+	/** "Con 200 UN de SFX428H-150-MTK recibe 20 UN de PM-13008-C FILTRO COMB de regalo." (uno por regalo). */
+	private textoAvisoRegalo(material: string, cantidad: number, unidad: string, regalos: PromoRegalo[]): string {
+		return regalos
+			.map((p) => this.i18n().getText("regaloAviso", [cantidadTxt(cantidad), p.unidad || unidad, material, cantidadTxt(p.cantidadRegalo), p.unidadRegalo || "UN", `${p.matnrRegalo} ${p.descRegalo}`.trim()]) as string)
+			.join("\n");
+	}
+
+	/** Fila de la tabla "Articulos gratis" del detalle del material: todas las promociones vigentes, con la que aplica resaltada. */
+	private filaRegaloDetalle(p: PromoRegalo, cantidad: number): Record<string, unknown> {
+		const i18n = this.i18n();
+		const regla = i18n.getText("regaloRegla", [cantidadTxt(p.regaloPorCada), p.unidadRegalo || "UN", cantidadTxt(p.porCada), p.unidad || "UN"]) as string;
+		const estado =
+			p.estado === "A"
+				? { estadoTxt: i18n.getText("regaloAplica", [cantidadTxt(cantidad), p.unidad || "UN", cantidadTxt(p.cantidadRegalo), p.unidadRegalo || "UN"]), estadoState: "Success", highlight: "Success" }
+				: p.estado === "N"
+					? { estadoTxt: i18n.getText("regaloNoAlcanza"), estadoState: "None", highlight: "None" }
+					: p.estado === "E"
+						? { estadoTxt: p.mensaje, estadoState: "Warning", highlight: "None" }
+						: { estadoTxt: "", estadoState: "None", highlight: "None" };
+		return {
+			minimo: `${cantidadTxt(p.desde)} ${p.unidad || "UN"}`,
+			articulo: p.matnrRegalo,
+			descripcion: p.descRegalo,
+			regla: p.tipo === "2" ? regla : `${regla} · ${i18n.getText("regaloIncluido") as string}`,
+			...estado
+		};
+	}
+
+	/** Promociones del material del detalle abierto, con la cantidad del dialogo. Solo repuestos leidos de SAP. */
+	private async cargarRegalosDetalle(m: Vehiculo & Repuesto & { tipo: string }, cantidad: number): Promise<void> {
+		const modelo = this.dialogoDetalle?.getModel("detalle") as JSONModel | undefined;
+		const consulta = m.tipo === "repuestos" && m.origen === "sap" ? this.consultaRegalo({ orgVentas: m.orgVentas, sector: m.sectorOferta, sectorMaterial: m.sector, material: m.material }, cantidad) : undefined;
+		if (!modelo || !consulta) {
+			return;
+		}
+		const turno = ++this.turnoRegalosDetalle;
+		modelo.setProperty("/cargandoRegalos", true);
+		try {
+			const promos = await consultarRegalos((this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel, consulta);
+			if (turno !== this.turnoRegalosDetalle) {
+				return;
+			}
+			modelo.setProperty("/regalos", promos.map((p) => this.filaRegaloDetalle(p, cantidad)));
+			modelo.setProperty("/avisoRegalo", this.textoAvisoRegalo(m.material, cantidad, "UN", regalosQueAplican(promos)));
+		} catch (error) {
+			// Las promociones son informativas: si SAP no responde, el material se puede agregar igual.
+			console.warn(`[Cotizador] promociones de ${m.material}: ${(error as Error).message}`);
+		} finally {
+			if (turno === this.turnoRegalosDetalle) {
+				modelo.setProperty("/cargandoRegalos", false);
+			}
+		}
+	}
+
+	/** Linea de regalo (precio 0, solo lectura) colgada de la linea que la genera; va en su mismo grupo (= la misma oferta SAP). */
+	private lineaDeRegalo(padre: Linea, p: PromoRegalo): Linea {
+		const i18n = this.i18n();
+		const detalle = i18n.getText("regaloLineaDetalle", [cantidadTxt(padre.cantidad), p.unidad || "UN", padre.material]) as string;
+		return {
+			uid: `L${(this.contadorLinea += 1)}`,
+			grupo: padre.grupo,
+			orgVentas: padre.orgVentas,
+			sector: padre.sector,
+			sectorMaterial: padre.sectorMaterial,
+			material: p.matnrRegalo,
+			denominacion: p.descRegalo || p.matnrRegalo,
+			detalle: p.tipo === "2" ? detalle : `${detalle} · ${i18n.getText("regaloIncluido") as string}`,
+			cantidad: p.cantidadRegalo,
+			precio: 0,
+			total: 0,
+			// Con impuestos en cero el grupo sigue mostrando sus totales (exige que todas sus lineas los traigan).
+			isc: 0,
+			igvImporte: 0,
+			totalConImpuestos: 0,
+			totalNeto: 0,
+			impuestoIncluido: true,
+			impuestoEstimado: padre.impuestoEstimado,
+			bonificacion: true,
+			sinTalla: true,
+			mecanismo: p.mecanismo,
+			origen: padre.uid
+		};
+	}
+
+	/**
+	 * Vuelve a pedir a SAP los regalos de cada linea de repuestos y deja en la oferta las lineas de regalo que tocan con su cantidad (pruebas del
+	 * 28/10/2026: el cotizador anterior y VA21 los muestran al agregar el material; el Cotizador solo los mostraba despues de guardar). Las
+	 * lineas de regalo de una linea se reemplazan solo si SAP respondio; si falla, quedan las que habia. Avisa cuando aparece o cambia un regalo.
+	 */
+	private async actualizarRegalos(): Promise<void> {
+		const oferta = this.modeloOferta();
+		const lineas = (oferta.getProperty("/lineas") as Linea[]) ?? [];
+		const padres = lineas.filter((l) => !l.bonificacion && !l.variante && !l.unica && !!l.uid && (l.precioPenSap !== undefined || l.precioFinal !== undefined));
+		const consultas = padres.map((l) => ({ l, consulta: this.consultaRegalo(l, l.cantidad) })).filter((x) => !!x.consulta);
+		if (consultas.length === 0) {
+			return;
+		}
+		const turno = ++this.turnoRegalos;
+		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel;
+		const respuestas = await Promise.all(
+			consultas.map(async ({ l, consulta }) => ({
+				uid: l.uid as string,
+				promos: await consultarRegalos(odata, consulta as ConsultaRegalo).catch((e: Error) => {
+					console.warn(`[Cotizador] promociones de la linea ${l.material}: ${e.message}`);
+					return null;
+				})
+			}))
+		);
+		if (turno !== this.turnoRegalos) {
+			return;
+		}
+		const porLinea = new Map(respuestas.filter((r) => r.promos !== null).map((r) => [r.uid, r.promos as PromoRegalo[]]));
+		const avisos: string[] = [];
+		const nuevas: Linea[] = [];
+		for (const l of (oferta.getProperty("/lineas") as Linea[]) ?? []) {
+			// Los regalos de promocion de una linea que SAP volvio a calcular se reemplazan (los de la moto, con talla, no se tocan).
+			if (l.bonificacion && l.sinTalla && l.origen && porLinea.has(l.origen)) {
+				continue;
+			}
+			nuevas.push(l);
+			const promos = l.uid ? porLinea.get(l.uid) : undefined;
+			if (!promos || l.bonificacion) {
+				continue;
+			}
+			const aplican = regalosQueAplican(promos);
+			aplican.forEach((p) => nuevas.push(this.lineaDeRegalo(l, p)));
+			const clave = claveRegalos(promos);
+			if (clave && clave !== this.regalosAvisados.get(l.uid as string)) {
+				avisos.push(this.textoAvisoRegalo(l.material, l.cantidad, "UN", aplican));
+			}
+			this.regalosAvisados.set(l.uid as string, clave);
+		}
+		oferta.setProperty("/lineas", nuevas);
+		this.recalcular();
+		if (avisos.length) {
+			MessageToast.show(avisos.join("\n"), { duration: 6000 });
+		}
 	}
 
 
@@ -2446,6 +2619,7 @@ export default class Oferta extends Controller {
 		const cantidad = Math.max(1, Number((material as { cantidad?: number }).cantidad) || 1);
 		(this.dialogoDetalle.getModel("detalle") as JSONModel).setData(this.datosDetalle(material, cantidad));
 		this.dialogoDetalle.open();
+		void this.cargarRegalosDetalle(material, cantidad);
 	}
 
 	/** Todo lo que se muestra sale de SAP: precios de lista (Mayorista/Retail), precio del cliente, condiciones de la simulacion y stock. */
@@ -2474,9 +2648,12 @@ export default class Oferta extends Controller {
 				{ nombre: i18n.getText("precioTuPrecio") as string, importe: tuPrecio, resaltado: true }
 			],
 			descuentos: descuentosAplicados(m.condiciones ?? []),
-			// Escalas por cantidad y articulos gratis de repuestos: aun no hay entidad en el servicio; se muestran vacios, sin inventar datos.
+			// Escalas por cantidad: aun no hay entidad en el servicio; se muestran vacias, sin inventar datos. Los articulos gratis los llena
+			// cargarRegalosDetalle con la entidad Regalo de SAP (todas las promociones vigentes del material, con la que aplica resaltada).
 			escalas: [],
 			regalos: [],
+			avisoRegalo: "",
+			cargandoRegalos: false,
 			stock,
 			cantidad,
 			totalTxt: fila.totalTxt
@@ -2495,6 +2672,7 @@ export default class Oferta extends Controller {
 			return;
 		}
 		modelo.setData(this.datosDetalle(material, cantidad));
+		await this.cargarRegalosDetalle(material, cantidad);
 	}
 
 	public onDetalleAgregar(): void {
@@ -4124,6 +4302,9 @@ export default class Oferta extends Controller {
 	private async guardarEnSap(): Promise<void> {
 		const oferta = this.modeloOferta();
 		const i18n = this.i18n();
+		// Los regalos se piden de nuevo con las cantidades finales: los Zeta viajan con la oferta (SAP no los agrega) y una oferta reabierta
+		// trae los suyos como lineas leidas, sin el mecanismo con que se envian.
+		await this.actualizarRegalos();
 		const cliente = oferta.getProperty("/cliente") as Cliente | null;
 		const grupos = (oferta.getProperty("/grupos") as Grupo[]) ?? [];
 		if (!cliente?.kunnr) {

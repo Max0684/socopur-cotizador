@@ -210,6 +210,8 @@ export interface LineaDetalle {
 	total: number;
 	bonificacion: boolean;
 	sinTalla: boolean;
+	/** "P" + Posnr de la posicion; en un regalo, origen es el de la posicion de la que cuelga (UEPOS), igual que en el carrito. */
+	uid: string;
 	origen: string;
 	/** Impuesto (IGV) real de SAP para esta posicion. */
 	impuesto: number;
@@ -271,7 +273,8 @@ export async function cargarDetalleOferta(modelo: ODataModel, numeroOferta: stri
 			total: Number(p.Netwr ?? 0),
 			bonificacion: esRegalo,
 			sinTalla: esRegalo,
-			origen: p.Posnr,
+			uid: `P${p.Posnr}`,
+			origen: esRegalo ? `P${p.Uepos}` : "",
 			impuesto: Number(p.Mwsbp ?? 0),
 			tasaIgv: Number(p.TasaIgv ?? 0),
 			isc: p.Isc === undefined || p.Isc === null ? undefined : Number(p.Isc),

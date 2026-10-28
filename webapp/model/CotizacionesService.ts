@@ -15,6 +15,9 @@ export interface LineaParaGuardar {
 	precio: number;
 	/** Solo vehiculos: se guarda como caracteristica ZVARIANTE de la posicion (asignarVin la usa para proponer el VIN). */
 	variante?: string;
+	/** Solo regalos de venta cruzada (Zeta): Bonif "Z" y el indice, en este grupo, de la linea que lo genera (su Posnr va como PosnrPadre). */
+	bonif?: "Z";
+	padre?: number;
 }
 
 /** Un grupo del carrito = una oferta SAP (organizacion de ventas + sector). */
@@ -243,7 +246,15 @@ export async function guardarCotizacion(modelo: ODataModel, datos: OfertaParaGua
 				AuartPedido: g.clasePedido,
 				Modalidad: g.modalidad
 			});
+			// Posnr que SAP dio a cada linea del grupo: un regalo Zeta se cuelga del de su linea.
+			const posiciones: string[] = [];
 			for (const l of g.lineas) {
+				const padre = l.bonif && l.padre !== undefined ? posiciones[l.padre] : undefined;
+				if (l.bonif && !padre) {
+					// Sin la posicion de su linea, el regalo iria como una venta normal a precio 0: no se envia.
+					posiciones.push("");
+					continue;
+				}
 				const item = await crearHijaCtx(modelo, "_Item", cabecera, {
 					GrupoNo: grupo.GrupoNo,
 					Matnr: l.material,
@@ -252,8 +263,10 @@ export async function guardarCotizacion(modelo: ODataModel, datos: OfertaParaGua
 					Werks: l.centro,
 					Lgort: l.almacen,
 					PrecioLista: decimal(l.precio),
-					Waers: datos.moneda
+					Waers: datos.moneda,
+					...(l.bonif && padre ? { Bonif: l.bonif, PosnrPadre: padre } : {})
 				});
+				posiciones.push(String((item.getObject() as Item | undefined)?.Posnr ?? ""));
 				if (l.variante) {
 					// CotizId y Posnr los toma el servicio del item padre: no se mandan.
 					await crearHija<ItemCar>(modelo, "_Car", item, { Atnam: ATNAM_VARIANTE, Atwrt: l.variante });
