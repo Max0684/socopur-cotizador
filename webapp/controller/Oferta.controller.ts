@@ -10,7 +10,7 @@ import { cargarFormasPago } from "com/socopur/cotizador/model/FormasPagoService"
 import { consultarCondiciones, consultarPrecio, impuestosDeCondiciones } from "com/socopur/cotizador/model/PreciosService";
 import { type CondicionServicio, type FilaCondicion, descuentosAplicados, filasDeCondiciones } from "com/socopur/cotizador/model/Condiciones";
 import { agruparVehiculos, buscarVehiculos, filtrarVehiculos, textoDetalleVehiculo } from "com/socopur/cotizador/model/VehiculosService";
-import { areasOrgCanal, textoSolicitudAmpliacion, type CondicionArea, type OpcionAreaCliente, condicionDeArea, opcionesAreaCliente, almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, faltaSectorDeVentas, gruposParaGuardar, igvExonerado, MODALIDAD_DESPACHO, modalidadParaEntrega, modalidadPorDefecto, oficinaDe, orgVehiculosDe, puedeVenderOtroCentro, sectorDeCabecera, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
+import { areasOrgCanal, textoSolicitudAmpliacion, type CondicionArea, type OpcionAreaCliente, condicionDeArea, opcionesAreaCliente, almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, gruposParaGuardar, igvExonerado, MODALIDAD_DESPACHO, modalidadParaEntrega, modalidadPorDefecto, oficinaDe, orgVehiculosDe, puedeVenderOtroCentro, sectorDeCabecera, sectorQueFalta, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
 import { evaluarBloqueoPedido, type BloqueoPedido } from "com/socopur/cotizador/model/BloqueoPedido";
 import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerDatosGuardados, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type EntregaParaGuardar, ENVIO_UNICO, type VinAsignado, esperarVinculos, leerMotivoVinculo, anularGrupo } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
@@ -2073,14 +2073,15 @@ export default class Oferta extends Controller {
 		const canalNum = canalDe(m.canal);
 		const area = canalNum ? `${grupo.lineas[0]?.orgVentas}/${canalNum}` : "";
 		grupo.areaFalta = !!cliente && !!area && faltaAreaDeVentas(cliente.areas, grupo.lineas[0]?.orgVentas, canalNum);
-		// Dado de alta en la organizacion y el canal, pero no en el sector de la cabecera: SAP lo rechaza al guardar la oferta.
-		const sectorFalta = !grupo.areaFalta && !!cliente && !!area && faltaSectorDeVentas(cliente.areas, grupo.lineas[0]?.orgVentas, canalNum, sectorCabecera);
+		// Dado de alta en la organizacion y el canal, pero no en el sector de la cabecera o en el de algun material: SAP rechaza la oferta.
+		const sectoresLineas = grupo.lineas.filter((l) => !l.bonificacion).map((l) => l.sectorMaterial ?? l.sector);
+		const sectorFalta = !grupo.areaFalta && !!cliente && !!area ? sectorQueFalta(cliente.areas, grupo.lineas[0]?.orgVentas, canalNum, sectorCabecera, sectoresLineas) : undefined;
 		if (grupo.areaFalta) {
 			const nombre = (this.modeloMock().getProperty("/canalesArea") as { key: string; text: string }[]).find((x) => x.key === area)?.text ?? area;
 			grupo.areaAviso = i18n.getText("areaFalta", [nombre]) as string;
 		} else if (sectorFalta) {
 			grupo.areaFalta = true;
-			grupo.areaAviso = i18n.getText("sectorFalta", [`${area}/${sectorCabecera}`]) as string;
+			grupo.areaAviso = i18n.getText("sectorFalta", [`${area}/${sectorFalta}`]) as string;
 		}
 		// Condicion de pago, moneda y grupo de clientes del area de ESTE grupo: cambian por canal y sector, no son un dato del cliente.
 		const cond = !grupo.areaFalta ? condicionDeArea(cliente?.condicionesAreas, grupo.lineas[0]?.orgVentas ?? "", canalNum, sectorCabecera) : undefined;
@@ -3200,10 +3201,10 @@ export default class Oferta extends Controller {
 			const cot = (await odata
 				.bindContext(`/Cotizacion(CotizId=${cotizId},IsActiveEntity=true)`, undefined, {
 					$select: "CotizId",
-					$expand: { _Grupo: { $select: "GrupoNo,VbelnOferta,VbelnPedido,AuartPedido" } },
+					$expand: { _Grupo: { $select: "GrupoNo,VbelnOferta,VbelnPedido,AuartPedido,Modalidad" } },
 					$$ownRequest: true
 				})
-				.requestObject()) as { _Grupo?: { GrupoNo: string; VbelnOferta: string; VbelnPedido: string; AuartPedido: string }[] };
+				.requestObject()) as { _Grupo?: { GrupoNo: string; VbelnOferta: string; VbelnPedido: string; AuartPedido: string; Modalidad?: string }[] };
 			const g = (cot._Grupo ?? []).find((x) => sinCeros(x.VbelnOferta) === sinCeros(numeroOferta) && !x.VbelnPedido);
 			if (!g) {
 				return;
@@ -3216,6 +3217,8 @@ export default class Oferta extends Controller {
 					grupoNo: g.GrupoNo,
 					titulo: (oferta.getProperty("/grupos/0/titulo") as string) ?? (oferta.getProperty("/titulo") as string),
 					lineas: (oferta.getProperty("/lineas") as Linea[]) ?? [],
+					// Sin modalidad el dialogo "Validar antes de crear el pedido" la mostraba vacia al reabrir la oferta.
+					modalidad: (g.Modalidad || (oferta.getProperty("/grupos/0/modalidad") as string) || "").toLowerCase(),
 					clasePedido: g.AuartPedido,
 					total: oferta.getProperty("/totales/total") as number
 				}
@@ -4112,6 +4115,11 @@ export default class Oferta extends Controller {
 		return { datos };
 	}
 
+	/** Total del grupo con impuestos cuando se conocen (lo que paga el cliente); si no, la suma de las lineas, que ya traen el IGV en el precio. */
+	private totalDeGrupo(g: Grupo): number {
+		return g.totalConImp ?? g.subtotal;
+	}
+
 	/** Arma lo que necesita el servicio a partir del carrito y llama a guardarCotizacion. */
 	private async guardarEnSap(): Promise<void> {
 		const oferta = this.modeloOferta();
@@ -4191,7 +4199,8 @@ export default class Oferta extends Controller {
 					lineas: g.lineas,
 					modalidad: g.modalidad,
 					clasePedido: g.clasePedido,
-					total: g.subtotal,
+					// Con lo que devolvio SAP: tras releer la oferta las lineas quedan en neto y el subtotal no lleva el IGV.
+					total: this.totalDeGrupo(gruposSap[i] ?? g),
 					areaFalta: g.areaFalta
 				}))
 			);
@@ -4234,7 +4243,7 @@ export default class Oferta extends Controller {
 			: grupos.map((_, i) => String(4530 + i).padStart(7, "0"));
 		oferta.setProperty(
 			"/ofertasGuardadas",
-			grupos.map((g, i) => ({ numero: numeros[i], titulo: g.titulo, lineas: g.lineas, modalidad: g.modalidad, clasePedido: g.clasePedido, total: g.subtotal, areaFalta: g.areaFalta }))
+			grupos.map((g, i) => ({ numero: numeros[i], titulo: g.titulo, lineas: g.lineas, modalidad: g.modalidad, clasePedido: g.clasePedido, total: this.totalDeGrupo(g), areaFalta: g.areaFalta }))
 		);
 		oferta.setProperty("/pedidos", []);
 		const texto = this.i18n().getText(existente ? "guardadoActualizada" : "guardadoOk", [existente ? existente : numeros.join(", ")]) as string;

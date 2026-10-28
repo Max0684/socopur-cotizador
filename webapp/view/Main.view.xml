@@ -71,6 +71,7 @@
 							<core:Item key="Vencida" text="{i18n>estadoVencida}" />
 							<core:Item key="Pedido generado" text="{i18n>estadoPedido}" />
 							<core:Item key="Anulada" text="{i18n>estadoAnulada}" />
+							<core:Item key="Oferta no creada" text="{i18n>estadoOfertaFallida}" />
 						</Select>
 					</VBox>
 				</HBox>
@@ -112,6 +113,8 @@
 						<ObjectAttribute text="{parts: ['mock>numero', 'mock>fecha'], formatter: '.formatNumFecha'}" />
 						<ObjectAttribute text="{mock>doc}" />
 						<ObjectAttribute text="{path: 'mock>vence', formatter: '.formatVence'}" visible="{= !!${mock>vence} &amp;&amp; ${mock>estado} !== 'Pedido generado' }" />
+						<!-- Motivo de SAP cuando no creo la oferta (antes la fila decia solo "N° ·") -->
+						<ObjectAttribute text="{mock>motivoError}" visible="{= !!${mock>motivoError} }" />
 					</attributes>
 					<!-- El estado va en la fila del documento (corto): en la del numero y la fecha la cortaba en un telefono -->
 					<secondStatus>

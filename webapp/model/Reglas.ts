@@ -282,6 +282,15 @@ export interface TotalesOferta {
 
 const redondear = (v: number): number => Math.round(v * 100) / 100;
 
+/**
+ * Motivo por el que SAP no creo la oferta, tal como el proceso de fondo lo deja en el comentario de la cotizacion
+ * ("[Oferta grupo 01] Sold-to party ... not maintained ..."), sin el prefijo. Si el comentario es de otra cosa, vacio.
+ */
+export function motivoOfertaFallida(comentario: string | undefined): string {
+	const m = /^\[Oferta grupo \d+\]\s*(.*)$/s.exec((comentario ?? "").trim());
+	return m ? m[1].trim() : "";
+}
+
 /** Precio unitario con impuestos de una posicion de un documento SAP: (valor neto + ISC + IGV) / cantidad. Sin cantidad no hay precio. */
 export function precioFinalDePosicion(netwr: number, impuesto: number, cantidad: number): number | undefined {
 	return cantidad > 0 ? redondear((netwr + impuesto) / cantidad) : undefined;
@@ -354,4 +363,19 @@ export function faltaSectorDeVentas(areasCliente: string[] | undefined, orgVenta
 		return false;
 	}
 	return !delArea.some((p) => p[2] === sector);
+}
+
+/**
+ * Primer sector del grupo en el que el cliente no esta dado de alta: el de la cabecera y el propio de cada material. SAP revisa tambien
+ * el sector de cada posicion: en mostrador (cabecera 99) rechazo la oferta de OSANTRAK, ampliado a 1103/11/99 pero no a 1103/11/51, con
+ * "Sold-to party ... not maintained for sales area 1103 11 51" (27/10/2026). undefined = no falta ninguno o no se puede saber.
+ */
+export function sectorQueFalta(
+	areasCliente: string[] | undefined,
+	orgVentas: string | undefined,
+	canal: string,
+	sectorCabecera: string,
+	sectoresLineas: string[]
+): string | undefined {
+	return [...new Set([sectorCabecera, ...sectoresLineas].filter(Boolean))].find((s) => faltaSectorDeVentas(areasCliente, orgVentas, canal, s));
 }

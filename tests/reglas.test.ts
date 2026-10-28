@@ -401,3 +401,23 @@ test("modalidadParaEntrega: envio pasa a despacho; al volver a recojo el despach
 	assert.equal(modalidadParaEntrega(mostrador, false, "rep_mostrador"), undefined);
 	assert.equal(modalidadParaEntrega(web, false, "rep_mostrador"), undefined);
 });
+
+test("sectorQueFalta: SAP revisa el sector de cada material, no solo el 99 de la cabecera (OSANTRAK: 1103/11/99 si, 1103/11/51 no)", async () => {
+	const { sectorQueFalta } = await import("../webapp/model/Reglas.ts");
+	const osantrak = ["1103/10/50", "1103/10/51", "1103/11/50", "1103/11/52", "1103/11/99"];
+	assert.equal(sectorQueFalta(osantrak, "1103", "11", "99", ["51", "51"]), "51");
+	assert.equal(sectorQueFalta(osantrak, "1103", "11", "99", ["50", "52"]), undefined);
+	assert.equal(sectorQueFalta(osantrak, "1103", "10", "51", ["51"]), undefined);
+	// La cabecera se revisa primero
+	assert.equal(sectorQueFalta(["1103/11/50"], "1103", "11", "99", ["50"]), "99");
+	// Sin areas con sector no se puede saber: no se bloquea
+	assert.equal(sectorQueFalta(["1103/11"], "1103", "11", "99", ["51"]), undefined);
+});
+
+test("motivoOfertaFallida: el motivo de SAP sin el prefijo del grupo; otro comentario no es motivo", async () => {
+	const { motivoOfertaFallida } = await import("../webapp/model/Reglas.ts");
+	assert.equal(motivoOfertaFallida("[Oferta grupo 01] Sold-to party 100022844 not maintained for sales area 1103 11 51"), "Sold-to party 100022844 not maintained for sales area 1103 11 51");
+	assert.equal(motivoOfertaFallida("[Pedido grupo 01] Billing block Z1 is not defined"), "");
+	assert.equal(motivoOfertaFallida("Entregar por la tarde"), "");
+	assert.equal(motivoOfertaFallida(undefined), "");
+});

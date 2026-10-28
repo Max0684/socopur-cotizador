@@ -2,7 +2,7 @@ import ODataModel from "sap/ui/model/odata/v4/ODataModel";
 import type { Cotizacion, Item } from "./odata/Entidades";
 import type { CondicionServicio } from "./Condiciones";
 import { entidadTieneCampo } from "./CamposServicio";
-import { precioFinalDePosicion } from "./Reglas";
+import { motivoOfertaFallida, precioFinalDePosicion } from "./Reglas";
 
 /** Forma que usa hoy la lista de ofertas del prototipo (mock.json: /ofertas). */
 export interface OfertaLista {
@@ -19,6 +19,10 @@ export interface OfertaLista {
 	cotizId: string;
 	/** La oferta esta anulada: el flujo de anulacion dejo su grupo en X o SAP la tiene rechazada (Abstk = C). */
 	anulada: boolean;
+	/** Sin numero de oferta porque SAP la rechazo (grupo en E): el motivo, o "" si no se guardo. Sin valor si no fallo. */
+	motivoError?: string;
+	/** Sin numero de oferta todavia: el proceso de fondo la esta creando (grupo en Q). */
+	enProceso?: boolean;
 }
 
 type CotizacionConLineas = Cotizacion & { _Item?: Pick<Item, "Cantidad" | "PrecioLista">[]; _Grupo?: { GrupoNo: string; VbelnOferta: string; Estado: string }[] };
@@ -65,7 +69,7 @@ export async function cargarOfertas(modelo: ODataModel, textoPedido: string, per
 	// Solo las del vendedor identificado (PERNR de 8 digitos, como lo guarda el servicio); sin vendedor no se filtra.
 	const deVendedor = pernr ? ` and Pernr eq '${pernr.replace(/'/g, "''")}'` : "";
 	const binding = modelo.bindList("/Cotizacion", undefined, undefined, undefined, {
-		$select: "CotizId,Estado,LocalCreatedAt,ClienteNombre,ClienteStcd1,ClienteStcd2,NumeroOferta,NumeroPedido,VigenciaHasta",
+		$select: "CotizId,Estado,LocalCreatedAt,ClienteNombre,ClienteStcd1,ClienteStcd2,NumeroOferta,NumeroPedido,VigenciaHasta,Comentario",
 		$expand: { _Item: { $select: "Cantidad,PrecioLista" }, _Grupo: { $select: "GrupoNo,VbelnOferta,Estado" } },
 		$filter: `IsActiveEntity eq true${deVendedor}`,
 		$orderby: "LocalCreatedAt desc"
@@ -77,8 +81,13 @@ export async function cargarOfertas(modelo: ODataModel, textoPedido: string, per
 		const conPedido = Boolean(c.NumeroPedido);
 		// Anulada por el flujo del Cotizador (grupo en X, que conserva el numero de oferta) o rechazada directamente en SAP.
 		const anulada = (c._Grupo ?? []).some((g) => g.Estado === "X" && numeroSap(g.VbelnOferta) === numeroSap(c.NumeroOferta)) || rechazadasSap.has(numeroSap(c.NumeroOferta));
+		// Sin numero de oferta la lista mostraba "N° ·": o SAP la rechazo (grupo en E, el motivo queda en el comentario) o aun se esta creando (Q).
+		const sinNumero = !numeroSap(c.NumeroOferta);
+		const fallida = sinNumero && (c._Grupo ?? []).some((g) => g.Estado === "E");
 		return {
 			anulada,
+			...(fallida ? { motivoError: motivoOfertaFallida(c.Comentario) } : {}),
+			enProceso: sinNumero && !fallida && (c._Grupo ?? []).some((g) => g.Estado === "Q"),
 			cotizId: c.CotizId,
 			numero: numeroSap(c.NumeroOferta),
 			cliente: c.ClienteNombre ?? "",
