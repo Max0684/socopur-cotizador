@@ -64,3 +64,11 @@ test("documentoPublicado mira el campo Nombre de DocumentoIdentidad en el $metad
 	assert.equal(await documentoPublicado(crearModeloFalso({ camposPublicados: ["DocumentoIdentidad/Nombre"] }).modelo as unknown as Modelo), true);
 	assert.equal(await documentoPublicado(crearModeloFalso().modelo as unknown as Modelo), false);
 });
+
+test("datosDeFila: DNI con nombres y apellidos por separado; sin ellos quedan vacios", () => {
+	const d = datosDeFila({ Ok: true, Nombre: "SALAS ANCO CHRISTIAN STEPHANO", Nombres: " CHRISTIAN STEPHANO ", ApellidoPaterno: "SALAS", ApellidoMaterno: "ANCO" });
+	assert.equal(d.nombres, "CHRISTIAN STEPHANO");
+	assert.equal(d.apePat, "SALAS");
+	assert.equal(d.apeMat, "ANCO");
+	assert.equal(datosDeFila(jyas).apePat, "");
+});

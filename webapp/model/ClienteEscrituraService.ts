@@ -21,6 +21,38 @@ export interface DatosAlta {
 	dist: string;
 	celular: string;
 	email: string;
+	/**
+	 * Tipo de cliente de SAP (tratamiento del BP): 0001 Senora o 0002 Senor = persona, 0003 = empresa. Sin el (servicio anterior a la
+	 * v1.2 del alta) no se manda y SAP crea una empresa, como antes.
+	 */
+	titulo?: string;
+	/** Persona: nombres (el primero y los demas), apellido paterno y materno. */
+	nombres?: string;
+	apePat?: string;
+	apeMat?: string;
+}
+
+/** Tratamiento del BP en SAP (TSAD3T): decide si el cliente se crea como persona o como empresa, igual que en ZSCPBP01. */
+export const TIPO_CLIENTE = { senora: "0001", senor: "0002", empresa: "0003" } as const;
+
+export const esPersona = (titulo?: string): boolean => titulo === TIPO_CLIENTE.senora || titulo === TIPO_CLIENTE.senor;
+
+/**
+ * Tipos de cliente que admite el documento: DNI siempre persona; RUC 20 siempre empresa; los demas RUC (10 = persona con negocio, que en SAP
+ * esta casi siempre como persona: 2.651 de 2.968 en el 130) pueden ser cualquiera de los tres.
+ */
+export function tiposClientePara(tipoDoc: string, doc: string): string[] {
+	if (tipoDoc === "DNI") {
+		return [TIPO_CLIENTE.senora, TIPO_CLIENTE.senor];
+	}
+	return doc.trim().startsWith("20") ? [TIPO_CLIENTE.empresa] : [TIPO_CLIENTE.senora, TIPO_CLIENTE.senor, TIPO_CLIENTE.empresa];
+}
+
+/** Como SAP: el primer nombre y el resto como segundo nombre, hasta 40 letras cada uno. null si no entran. */
+export function partirNombres(nombres: string): { nombre: string; segundo: string } | null {
+	const [nombre = "", ...resto] = nombres.trim().split(/\s+/).filter(Boolean);
+	const segundo = resto.join(" ");
+	return nombre.length > 40 || segundo.length > 40 ? null : { nombre, segundo };
 }
 
 export interface ResultadoAlta {
@@ -68,6 +100,8 @@ export interface ServiciosDeCliente {
 	historial: boolean;
 	/** Catalogo real de departamento/provincia/distrito (UbigeoCatalogo). Sin el, la pantalla usa el de ejemplo. */
 	ubigeo: boolean;
+	/** El alta acepta personas (Titulo, Nombres y apellidos en ClienteAlta; v1.2 del 29/10/2026). */
+	persona: boolean;
 }
 
 /** Arbol que usan los desplegables en cascada del alta. */
@@ -82,14 +116,15 @@ const verdadero = (v: unknown): boolean => v === true || v === "X";
 
 /** Que partes del contrato publica ya el servicio. Un campo o entidad desconocidos en una peticion hacen que SAP la rechace entera. */
 export async function serviciosDeCliente(modelo: ODataModel): Promise<ServiciosDeCliente> {
-	const [alta, edicion, bloqueo, historial, ubigeo] = await Promise.all([
+	const [alta, edicion, bloqueo, historial, ubigeo, persona] = await Promise.all([
 		entidadTieneCampo(modelo, "ClienteAlta", "Doc"),
 		entidadTieneCampo(modelo, "ClienteEdicion", "Kunnr"),
 		entidadTieneCampo(modelo, "ClienteEdicionBloqueo", "NombreBloqueado"),
 		entidadTieneCampo(modelo, "ClienteCambio", "Campo"),
-		entidadTieneCampo(modelo, "UbigeoCatalogo", "Distrito")
+		entidadTieneCampo(modelo, "UbigeoCatalogo", "Distrito"),
+		entidadTieneCampo(modelo, "ClienteAlta", "Nombres")
 	]);
-	return { alta, edicion, bloqueo, historial, ubigeo };
+	return { alta, edicion, bloqueo, historial, ubigeo, persona };
 }
 
 /** Largo de cada parte del nombre en SAP (NAME1, NAME2 y NAME3 del BP; KNA1 guarda 35). */
@@ -128,15 +163,26 @@ export function partirRazon(texto: string, largo = LARGO_PARTE_RAZON): string[] 
 	return partes;
 }
 
-/** Cuerpo del create de ClienteAlta: todo recortado y con el largo de los campos de SAP. */
+/**
+ * Cuerpo del create de ClienteAlta: todo recortado y con el largo de los campos de SAP. Titulo, nombres y apellidos solo van si vienen
+ * (un campo que el servicio no publica hace que SAP rechace el alta entera); una persona no lleva razon social y una empresa no lleva nombres.
+ */
 export function cuerpoAlta(a: DatosAlta): Record<string, string> {
-	const corto = (v: string, largo: number): string => texto(v).trim().slice(0, largo);
+	const corto = (v: string | undefined, largo: number): string => texto(v).trim().slice(0, largo);
+	const persona = esPersona(a.titulo);
+	const tipo: Record<string, string> =
+		a.titulo === undefined
+			? {}
+			: persona
+				? { Titulo: a.titulo, Nombres: corto(texto(a.nombres).replace(/\s+/g, " "), 81), ApePaterno: corto(a.apePat, 40), ApeMaterno: corto(a.apeMat, 40) }
+				: { Titulo: a.titulo };
 	return {
+		...tipo,
 		TipoDoc: a.tipoDoc,
 		Doc: corto(a.doc, 11),
-		Razon1: corto(a.razon1, 35),
-		Razon2: corto(a.razon2, 35),
-		Razon3: corto(a.razon3, 35),
+		Razon1: persona ? "" : corto(a.razon1, 35),
+		Razon2: persona ? "" : corto(a.razon2, 35),
+		Razon3: persona ? "" : corto(a.razon3, 35),
 		Dir1: corto(a.dir1, 35),
 		Dir2: corto(a.dir2, 35),
 		Dir3: corto(a.dir3, 35),

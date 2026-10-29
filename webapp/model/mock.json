@@ -1775,7 +1775,7 @@
  "apiDocumentos": {
   "45219034": {
    "tipoDoc": "DNI",
-   "razon": "Carla Ivonne Rios Salas",
+   "razon": "Carla Ivonne Rios Salas", "nombres": "Carla Ivonne", "apePat": "Rios", "apeMat": "Salas",
    "direccion": "Av. Ejemplo 123, Urb. Los Pinos",
    "dep": "Lima",
    "prov": "Lima",

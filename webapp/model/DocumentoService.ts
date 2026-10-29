@@ -17,6 +17,10 @@ export interface DatosDocumento {
 	ubigeo: string;
 	estado: string;
 	condicion: string;
+	/** DNI: por separado para el alta de persona; vacios si SAP no los trae (servicio anterior al 29/10/2026 noche). */
+	nombres: string;
+	apePat: string;
+	apeMat: string;
 }
 
 interface FilaDocumento {
@@ -30,6 +34,9 @@ interface FilaDocumento {
 	Ubigeo?: string;
 	Estado?: string;
 	Condicion?: string;
+	Nombres?: string;
+	ApellidoPaterno?: string;
+	ApellidoMaterno?: string;
 }
 
 /** El servicio publica la consulta de RUC/DNI (SAP del 29/10/2026 en adelante). */
@@ -61,7 +68,10 @@ export function datosDeFila(f: FilaDocumento): DatosDocumento {
 		distrito: texto(f.Distrito),
 		ubigeo: texto(f.Ubigeo),
 		estado: texto(f.Estado),
-		condicion: texto(f.Condicion)
+		condicion: texto(f.Condicion),
+		nombres: texto(f.Nombres),
+		apePat: texto(f.ApellidoPaterno),
+		apeMat: texto(f.ApellidoMaterno)
 	};
 }
 

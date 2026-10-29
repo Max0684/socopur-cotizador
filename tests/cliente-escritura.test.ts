@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { aBloqueo, aCambio, AltaEnProcesoError, arbolUbigeo, crearClienteSap, cuerpoAlta, cuerpoEdicion, leerBloqueoEdicion, serviciosDeCliente, type DatosAlta } from "../webapp/model/ClienteEscrituraService.ts";
+import { aBloqueo, aCambio, AltaEnProcesoError, arbolUbigeo, crearClienteSap, cuerpoAlta, cuerpoEdicion, esPersona, leerBloqueoEdicion, partirNombres, serviciosDeCliente, tiposClientePara, type DatosAlta } from "../webapp/model/ClienteEscrituraService.ts";
 import { crearModeloFalso } from "./helpers/modeloFalso.ts";
 
 const como = (m: unknown) => m as Parameters<typeof crearClienteSap>[0];
@@ -53,9 +53,9 @@ test("aBloqueo y aCambio: pasan la fila del servicio a lo que muestra la pantall
 
 test("serviciosDeCliente: solo marca lo que el $metadata ya publica", async () => {
 	const nada = crearModeloFalso();
-	assert.deepEqual(await serviciosDeCliente(como(nada.modelo)), { alta: false, edicion: false, bloqueo: false, historial: false, ubigeo: false });
-	const parcial = crearModeloFalso({ camposPublicados: ["ClienteAlta/Doc", "ClienteEdicionBloqueo/NombreBloqueado"] });
-	assert.deepEqual(await serviciosDeCliente(como(parcial.modelo)), { alta: true, edicion: false, bloqueo: true, historial: false, ubigeo: false });
+	assert.deepEqual(await serviciosDeCliente(como(nada.modelo)), { alta: false, edicion: false, bloqueo: false, historial: false, ubigeo: false, persona: false });
+	const parcial = crearModeloFalso({ camposPublicados: ["ClienteAlta/Doc", "ClienteAlta/Nombres", "ClienteEdicionBloqueo/NombreBloqueado"] });
+	assert.deepEqual(await serviciosDeCliente(como(parcial.modelo)), { alta: true, edicion: false, bloqueo: true, historial: false, ubigeo: false, persona: true });
 });
 
 test("crearClienteSap: crea en ClienteAlta con el cuerpo recortado", async () => {
@@ -152,4 +152,40 @@ test("partirRazon: una palabra de mas de 35 se corta donde cae; mas de 3 partes 
 	const doce = Array.from({ length: 12 }, () => "PALABRA").join(" ");
 	assert.equal(partirRazon(doce).length, 3);
 	assert.equal(partirRazon(`${doce} OTRA MAS`).length, 4);
+});
+
+test("cuerpoAlta: una persona manda tratamiento, nombres y apellidos, y la razon social vacia", () => {
+	const c = cuerpoAlta({ ...alta, tipoDoc: "DNI", doc: "72467726", titulo: "0002", nombres: " Christian   Stephano ", apePat: " Salas ", apeMat: "Anco" });
+	assert.equal(c.Titulo, "0002");
+	assert.equal(c.Nombres, "Christian Stephano");
+	assert.equal(c.ApePaterno, "Salas");
+	assert.equal(c.ApeMaterno, "Anco");
+	assert.equal(c.Razon1, "");
+	assert.equal(c.Doc, "72467726");
+});
+
+test("cuerpoAlta: una empresa manda solo el tratamiento 0003; sin tratamiento no se manda ningun campo nuevo", () => {
+	const empresa = cuerpoAlta({ ...alta, titulo: "0003", nombres: "No va" });
+	assert.equal(empresa.Titulo, "0003");
+	assert.equal(empresa.Nombres, undefined);
+	assert.equal(empresa.Razon1, "BM3 SAC");
+	const anterior = cuerpoAlta(alta);
+	assert.equal("Titulo" in anterior, false);
+	assert.equal("Nombres" in anterior, false);
+});
+
+test("tiposClientePara: DNI solo persona, RUC 20 solo empresa, RUC 10 cualquiera", () => {
+	assert.deepEqual(tiposClientePara("DNI", "72467726"), ["0001", "0002"]);
+	assert.deepEqual(tiposClientePara("RUC", "20393772841"), ["0003"]);
+	assert.deepEqual(tiposClientePara("RUC", "10731269233"), ["0001", "0002", "0003"]);
+	assert.equal(esPersona("0001"), true);
+	assert.equal(esPersona("0003"), false);
+	assert.equal(esPersona(undefined), false);
+});
+
+test("partirNombres: el primero y el resto, hasta 40 letras cada uno", () => {
+	assert.deepEqual(partirNombres(" Juan  Carlos Alberto "), { nombre: "Juan", segundo: "Carlos Alberto" });
+	assert.deepEqual(partirNombres("Wendy"), { nombre: "Wendy", segundo: "" });
+	assert.equal(partirNombres("X".repeat(41)), null);
+	assert.equal(partirNombres(`Ana ${"Y".repeat(41)}`), null);
 });

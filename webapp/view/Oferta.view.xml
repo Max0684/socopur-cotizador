@@ -104,17 +104,25 @@
 								<MessageStrip visible="{= !!${oferta>/alta/nota} }" text="{oferta>/alta/nota}" type="{oferta>/alta/notaTipo}" showIcon="true" class="sapUiSmallMarginBottom" />
 								<MessageStrip visible="{= !!${oferta>/alta/errores} }" text="{oferta>/alta/errores}" type="Error" showIcon="true" class="sapUiSmallMarginBottom" />
 								<form:SimpleForm editable="true" layout="ColumnLayout" columnsM="2" columnsL="2" columnsXL="3">
-									<Label text="{i18n>altaTipoCliente}" />
-									<Select selectedKey="{oferta>/alta/tipoCliente}" items="{oferta>/tiposCliente}" enabled="{= ${oferta>/pedidos}.length === 0 }"><core:Item key="{oferta>key}" text="{oferta>text}" /></Select>
 									<Label text="{i18n>altaTipoDoc}" />
-									<Select selectedKey="{oferta>/alta/tipoDoc}" enabled="{= ${oferta>/pedidos}.length === 0 }"><core:Item key="DNI" text="DNI" /><core:Item key="RUC" text="RUC" /></Select>
+									<Select selectedKey="{oferta>/alta/tipoDoc}" change=".onCambiaDocAlta" enabled="{= ${oferta>/pedidos}.length === 0 }"><core:Item key="DNI" text="DNI" /><core:Item key="RUC" text="RUC" /></Select>
 									<Label text="{i18n>altaNroDoc}" />
-									<Input value="{oferta>/alta/doc}" maxLength="11" enabled="{= ${oferta>/pedidos}.length === 0 }" />
+									<Input value="{oferta>/alta/doc}" maxLength="11" change=".onCambiaDocAlta" enabled="{= ${oferta>/pedidos}.length === 0 }" />
+									<!-- Tratamiento del BP en SAP: Senora/Senor = persona (DNI, o RUC 10), Empresa = organizacion (RUC 20). Como en ZSCPBP01. -->
+									<Label text="{i18n>altaTipoCliente}" required="true" />
+									<Select selectedKey="{oferta>/alta/tipoCliente}" forceSelection="false" items="{oferta>/tiposCliente}" change=".onCambiaTipoCliente" enabled="{= ${oferta>/pedidos}.length === 0 }"><core:Item key="{oferta>key}" text="{oferta>text}" /></Select>
 									<Label text="" />
 									<Button text="{i18n>altaConsultarApi}" icon="sap-icon://search" press=".onConsultarApi" width="14rem" busy="{= !!${oferta>/alta/consultando} }" busyIndicatorDelay="0" enabled="{= ${oferta>/pedidos}.length === 0 }" />
-									<Label text="{i18n>altaRazon}" required="true" />
+									<Label text="{i18n>altaRazon}" required="true" visible="{= !${oferta>/alta/persona} }" />
 									<!-- Un solo campo: al crear se reparte entre palabras en las 3 partes de 35 de SAP (107 = 3 x 35 + los 2 espacios del corte) -->
-									<Input value="{oferta>/alta/razon}" maxLength="107" enabled="{= ${oferta>/pedidos}.length === 0 }" />
+									<Input value="{oferta>/alta/razon}" maxLength="107" visible="{= !${oferta>/alta/persona} }" enabled="{= ${oferta>/pedidos}.length === 0 }" />
+									<!-- Persona: nombres (el primero y el resto, 40 + 40 en SAP) y los dos apellidos -->
+									<Label text="{i18n>altaNombres}" required="true" visible="{= !!${oferta>/alta/persona} }" />
+									<Input value="{oferta>/alta/nombres}" maxLength="81" visible="{= !!${oferta>/alta/persona} }" enabled="{= ${oferta>/pedidos}.length === 0 }" />
+									<Label text="{i18n>altaApePat}" required="true" visible="{= !!${oferta>/alta/persona} }" />
+									<Input value="{oferta>/alta/apePat}" maxLength="40" visible="{= !!${oferta>/alta/persona} }" enabled="{= ${oferta>/pedidos}.length === 0 }" />
+									<Label text="{i18n>altaApeMat}" visible="{= !!${oferta>/alta/persona} }" />
+									<Input value="{oferta>/alta/apeMat}" maxLength="40" visible="{= !!${oferta>/alta/persona} }" enabled="{= ${oferta>/pedidos}.length === 0 }" />
 									<Label text="{i18n>altaPais}" />
 									<Input value="Perú" editable="false" />
 									<Label text="{i18n>altaDepartamento}" required="true" />

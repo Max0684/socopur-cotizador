@@ -25,7 +25,7 @@ import { AmpliacionEnProcesoError, ampliacionPublicada, ampliarRetail, filtrarPo
 import { validarDocumento } from "com/socopur/cotizador/model/Documento";
 import { conAdvertencia, consultarDocumento, documentoPublicado, tipoDeDocumento } from "com/socopur/cotizador/model/DocumentoService";
 import { usarOData as usarODataActual } from "com/socopur/cotizador/model/Modo";
-import { AltaEnProcesoError, cargarUbigeo, crearClienteSap, leerBloqueoEdicion, leerCambiosCliente, modificarClienteSap, partirRazon, serviciosDeCliente, type CambiosCliente, type DatosAlta } from "com/socopur/cotizador/model/ClienteEscrituraService";
+import { AltaEnProcesoError, cargarUbigeo, crearClienteSap, esPersona, leerBloqueoEdicion, leerCambiosCliente, modificarClienteSap, partirNombres, partirRazon, serviciosDeCliente, TIPO_CLIENTE, tiposClientePara, type CambiosCliente, type DatosAlta } from "com/socopur/cotizador/model/ClienteEscrituraService";
 import { buscarRepuestosConStock, disponibilidadPorAlmacen, motivoVacio } from "com/socopur/cotizador/model/MaterialesService";
 import { cargarPreciosLista, precioListaDisponible, textoPrecioLista } from "com/socopur/cotizador/model/PrecioListaService";
 import { textoOrganizacion } from "com/socopur/cotizador/model/VendedoresService";
@@ -4388,13 +4388,21 @@ export default class Oferta extends Controller {
 	/* ---------- Alta de cliente inline (datos de ZSCPBP01; la consulta a APIDNI es SIMULADA) ---------- */
 
 	private altaVacia(doc: string): Record<string, unknown> {
-		const esRuc = doc.length === 11;
+		const tipoDoc = doc.length === 11 ? "RUC" : "DNI";
+		// Con una sola opcion (RUC 20 = empresa) queda elegida; si no (DNI: senora o senor; RUC 10: cualquiera) la elige el vendedor.
+		const tipos = tiposClientePara(tipoDoc, doc);
 		return {
-			tipoCliente: esRuc ? "0003" : "0001",
-			tipoDoc: esRuc ? "RUC" : "DNI",
+			tipoCliente: tipos.length === 1 ? tipos[0] : "",
+			// Que campos se ven: los de persona (nombres y apellidos) o la razon social. Con DNI, persona desde el inicio.
+			persona: tipoDoc === "DNI" || esPersona(tipos.length === 1 ? tipos[0] : ""),
+			tipoDoc,
 			doc,
 			// Un solo campo; al crear se reparte en las tres partes de SAP (partirRazon).
 			razon: "",
+			// Persona (tipo 0001 o 0002), como la rama de persona de ZSCPBP01.
+			nombres: "",
+			apePat: "",
+			apeMat: "",
 			dep: "",
 			prov: "",
 			dist: "",
@@ -4416,8 +4424,35 @@ export default class Oferta extends Controller {
 		oferta.setProperty("/altaAbierta", true);
 		oferta.setProperty("/alta", this.altaVacia(doc));
 		oferta.setProperty("/ubigeo", this.modeloMock().getProperty("/ubigeo") ?? []);
-		oferta.setProperty("/tiposCliente", this.modeloMock().getProperty("/tiposCliente") ?? []);
+		oferta.setProperty("/tiposCliente", this.opcionesTipoCliente("DNI" === oferta.getProperty("/alta/tipoDoc") ? "DNI" : "RUC", doc));
 		void this.usarUbigeoReal();
+	}
+
+	/** Tipos de cliente (tratamiento del BP en SAP) que admite el documento, con sus textos. */
+	private opcionesTipoCliente(tipoDoc: string, doc: string): { key: string; text: string }[] {
+		const textos: Record<string, string> = {
+			[TIPO_CLIENTE.senora]: this.i18n().getText("tipoClienteSenora") as string,
+			[TIPO_CLIENTE.senor]: this.i18n().getText("tipoClienteSenor") as string,
+			[TIPO_CLIENTE.empresa]: this.i18n().getText("tipoClienteEmpresa") as string
+		};
+		return tiposClientePara(tipoDoc, doc).map((key) => ({ key, text: textos[key] }));
+	}
+
+	/** Al cambiar el tipo o el numero de documento se ajustan los tipos de cliente posibles (DNI = persona, RUC 20 = empresa). */
+	public onCambiaDocAlta(): void {
+		const oferta = this.modeloOferta();
+		const opciones = this.opcionesTipoCliente(String(oferta.getProperty("/alta/tipoDoc") ?? ""), String(oferta.getProperty("/alta/doc") ?? ""));
+		oferta.setProperty("/tiposCliente", opciones);
+		if (!opciones.some((o) => o.key === oferta.getProperty("/alta/tipoCliente"))) {
+			oferta.setProperty("/alta/tipoCliente", opciones.length === 1 ? opciones[0].key : "");
+		}
+		this.onCambiaTipoCliente();
+	}
+
+	public onCambiaTipoCliente(): void {
+		const oferta = this.modeloOferta();
+		const tipo = String(oferta.getProperty("/alta/tipoCliente") ?? "");
+		oferta.setProperty("/alta/persona", esPersona(tipo) || (!tipo && oferta.getProperty("/alta/tipoDoc") === "DNI"));
 	}
 
 	/** Con SAP real y el catalogo publicado, los desplegables de departamento/provincia/distrito usan la lista real en vez de la de ejemplo. */
@@ -4489,7 +4524,14 @@ export default class Oferta extends Controller {
 					return;
 				}
 				oferta.setProperty("/alta/tipoDoc", tipo);
+				this.onCambiaDocAlta();
 				oferta.setProperty("/alta/razon", d.nombre);
+				// DNI: RENIEC trae nombres y apellidos por separado; sin ellos el nombre completo queda en Nombres para que el vendedor lo reparta.
+				if (tipo === "DNI") {
+					oferta.setProperty("/alta/nombres", d.apePat ? d.nombres : d.nombre);
+					oferta.setProperty("/alta/apePat", d.apePat);
+					oferta.setProperty("/alta/apeMat", d.apeMat);
+				}
 				const [d1, d2, d3] = partirRazon(d.direccion);
 				oferta.setProperty("/alta/dir1", d1 ?? "");
 				oferta.setProperty("/alta/dir2", d2 ?? "");
@@ -4510,7 +4552,7 @@ export default class Oferta extends Controller {
 			}
 			return;
 		}
-		const r = (this.modeloMock().getProperty("/apiDocumentos") as Record<string, { tipoDoc: string; razon: string; direccion: string; dep: string; prov: string; dist: string; ubigeoApi: string; formato: string }>)[doc];
+		const r = (this.modeloMock().getProperty("/apiDocumentos") as Record<string, { tipoDoc: string; razon: string; nombres?: string; apePat?: string; apeMat?: string; direccion: string; dep: string; prov: string; dist: string; ubigeoApi: string; formato: string }>)[doc];
 		if (!r) {
 			oferta.setProperty("/alta/nota", i18n.getText("altaApiSinDatos"));
 			oferta.setProperty("/alta/notaTipo", "Warning");
@@ -4519,6 +4561,9 @@ export default class Oferta extends Controller {
 		const partir = (t: string, n: number): string[] => [t.slice(0, n), t.slice(n, 2 * n), t.slice(2 * n, 3 * n)];
 		const [d1, d2, d3] = partir(r.direccion, 35);
 		oferta.setProperty("/alta/razon", r.razon);
+		oferta.setProperty("/alta/nombres", r.nombres ?? "");
+		oferta.setProperty("/alta/apePat", r.apePat ?? "");
+		oferta.setProperty("/alta/apeMat", r.apeMat ?? "");
 		oferta.setProperty("/alta/dir1", d1);
 		oferta.setProperty("/alta/dir2", d2);
 		oferta.setProperty("/alta/dir3", d3);
@@ -4547,9 +4592,22 @@ export default class Oferta extends Controller {
 		if (!this.usarOData() && clientes[doc]) {
 			errores.push(i18n.getText("altaErrExiste") as string);
 		}
+		const persona = esPersona(a.tipoCliente);
 		const razon = this.razonLimpia(a.razon);
 		const partesRazon = partirRazon(razon);
-		if (!razon) {
+		if (!tiposClientePara(a.tipoDoc, doc).includes(a.tipoCliente)) {
+			errores.push(i18n.getText("altaErrTipoCliente") as string);
+		} else if (persona) {
+			// Persona: nombres y apellido paterno obligatorios; el materno puede faltar (SAP valida lo mismo).
+			if (!this.razonLimpia(a.nombres)) {
+				errores.push(i18n.getText("altaErrNombres") as string);
+			} else if (!partirNombres(a.nombres)) {
+				errores.push(i18n.getText("altaErrNombresLargos") as string);
+			}
+			if (!this.razonLimpia(a.apePat)) {
+				errores.push(i18n.getText("altaErrApePat") as string);
+			}
+		} else if (!razon) {
 			errores.push(i18n.getText("altaErrRazon") as string);
 		} else if (partesRazon.length > 3) {
 			errores.push(i18n.getText("altaErrRazonLarga") as string);
@@ -4570,8 +4628,8 @@ export default class Oferta extends Controller {
 		if (errores.length) {
 			return;
 		}
-		const [razon1 = "", razon2 = "", razon3 = ""] = partesRazon;
-		const datos = { ...a, razon1, razon2, razon3 };
+		const [razon1 = "", razon2 = "", razon3 = ""] = persona ? [] : partesRazon;
+		const datos = { ...a, razon1, razon2, razon3, titulo: a.tipoCliente, nombres: this.razonLimpia(a.nombres), apePat: this.razonLimpia(a.apePat), apeMat: this.razonLimpia(a.apeMat) };
 		if (this.usarOData()) {
 			void this.crearClienteEnSap(datos as unknown as DatosAlta, doc);
 			return;
@@ -4591,11 +4649,18 @@ export default class Oferta extends Controller {
 		quitarTodosLosMensajes();
 		this.getView()?.setBusy(true);
 		try {
-			if (!(await serviciosDeCliente(odata)).alta) {
+			const servicios = await serviciosDeCliente(odata);
+			if (!servicios.alta) {
 				this.crearClienteSimulado(a as unknown as Record<string, string>, doc);
 				return;
 			}
-			const r = await crearClienteSap(odata, { ...a, doc });
+			// Servicio anterior a la v1.2 del alta: solo empresas, y sin los campos nuevos (SAP rechazaria la peticion entera).
+			if (!servicios.persona && esPersona(a.titulo)) {
+				oferta.setProperty("/alta/errores", i18n.getText("altaErrPersonaSap") as string);
+				return;
+			}
+			const datos = servicios.persona ? a : { ...a, titulo: undefined, nombres: undefined, apePat: undefined, apeMat: undefined };
+			const r = await crearClienteSap(odata, { ...datos, doc });
 			if (!r.kunnr) {
 				oferta.setProperty("/alta/errores", i18n.getText("altaErrSap", [r.mensaje || (i18n.getText("altaErrSinNumero") as string)]) as string);
 				return;
@@ -4624,8 +4689,9 @@ export default class Oferta extends Controller {
 		const oferta = this.modeloOferta();
 		const i18n = this.i18n();
 		const clientes = this.modeloMock().getProperty("/clientes") as Record<string, Cliente>;
-		// Las partes se cortaron entre palabras: SAP las muestra unidas con un espacio.
-		const nombre = [a.razon1, a.razon2, a.razon3].map((t) => (t ?? "").trim()).filter(Boolean).join(" ");
+		// Las partes se cortaron entre palabras: SAP las muestra unidas con un espacio. Una persona se muestra con nombres y apellidos.
+		const partes = esPersona(a.titulo) ? [a.nombres, a.apePat, a.apeMat] : [a.razon1, a.razon2, a.razon3];
+		const nombre = partes.map((t) => (t ?? "").trim()).filter(Boolean).join(" ");
 		const nuevo: Cliente = {
 			doc,
 			tipoDoc: a.tipoDoc,
