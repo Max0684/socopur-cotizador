@@ -21,6 +21,7 @@ import { fechaDdMmAaaa, htmlVehiculo, type TextosVehiculo } from "com/socopur/co
 import { leerTipoCambio, tipoCambioPublicado, tipoCambioTexto } from "com/socopur/cotizador/model/TipoCambioService";
 import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerDatosGuardados, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type EntregaParaGuardar, ENVIO_UNICO, type VinAsignado, esperarVinculos, leerMotivoVinculo, anularGrupo } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
+import { AmpliacionEnProcesoError, ampliacionPublicada, ampliarRetail, leerAmpliacion, type EstadoAmpliacion } from "com/socopur/cotizador/model/AmpliacionService";
 import { validarDocumento } from "com/socopur/cotizador/model/Documento";
 import { conAdvertencia, consultarDocumento, documentoPublicado, tipoDeDocumento } from "com/socopur/cotizador/model/DocumentoService";
 import { usarOData as usarODataActual } from "com/socopur/cotizador/model/Modo";
@@ -2261,6 +2262,20 @@ export default class Oferta extends Controller {
 		if (!cl) {
 			return;
 		}
+		const odata = this.usarOData() ? ((this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel | undefined) : undefined;
+		const conRetail = !!odata && !!cl.kunnr && (await ampliacionPublicada(odata).catch(() => false));
+		await this.abrirCliente("AmpliarArea", {
+			...this.areasParaAmpliar(cl),
+			nueva: "",
+			retail: { visible: conRetail, cargando: conRetail, grupos: [] }
+		});
+		if (conRetail && odata) {
+			await this.cargarAmpliacionRetail(odata, cl.kunnr as string);
+		}
+	}
+
+	/** Areas actuales del cliente y las que se pueden pedir a datos maestros, para el dialogo de ampliacion. */
+	private areasParaAmpliar(cl: Cliente): { areas: { key: string; text: string }[]; disponibles: { key: string; text: string }[] } {
 		const todas = this.modeloMock().getProperty("/canalesArea") as { key: string; text: string }[];
 		const actuales = cl.areas ?? [];
 		// Las areas de SAP vienen como organizacion/canal/sector: se comparan por organizacion/canal con la lista de areas que se pueden pedir.
@@ -2271,15 +2286,107 @@ export default class Oferta extends Controller {
 			key: `${c.vkorg}/${c.vtweg}/${c.spart}`,
 			text: this.i18n().getText("areaClienteFila", [textoOrganizacion(c.vkorg), canales.find((x) => x.key === c.vtweg)?.text ?? c.vtweg, c.spart, c.zterm || "—", c.waers || "—"]) as string
 		}));
-		await this.abrirCliente("AmpliarArea", {
-			areas: reales.length > 0 ? reales : this.areasTexto(actuales),
-			disponibles: todas.filter((a) => !actualesOrgCanal.includes(a.key)),
-			nueva: ""
+		return { areas: reales.length > 0 ? reales : this.areasTexto(actuales), disponibles: todas.filter((a) => !actualesOrgCanal.includes(a.key)) };
+	}
+
+	/** Lee de SAP lo que le falta al cliente para la ampliacion retail y lo pone en el dialogo. */
+	private async cargarAmpliacionRetail(odata: ODataModel, kunnr: string): Promise<void> {
+		const modelo = this.dialogoClienteActual?.getModel("cli") as JSONModel;
+		modelo.setProperty("/retail/cargando", true);
+		try {
+			modelo.setProperty("/retail", this.datosRetail(await leerAmpliacion(odata, kunnr)));
+		} catch (error) {
+			modelo.setProperty("/retail", { visible: true, cargando: false, grupos: [], puede: false, estadoTipo: "Error", estadoTexto: this.i18n().getText("ampliarRetailErrLectura", [this.motivoDeError(error)]) as string });
+		}
+	}
+
+	private datosRetail(e: EstadoAmpliacion | null): Record<string, unknown> {
+		const i18n = this.i18n();
+		const canales = (this.modeloOferta().getProperty("/opciones/canales") as { key: string; text: string }[]) ?? [];
+		const enCurso = e?.estado === "A";
+		const estadoTexto = enCurso ? i18n.getText("ampliarRetailEnCurso") : e?.estado === "E" ? i18n.getText("ampliarRetailFallo", [e.mensaje]) : "";
+		const resumen = !e
+			? i18n.getText("ampliarRetailSinCliente")
+			: !e.pendiente
+				? i18n.getText("ampliarRetailCompleto")
+				: e.areasPendientes === 0
+					? i18n.getText("ampliarRetailSoloDatos")
+					: i18n.getText(e.sociedades ? "ampliarRetailFaltanSoc" : "ampliarRetailFaltan", [e.areasPendientes, e.sociedades]);
+		return {
+			visible: true,
+			cargando: false,
+			resumen,
+			estadoTexto,
+			estadoTipo: enCurso ? "Warning" : "Error",
+			puede: !!e?.pendiente && !enCurso,
+			grupos: (e?.grupos ?? []).map((g) => ({
+				titulo: `${textoOrganizacion(g.vkorg)} · ${canales.find((c) => c.key === g.vtweg)?.text ?? `canal ${g.vtweg}`}`,
+				sectores: i18n.getText("ampliarRetailSectores", [g.sectores.join(", ")])
+			}))
+		};
+	}
+
+	/** Amplia el cliente en SAP a las areas retail que le faltan (accion ampliarRetail; la hace un job de fondo) y recarga sus areas. */
+	public onAmpliarRetail(): void {
+		const cl = this.clienteActual();
+		const modelo = this.dialogoClienteActual?.getModel("cli") as JSONModel;
+		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel | undefined;
+		if (!cl?.kunnr || !odata) {
+			return;
+		}
+		const kunnr = cl.kunnr;
+		MessageBox.confirm(this.i18n().getText("ampliarRetailConfirmar", [cl.nombre, kunnr]) as string, {
+			onClose: (accion: string) => {
+				if (accion === MessageBox.Action.OK) {
+					void this.ejecutarAmpliacionRetail(odata, kunnr, modelo);
+				}
+			}
 		});
 	}
 
+	private async ejecutarAmpliacionRetail(odata: ODataModel, kunnr: string, modelo: JSONModel): Promise<void> {
+		const i18n = this.i18n();
+		modelo.setProperty("/retail/cargando", true);
+		modelo.setProperty("/retail/puede", false);
+		quitarTodosLosMensajes();
+		try {
+			const e = await ampliarRetail(odata, kunnr);
+			modelo.setProperty("/retail", this.datosRetail(e));
+			if (e.estado === "M") {
+				await this.recargarAreasCliente(odata, kunnr);
+				const cl = this.clienteActual();
+				if (cl) {
+					const { areas, disponibles } = this.areasParaAmpliar(cl);
+					modelo.setProperty("/areas", areas);
+					modelo.setProperty("/disponibles", disponibles);
+				}
+				MessageToast.show(i18n.getText("ampliarRetailOk", [e.mensaje]) as string, { duration: 6000 });
+			}
+		} catch (error) {
+			if (error instanceof AmpliacionEnProcesoError) {
+				modelo.setProperty("/retail", { ...(modelo.getProperty("/retail") as object), cargando: false, puede: false, estadoTipo: "Warning", estadoTexto: i18n.getText("ampliarRetailEnCurso") as string });
+			} else {
+				modelo.setProperty("/retail", { ...(modelo.getProperty("/retail") as object), cargando: false, puede: true, estadoTipo: "Error", estadoTexto: i18n.getText("ampliarRetailRechazo", [this.motivoDeError(error)]) as string });
+			}
+		}
+	}
+
+	/** Tras ampliar: vuelve a leer las areas del cliente en SAP, sin tocar el resto de la oferta (direccion, lineas). */
+	private async recargarAreasCliente(odata: ODataModel, kunnr: string): Promise<void> {
+		const encontrado = (await buscarClientes(odata, kunnr)).find((c) => c.kunnr === kunnr);
+		const oferta = this.modeloOferta();
+		const cl = this.clienteActual();
+		if (!encontrado || !cl || cl.kunnr !== kunnr) {
+			return;
+		}
+		oferta.setProperty("/cliente", { ...cl, areas: encontrado.areas, condicionesAreas: encontrado.condicionesAreas });
+		this.cargarAreasCliente();
+		this.recalcular();
+	}
+
 	/**
-	 * El vendedor NO amplia el cliente: arma la solicitud para quien administra los datos maestros (condiciones de pago y credito del area nueva).
+	 * Areas que no son retail (p. ej. mayorista, con condiciones de pago y credito propias): el vendedor no las amplia, arma la solicitud para
+	 * quien administra los datos maestros. Las retail se amplian en SAP con onAmpliarRetail.
 	 * Se copia al portapapeles y, si el manifest trae un correo (config/ampliacionCorreo), se abre el correo ya redactado.
 	 */
 	public onAmpliarArea(): void {

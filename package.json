@@ -1,6 +1,6 @@
 {
   "name": "com.socopur.cotizador",
-  "version": "0.3.11",
+  "version": "0.3.12",
   "private": true,
   "description": "Cotizador Socopur (YCOTIZ) - UI5 Freestyle + TypeScript",
   "scripts": {
