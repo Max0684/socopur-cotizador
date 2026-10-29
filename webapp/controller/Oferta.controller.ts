@@ -4671,7 +4671,13 @@ export default class Oferta extends Controller {
 			if (encontrados.length) {
 				this.aplicarClienteSap(encontrados[0]);
 			}
-			MessageToast.show(r.creado ? (i18n.getText("altaCreadoSap", [r.kunnr]) as string) : (i18n.getText("altaYaExistia", [r.kunnr]) as string), { duration: 6000 });
+			// Desde la v1.3 del alta el mismo job amplia al cliente a las demas areas retail; si eso falla el cliente igual quedo creado.
+			const sinAmpliar = r.creado && /no se amplio/i.test(r.mensaje);
+			if (sinAmpliar) {
+				MessageBox.warning(i18n.getText("altaCreadoSinAmpliar", [r.kunnr, r.mensaje]) as string);
+			} else {
+				MessageToast.show(r.creado ? (i18n.getText("altaCreadoSap", [r.kunnr]) as string) : (i18n.getText("altaYaExistia", [r.kunnr]) as string), { duration: 6000 });
+			}
 		} catch (error) {
 			if (error instanceof AltaEnProcesoError) {
 				oferta.setProperty("/altaAbierta", false);
