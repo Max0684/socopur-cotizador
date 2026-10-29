@@ -21,7 +21,7 @@ import { fechaDdMmAaaa, htmlVehiculo, type TextosVehiculo } from "com/socopur/co
 import { leerTipoCambio, tipoCambioPublicado, tipoCambioTexto } from "com/socopur/cotizador/model/TipoCambioService";
 import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerDatosGuardados, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type EntregaParaGuardar, ENVIO_UNICO, type VinAsignado, esperarVinculos, leerMotivoVinculo, anularGrupo } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
-import { AmpliacionEnProcesoError, ampliacionPublicada, ampliarRetail, leerAmpliacion, type EstadoAmpliacion } from "com/socopur/cotizador/model/AmpliacionService";
+import { AmpliacionEnProcesoError, ampliacionPublicada, ampliarRetail, filtrarPorOrg, leerAmpliacion, organizacionesDe, type EstadoAmpliacion, type FilaAmpliacion, type FilaPorOrg } from "com/socopur/cotizador/model/AmpliacionService";
 import { validarDocumento } from "com/socopur/cotizador/model/Documento";
 import { conAdvertencia, consultarDocumento, documentoPublicado, tipoDeDocumento } from "com/socopur/cotizador/model/DocumentoService";
 import { usarOData as usarODataActual } from "com/socopur/cotizador/model/Modo";
@@ -2264,29 +2264,66 @@ export default class Oferta extends Controller {
 		}
 		const odata = this.usarOData() ? ((this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel | undefined) : undefined;
 		const conRetail = !!odata && !!cl.kunnr && (await ampliacionPublicada(odata).catch(() => false));
+		// El filtro arranca en la organizacion del vendedor (si el cliente la tiene en alguna lista): con 100 areas o mas la ventana se hacia larga.
 		await this.abrirCliente("AmpliarArea", {
 			...this.areasParaAmpliar(cl),
 			nueva: "",
-			retail: { visible: conRetail, cargando: conRetail, grupos: [] }
+			filtroOrg: String(this.modeloOferta().getProperty("/perfil/orgVentas") ?? ""),
+			retail: { visible: conRetail, cargando: conRetail, gruposTodos: [] }
 		});
+		this.aplicarFiltroAmpliacion();
 		if (conRetail && odata) {
 			await this.cargarAmpliacionRetail(odata, cl.kunnr as string);
 		}
 	}
 
-	/** Areas actuales del cliente y las que se pueden pedir a datos maestros, para el dialogo de ampliacion. */
-	private areasParaAmpliar(cl: Cliente): { areas: { key: string; text: string }[]; disponibles: { key: string; text: string }[] } {
+	/**
+	 * Areas actuales del cliente (agrupadas por organizacion, canal y condicion: una fila por sector eran mas de 100) y las que se pueden pedir
+	 * a datos maestros, para el dialogo de ampliacion. Sin filtrar: el filtro lo aplica aplicarFiltroAmpliacion.
+	 */
+	private areasParaAmpliar(cl: Cliente): { areasTodas: FilaAmpliacion[]; disponiblesTodas: (FilaPorOrg & { key: string; text: string })[] } {
+		const i18n = this.i18n();
 		const todas = this.modeloMock().getProperty("/canalesArea") as { key: string; text: string }[];
 		const actuales = cl.areas ?? [];
 		// Las areas de SAP vienen como organizacion/canal/sector: se comparan por organizacion/canal con la lista de areas que se pueden pedir.
 		const actualesOrgCanal = areasOrgCanal(actuales);
 		const canales = (this.modeloOferta().getProperty("/opciones/canales") as { key: string; text: string }[]) ?? [];
+		const canal = (vtweg: string): string => canales.find((x) => x.key === vtweg)?.text ?? vtweg;
 		// Con clientes de SAP se listan sus areas reales (todas, no solo las del vendedor) con la condicion de cada una.
-		const reales = (cl.condicionesAreas ?? []).map((c) => ({
-			key: `${c.vkorg}/${c.vtweg}/${c.spart}`,
-			text: this.i18n().getText("areaClienteFila", [textoOrganizacion(c.vkorg), canales.find((x) => x.key === c.vtweg)?.text ?? c.vtweg, c.spart, c.zterm || "—", c.waers || "—"]) as string
+		const condiciones = cl.condicionesAreas ?? [];
+		const reales = opcionesAreaCliente(condiciones, organizacionesDe(condiciones)).map((o) => ({
+			vkorg: o.vkorg,
+			titulo: i18n.getText("ampliarAreaTitulo", [textoOrganizacion(o.vkorg), canal(o.vtweg)]) as string,
+			detalle: i18n.getText("ampliarAreaDetalle", [o.sectores.join(", "), o.zterm || "—", o.waers || "—"]) as string
 		}));
-		return { areas: reales.length > 0 ? reales : this.areasTexto(actuales), disponibles: todas.filter((a) => !actualesOrgCanal.includes(a.key)) };
+		const ejemplo = this.areasTexto(actuales).map((a) => ({ vkorg: a.key.split("/")[0], titulo: a.text, detalle: "" }));
+		return {
+			areasTodas: reales.length > 0 ? reales : ejemplo,
+			disponiblesTodas: todas.filter((a) => !actualesOrgCanal.includes(a.key)).map((a) => ({ ...a, vkorg: a.key.split("/")[0] }))
+		};
+	}
+
+	/** Filtro por organizacion del dialogo de ampliacion: se aplica a las areas actuales, a las retail pendientes y a las que se pueden pedir. */
+	public onFiltrarAmpliacion(): void {
+		this.aplicarFiltroAmpliacion();
+	}
+
+	private aplicarFiltroAmpliacion(): void {
+		const modelo = this.dialogoClienteActual?.getModel("cli") as JSONModel;
+		const areas = (modelo.getProperty("/areasTodas") as FilaAmpliacion[]) ?? [];
+		const disponibles = (modelo.getProperty("/disponiblesTodas") as (FilaPorOrg & { key: string; text: string })[]) ?? [];
+		const pendientes = (modelo.getProperty("/retail/gruposTodos") as FilaAmpliacion[]) ?? [];
+		const orgs = organizacionesDe(areas, disponibles, pendientes);
+		// Una organizacion que no esta en ninguna lista (p. ej. la del vendedor en un cliente de otra empresa) deja el filtro en "Todas".
+		const org = orgs.includes(String(modelo.getProperty("/filtroOrg") ?? "")) ? String(modelo.getProperty("/filtroOrg")) : "";
+		modelo.setProperty("/filtroOrg", org);
+		modelo.setProperty("/orgsFiltro", [{ key: "", text: this.i18n().getText("ampliarFiltroTodas") as string }, ...orgs.map((o) => ({ key: o, text: textoOrganizacion(o) }))]);
+		modelo.setProperty("/areas", filtrarPorOrg(areas, org));
+		modelo.setProperty("/disponibles", filtrarPorOrg(disponibles, org));
+		modelo.setProperty("/retail/grupos", filtrarPorOrg(pendientes, org));
+		if (!filtrarPorOrg(disponibles, org).some((a) => a.key === modelo.getProperty("/nueva"))) {
+			modelo.setProperty("/nueva", "");
+		}
 	}
 
 	/** Lee de SAP lo que le falta al cliente para la ampliacion retail y lo pone en el dialogo. */
@@ -2296,8 +2333,9 @@ export default class Oferta extends Controller {
 		try {
 			modelo.setProperty("/retail", this.datosRetail(await leerAmpliacion(odata, kunnr)));
 		} catch (error) {
-			modelo.setProperty("/retail", { visible: true, cargando: false, grupos: [], puede: false, estadoTipo: "Error", estadoTexto: this.i18n().getText("ampliarRetailErrLectura", [this.motivoDeError(error)]) as string });
+			modelo.setProperty("/retail", { visible: true, cargando: false, gruposTodos: [], puede: false, estadoTipo: "Error", estadoTexto: this.i18n().getText("ampliarRetailErrLectura", [this.motivoDeError(error)]) as string });
 		}
+		this.aplicarFiltroAmpliacion();
 	}
 
 	private datosRetail(e: EstadoAmpliacion | null): Record<string, unknown> {
@@ -2319,9 +2357,12 @@ export default class Oferta extends Controller {
 			estadoTexto,
 			estadoTipo: enCurso ? "Warning" : "Error",
 			puede: !!e?.pendiente && !enCurso,
-			grupos: (e?.grupos ?? []).map((g) => ({
-				titulo: `${textoOrganizacion(g.vkorg)} · ${canales.find((c) => c.key === g.vtweg)?.text ?? `canal ${g.vtweg}`}`,
-				sectores: i18n.getText("ampliarRetailSectores", [g.sectores.join(", ")])
+			// El boton amplia TODO lo pendiente (regla de ZSDSCPP002), aunque el filtro muestre una sola organizacion: el texto lo dice.
+			accion: e?.areasPendientes ? i18n.getText("ampliarRetailAccionN", [e.areasPendientes]) : i18n.getText("ampliarRetailAccion"),
+			gruposTodos: (e?.grupos ?? []).map((g) => ({
+				vkorg: g.vkorg,
+				titulo: i18n.getText("ampliarAreaTitulo", [textoOrganizacion(g.vkorg), canales.find((c) => c.key === g.vtweg)?.text ?? `canal ${g.vtweg}`]) as string,
+				detalle: i18n.getText("ampliarRetailSectores", [g.sectores.join(", ")]) as string
 			}))
 		};
 	}
@@ -2356,9 +2397,9 @@ export default class Oferta extends Controller {
 				await this.recargarAreasCliente(odata, kunnr);
 				const cl = this.clienteActual();
 				if (cl) {
-					const { areas, disponibles } = this.areasParaAmpliar(cl);
-					modelo.setProperty("/areas", areas);
-					modelo.setProperty("/disponibles", disponibles);
+					const { areasTodas, disponiblesTodas } = this.areasParaAmpliar(cl);
+					modelo.setProperty("/areasTodas", areasTodas);
+					modelo.setProperty("/disponiblesTodas", disponiblesTodas);
 				}
 				MessageToast.show(i18n.getText("ampliarRetailOk", [e.mensaje]) as string, { duration: 6000 });
 			}
@@ -2369,9 +2410,13 @@ export default class Oferta extends Controller {
 				modelo.setProperty("/retail", { ...(modelo.getProperty("/retail") as object), cargando: false, puede: true, estadoTipo: "Error", estadoTexto: i18n.getText("ampliarRetailRechazo", [this.motivoDeError(error)]) as string });
 			}
 		}
+		this.aplicarFiltroAmpliacion();
 	}
 
-	/** Tras ampliar: vuelve a leer las areas del cliente en SAP, sin tocar el resto de la oferta (direccion, lineas). */
+	/**
+	 * Tras ampliar: vuelve a leer las areas del cliente en SAP, sin tocar el resto de la oferta (direccion, lineas). El area elegida en la
+	 * oferta se conserva: con areas nuevas en la misma organizacion (p. ej. el canal 15) el desplegable volvia a "elegir" (prueba del 29/10/2026).
+	 */
 	private async recargarAreasCliente(odata: ODataModel, kunnr: string): Promise<void> {
 		const encontrado = (await buscarClientes(odata, kunnr)).find((c) => c.kunnr === kunnr);
 		const oferta = this.modeloOferta();
@@ -2379,8 +2424,14 @@ export default class Oferta extends Controller {
 		if (!encontrado || !cl || cl.kunnr !== kunnr) {
 			return;
 		}
+		const previa = String(oferta.getProperty("/areaClienteSel") ?? "");
 		oferta.setProperty("/cliente", { ...cl, areas: encontrado.areas, condicionesAreas: encontrado.condicionesAreas });
 		this.cargarAreasCliente();
+		const misma = previa ? ((oferta.getProperty("/areasCliente") as OpcionAreaCliente[]) ?? []).find((o) => o.key === previa) : undefined;
+		if (misma) {
+			oferta.setProperty("/areaClienteSel", misma.key);
+			this.aplicarAreaCliente(misma);
+		}
 		this.recalcular();
 	}
 

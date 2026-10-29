@@ -11,20 +11,28 @@
 		<content>
 			<VBox class="sapUiSmallMargin">
 				<MessageStrip text="{i18n>ampliarNota}" type="Information" showIcon="true" class="sapUiSmallMarginBottom" />
-				<Title text="{i18n>areasVenta}" level="H4" class="sapUiTinyMarginBottom" />
-				<List items="{cli>/areas}" noDataText="{i18n>areasNinguna}" class="sapUiSmallMarginBottom">
-					<StandardListItem title="{cli>text}" icon="sap-icon://business-by-design" />
-				</List>
+				<!-- Filtro por organizacion: con 100 areas o mas el vendedor no encontraba la que buscaba (pruebas del 29/10/2026). -->
+				<HBox alignItems="Center" wrap="Wrap" class="sapUiSmallMarginBottom">
+					<Label text="{i18n>ampliarFiltro}" labelFor="selFiltroAmpliar" class="sapUiSmallMarginEnd" />
+					<Select id="selFiltroAmpliar" selectedKey="{cli>/filtroOrg}" items="{cli>/orgsFiltro}" width="20rem" change=".onFiltrarAmpliacion" class="cotizAnchoMax">
+						<layoutData><FlexItemData styleClass="cotizAnchoMax" /></layoutData>
+						<core:Item key="{cli>key}" text="{cli>text}" />
+					</Select>
+				</HBox>
 				<!-- Ampliacion retail en SAP (regla de ZSDSCPP002): solo con el servicio publicado y un cliente de SAP. -->
 				<VBox visible="{= !!${cli>/retail/visible} }" busy="{= !!${cli>/retail/cargando} }" busyIndicatorDelay="0" class="sapUiSmallMarginBottom">
 					<Title text="{i18n>ampliarRetailTitulo}" level="H4" class="sapUiTinyMarginBottom" />
 					<MessageStrip text="{cli>/retail/estadoTexto}" type="{cli>/retail/estadoTipo}" showIcon="true" visible="{= !!${cli>/retail/estadoTexto} }" class="sapUiTinyMarginBottom" />
 					<Text text="{cli>/retail/resumen}" class="sapUiTinyMarginBottom" />
-					<List items="{cli>/retail/grupos}" visible="{= ${cli>/retail/grupos}.length > 0 }" class="sapUiTinyMarginBottom">
-						<StandardListItem title="{cli>titulo}" description="{cli>sectores}" icon="sap-icon://add" />
+					<List items="{cli>/retail/grupos}" visible="{= !!${cli>/retail/puede} }" noDataText="{i18n>ampliarRetailNadaEnOrg}" class="sapUiTinyMarginBottom">
+						<StandardListItem title="{cli>titulo}" description="{cli>detalle}" icon="sap-icon://add" />
 					</List>
-					<Button text="{i18n>ampliarRetailAccion}" icon="sap-icon://action" enabled="{= !!${cli>/retail/puede} }" press=".onAmpliarRetail" />
+					<Button text="{cli>/retail/accion}" icon="sap-icon://action" enabled="{= !!${cli>/retail/puede} }" visible="{= !!${cli>/retail/puede} }" press=".onAmpliarRetail" />
 				</VBox>
+				<Title text="{i18n>areasVenta}" level="H4" class="sapUiTinyMarginBottom" />
+				<List items="{cli>/areas}" noDataText="{i18n>areasNinguna}" class="sapUiSmallMarginBottom">
+					<StandardListItem title="{cli>titulo}" description="{cli>detalle}" icon="sap-icon://business-by-design" />
+				</List>
 				<Title text="{i18n>ampliarOtrasTitulo}" level="H4" visible="{= !!${cli>/retail/visible} }" class="sapUiTinyMarginBottom" />
 				<HBox alignItems="Center" wrap="Wrap">
 					<Label text="{i18n>ampliarNueva}" class="sapUiSmallMarginEnd" />

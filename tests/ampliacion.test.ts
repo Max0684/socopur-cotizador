@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { aEstadoAmpliacion, AmpliacionEnProcesoError, ampliarRetail, gruposDeTexto, leerAmpliacion } from "../webapp/model/AmpliacionService.ts";
+import { aEstadoAmpliacion, AmpliacionEnProcesoError, ampliarRetail, filtrarPorOrg, gruposDeTexto, leerAmpliacion, organizacionesDe } from "../webapp/model/AmpliacionService.ts";
 
 const como = (m: unknown) => m as Parameters<typeof ampliarRetail>[0];
 const sinPausa = { pausa: async () => undefined };
@@ -113,4 +113,15 @@ test("ampliarRetail: sin el cliente en ClienteEdicion no ejecuta nada", async ()
 	const { modelo, llamadas } = modeloAmpliacion([pendiente24840], { sinCliente: true });
 	await assert.rejects(ampliarRetail(como(modelo), "0100099999", sinPausa), /no encontro/);
 	assert.equal(llamadas.some((l) => l.startsWith("execute")), false);
+});
+
+test("organizacionesDe: junta las organizaciones de todas las listas, sin repetir y ordenadas", () => {
+	assert.deepEqual(organizacionesDe([{ vkorg: "1201" }, { vkorg: "1101" }], [{ vkorg: "1101" }, { vkorg: "" }], []), ["1101", "1201"]);
+});
+
+test("filtrarPorOrg: vacio deja todas; con organizacion, solo las suyas", () => {
+	const filas = [{ vkorg: "1101", t: "a" }, { vkorg: "1201", t: "b" }, { vkorg: "1101", t: "c" }];
+	assert.equal(filtrarPorOrg(filas, "").length, 3);
+	assert.deepEqual(filtrarPorOrg(filas, "1101").map((f) => f.t), ["a", "c"]);
+	assert.deepEqual(filtrarPorOrg(filas, "1301"), []);
 });

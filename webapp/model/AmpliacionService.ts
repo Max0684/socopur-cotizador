@@ -72,6 +72,27 @@ export function gruposDeTexto(t: string): GrupoAreas[] {
 		.filter((g) => g.vkorg && g.vtweg);
 }
 
+/** Fila de cualquiera de las listas del dialogo de ampliacion (areas actuales, pendientes o que se pueden solicitar). */
+export interface FilaPorOrg {
+	vkorg: string;
+}
+
+/** Fila agrupada por organizacion y canal: area actual o pendiente. */
+export interface FilaAmpliacion extends FilaPorOrg {
+	titulo: string;
+	detalle: string;
+}
+
+/** Organizaciones de las listas del dialogo, sin repetir y ordenadas: las opciones del filtro. */
+export function organizacionesDe(...listas: FilaPorOrg[][]): string[] {
+	return [...new Set(listas.flat().map((f) => f.vkorg).filter(Boolean))].sort();
+}
+
+/** Filtro del dialogo: vacio = todas las organizaciones. */
+export function filtrarPorOrg<T extends FilaPorOrg>(filas: T[], vkorg: string): T[] {
+	return vkorg ? filas.filter((f) => f.vkorg === vkorg) : filas;
+}
+
 export function aEstadoAmpliacion(f: Record<string, unknown>): EstadoAmpliacion {
 	return {
 		pendiente: f.Pendiente === true || f.Pendiente === "X",
