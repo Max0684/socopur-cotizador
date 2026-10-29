@@ -6,11 +6,12 @@ import { accionTieneParametro, entidadTieneCampo } from "./CamposServicio";
 const NS = "com.sap.gateway.srvd_a2x.yui_cotiz_srv.v0001";
 
 /**
- * Correo BTP de quien pide la accion (parametro UsuarioBtp): SAP lo guarda en el historial YCOTIZ_LOG. Solo se manda si el $metadata
- * publica el parametro en esa accion: un parametro desconocido haria rechazar la accion.
+ * Correo BTP de quien pide la accion (parametro UsuarioBtp): SAP lo guarda en el historial YCOTIZ_LOG. Si la accion publica el parametro
+ * se manda SIEMPRE, vacio si no se obtuvo el correo: SAP lo trata como obligatorio y rechaza la accion si falta. Si no lo publica no se
+ * manda: un parametro desconocido tambien la haria rechazar.
  */
 async function ponerUsuario(modelo: ODataModel, operacion: { setParameter(nombre: string, valor: unknown): unknown }, entidad: string, accion: string, usuario: string): Promise<void> {
-	if (usuario && (await accionTieneParametro(modelo, entidad, `${NS}.${accion}`, "UsuarioBtp"))) {
+	if (await accionTieneParametro(modelo, entidad, `${NS}.${accion}`, "UsuarioBtp")) {
 		operacion.setParameter("UsuarioBtp", usuario);
 	}
 }

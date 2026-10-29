@@ -556,8 +556,24 @@ test("asignarVinItem manda UsuarioBtp solo si la accion lo publica en el $metada
 	await asignarVinItem(como(sin.modelo), "COT-1", "000010", "1000006683", "vendedora@socopur.pe");
 	assert.deepEqual(sin.parametros, { Vhcle: "1000006683" });
 	const con = modeloVin(item);
-	const publicado = "/Item/com.sap.gateway.srvd_a2x.yui_cotiz_srv.v0001.asignarVin/$Parameter/UsuarioBtp";
-	(con.modelo as Record<string, unknown>).getMetaModel = () => ({ requestObject: async (ruta: string) => (ruta === publicado ? {} : undefined) });
+	const sobrecarga = "/Item/com.sap.gateway.srvd_a2x.yui_cotiz_srv.v0001.asignarVin/@$ui5.overload/0/$Parameter";
+	const lista = [{ $Name: "_it" }, { $Name: "Vhcle" }, { $Name: "UsuarioBtp" }];
+	(con.modelo as Record<string, unknown>).getMetaModel = () => ({ requestObject: async (ruta: string) => (ruta === sobrecarga ? lista : undefined) });
 	await asignarVinItem(como(con.modelo), "COT-1", "000010", "1000006683", "vendedora@socopur.pe");
 	assert.deepEqual(con.parametros, { Vhcle: "1000006683", UsuarioBtp: "vendedora@socopur.pe" });
+	// Sin correo igual se manda (vacio): SAP marca el parametro como obligatorio y rechaza la accion si falta.
+	await asignarVinItem(como(con.modelo), "COT-1", "000010", "1000006683");
+	assert.equal(con.parametros.UsuarioBtp, "");
+});
+
+test("accionTieneParametro lee la lista de parametros de la accion, no un campo de la entidad con el mismo nombre", async () => {
+	const { accionTieneParametro } = await import("../webapp/model/CamposServicio.ts");
+	const NS = "com.sap.gateway.srvd_a2x.yui_cotiz_srv.v0001";
+	const modelo = {
+		getMetaModel: () => ({
+			requestObject: async (ruta: string) =>
+				ruta === `/Cotizacion/${NS}.generarOfertas/@$ui5.overload/0/$Parameter` ? [{ $Name: "_it" }] : ruta.endsWith("/$Parameter/UsuarioBtp") ? { $kind: "Property" } : undefined
+		})
+	};
+	assert.equal(await accionTieneParametro(como(modelo), "Cotizacion", `${NS}.generarOfertas`, "UsuarioBtp"), false);
 });
