@@ -90,7 +90,7 @@ const CAMPOS: Record<string, string> = {
 	VBELNPEDIDO: "historialCampoPedido"
 };
 
-const OPERACIONES = ["CREAR", "MODIFICAR", "BORRAR", "GENERAR_OFERTAS", "OFERTA_CREADA", "CREAR_PEDIDO", "PEDIDO_CREADO", "ANULAR", "RENOVAR", "ASIGNAR_VIN", "LIBERAR_VIN"];
+const OPERACIONES = ["CREAR", "MODIFICAR", "BORRAR", "GENERAR_OFERTAS", "OFERTA_CREADA", "CREAR_PEDIDO", "PEDIDO_CREADO", "ANULAR", "RENOVAR", "ASIGNAR_VIN", "LIBERAR_VIN", "VIN_VENCIDO"];
 
 export function textoOperacion(operacion: string, t: Textos): string {
 	return OPERACIONES.includes(operacion) ? t(`historialOp_${operacion}`) : operacion;
@@ -118,6 +118,7 @@ export function textoDetalle(fila: FilaHistorial, t: Textos): string {
 			return fila.despues ? `${campo}: ${fila.despues}` : "";
 		case "BORRAR":
 		case "LIBERAR_VIN":
+		case "VIN_VENCIDO":
 			return fila.antes ? `${campo}: ${fila.antes}` : "";
 		case "ANULAR":
 			return fila.despues ? t("historialMotivo", [fila.despues]) : "";

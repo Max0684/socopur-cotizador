@@ -17,7 +17,8 @@ import { correoUsuarioBtp } from "com/socopur/cotizador/model/UsuarioBtp";
 import { almacenDelNavegador, borrarRespaldo, claveRespaldo, guardarRespaldo, leerRespaldo, perfilRecuperado, siguienteContador, type DatosRespaldo, type Respaldo } from "com/socopur/cotizador/model/RespaldoOferta";
 import { historialPublicado, leerHistorial, textoDetalle, textoLugar, textoOperacion } from "com/socopur/cotizador/model/HistorialService";
 import { impresionPublicada, leerImpresion, leerPdfOferta, numerosParaImprimir, pdfPublicado } from "com/socopur/cotizador/model/ImpresionService";
-import { htmlVehiculo, type TextosVehiculo } from "com/socopur/cotizador/model/ImpresionVehiculo";
+import { fechaDdMmAaaa, htmlVehiculo, type TextosVehiculo } from "com/socopur/cotizador/model/ImpresionVehiculo";
+import { leerTipoCambio, tipoCambioPublicado, tipoCambioTexto } from "com/socopur/cotizador/model/TipoCambioService";
 import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerDatosGuardados, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type EntregaParaGuardar, ENVIO_UNICO, type VinAsignado, esperarVinculos, leerMotivoVinculo, anularGrupo } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
 import { validarDocumento } from "com/socopur/cotizador/model/Documento";
@@ -4970,6 +4971,28 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 	 * Con ?odata=1 reemplaza la lista fija de formas de pago por la de SAP. Siempre deja disponible la del perfil del vendedor aunque SAP no la liste
 	 * (para que el desplegable no cambie solo de valor). Si el servicio aun no publica la entidad, queda la lista de antes.
 	 */
+	/**
+	 * Tipo de cambio de la cabecera: el de SAP (tipo M, lo mantiene Tesoreria), el mismo con el que SAP calcula el precio en soles.
+	 * Si el servicio aun no lo publica o SAP no lo tiene, queda el del perfil.
+	 */
+	private async sincronizarTipoCambio(): Promise<void> {
+		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel | undefined;
+		if (!odata || !(await tipoCambioPublicado(odata))) {
+			return;
+		}
+		try {
+			const tc = await leerTipoCambio(odata);
+			const texto = tipoCambioTexto(tc.cambio);
+			const nota = this.i18n().getText("tipoCambioSap", [fechaDdMmAaaa(tc.desde)]) as string;
+			this.modeloMock().setProperty("/perfil/tipoCambio", texto);
+			const oferta = this.modeloOferta();
+			oferta.setProperty("/perfil/tipoCambio", texto);
+			oferta.setProperty("/perfil/tipoCambioNota", nota);
+		} catch (error) {
+			console.warn(`[Cotizador] tipo de cambio de SAP: ${(error as Error).message}`);
+		}
+	}
+
 	private async sincronizarFormasPago(): Promise<void> {
 		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel | undefined;
 		if (!odata) {
@@ -5002,6 +5025,7 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 				await this.sincronizarCatalogosArea(canalInicial);
 				oferta.setProperty("/opcionesCentro", this.centrosDe(canalInicial));
 				await this.sincronizarFormasPago();
+				await this.sincronizarTipoCambio();
 			}
 			this.refrescarListasSede();
 			if (numero) {

@@ -40,6 +40,11 @@ test("textoLugar y textoOperacion: lugar por entidad y operacion desconocida tal
 	assert.equal(textoOperacion("OTRA", t), "OTRA");
 });
 
+test("VIN_VENCIDO (job de reservas vencidas): nombre propio y el VIN que se libero", () => {
+	assert.equal(textoOperacion("VIN_VENCIDO", t), "historialOp_VIN_VENCIDO");
+	assert.equal(textoDetalle(fila({ operacion: "VIN_VENCIDO", campo: "VHCLE", antes: "VBKJPDU200Z010421 (1000017334)" }), t), "historialCampoVin: VBKJPDU200Z010421 (1000017334)");
+});
+
 test("leerHistorial filtra por la cotizacion (Guid sin comillas) y ordena por fecha", async () => {
 	let pedido: { ruta: string; p?: Record<string, unknown> } | undefined;
 	const modelo = {

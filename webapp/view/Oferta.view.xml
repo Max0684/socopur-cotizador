@@ -208,7 +208,7 @@
 								<Label text="{i18n>expedicion}" />
 								<Select selectedKey="{oferta>/perfil/expedicion}" forceSelection="false" change=".onCambiaExpedicion" items="{oferta>/opciones/expediciones}" enabled="{= ${oferta>/pedidos}.length === 0 }"><core:Item key="{oferta>key}" text="{oferta>text}" /></Select>
 								<Label text="{i18n>tipoCambio}" />
-								<Input value="{oferta>/perfil/tipoCambio}" editable="false" description="{i18n>tipoCambioNota}" />
+								<Input value="{oferta>/perfil/tipoCambio}" editable="false" description="{= ${oferta>/perfil/tipoCambioNota} || ${i18n>tipoCambioNota} }" />
 							</form:SimpleForm>
 							<MessageStrip text="{i18n>datosNota}" type="Information" showIcon="true" />
 						</Panel>
