@@ -16,6 +16,7 @@ import { evaluarBloqueoPedido, type BloqueoPedido } from "com/socopur/cotizador/
 import { correoUsuarioBtp } from "com/socopur/cotizador/model/UsuarioBtp";
 import { almacenDelNavegador, borrarRespaldo, claveRespaldo, guardarRespaldo, leerRespaldo, perfilRecuperado, siguienteContador, type DatosRespaldo, type Respaldo } from "com/socopur/cotizador/model/RespaldoOferta";
 import { historialPublicado, leerHistorial, textoDetalle, textoLugar, textoOperacion } from "com/socopur/cotizador/model/HistorialService";
+import { leerPdfOferta, numerosParaImprimir, pdfPublicado } from "com/socopur/cotizador/model/ImpresionService";
 import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerDatosGuardados, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type EntregaParaGuardar, ENVIO_UNICO, type VinAsignado, esperarVinculos, leerMotivoVinculo, anularGrupo } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
 import { validarDocumento } from "com/socopur/cotizador/model/Documento";
@@ -377,6 +378,9 @@ export default class Oferta extends Controller {
 	private dialogoSolicitud?: Dialog;
 	private dialogoVin?: Dialog;
 	private dialogoHistorial?: Dialog;
+	private dialogoImprimirSap?: Dialog;
+	/** Direcciones blob de los PDF de SAP ya abiertos: se liberan al pedir otros. */
+	private urlsPdf: string[] = [];
 	/** Respaldo local de la oferta nueva: lo ultimo escrito (para no reescribir si nada cambio) y si hay una pregunta de recuperar abierta. */
 	private ultimoRespaldo = "";
 	private esperandoRespaldo = false;
@@ -4607,13 +4611,13 @@ export default class Oferta extends Controller {
 	}
 
 
-	/* ---------- Vista de impresion de la oferta (SAP: Output Management + Adobe Form ZFRSD_COTIVTA, con la misma informacion) ---------- */
+	/* ---------- Impresion: PDF oficial de SAP (formulario ZFRSD_COTIVTA) o, sin oferta grabada, vista previa del borrador ---------- */
 
 	private esc(t: unknown): string {
 		return String(t ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 	}
 
-	/** Un documento por cada oferta generada (grupo); cada uno en su propia pagina al imprimir. */
+	/** Vista previa del borrador (oferta aun no grabada en SAP): un documento por grupo, cada uno en su propia pagina al imprimir. */
 	private armarHtmlOferta(): string {
 		const oferta = this.modeloOferta();
 		const mock = this.modeloMock();
@@ -4670,6 +4674,14 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 	}
 
 	public async onVistaOferta(): Promise<void> {
+		// Oferta grabada en SAP: el formato oficial lo genera SAP. El borrador sigue con la vista previa.
+		const oferta = this.modeloOferta();
+		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel | undefined;
+		const numeros = numerosParaImprimir((oferta.getProperty("/ofertasGuardadas") as OfertaGuardada[]) ?? [], String(oferta.getProperty("/numero") ?? ""));
+		if (this.usarOData() && odata && numeros.length > 0 && (await pdfPublicado(odata))) {
+			await this.abrirPdfsSap(odata, numeros);
+			return;
+		}
 		if (!this.dialogoVistaOferta) {
 			this.dialogoVistaOferta = (await Fragment.load({
 				id: this.getView()?.getId(),
@@ -4685,6 +4697,64 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 
 	public onCerrarVistaOferta(): void {
 		this.dialogoVistaOferta?.close();
+	}
+
+	/** PDF de cada oferta grabada, generado por SAP con su formulario; se abre en otra pestana para imprimirlo o guardarlo. */
+	private async abrirPdfsSap(odata: ODataModel, numeros: string[]): Promise<void> {
+		if (!this.dialogoImprimirSap) {
+			this.dialogoImprimirSap = (await Fragment.load({
+				id: this.getView()?.getId(),
+				name: "com.socopur.cotizador.view.fragment.ImprimirSap",
+				controller: this
+			})) as Dialog;
+			this.getView()?.addDependent(this.dialogoImprimirSap);
+			this.dialogoImprimirSap.setModel(new JSONModel(), "pdf");
+		}
+		this.urlsPdf.forEach((url) => URL.revokeObjectURL(url));
+		this.urlsPdf = [];
+		const modelo = this.dialogoImprimirSap.getModel("pdf") as JSONModel;
+		const i18n = this.i18n();
+		modelo.setData({ cargando: true, filas: [] });
+		this.dialogoImprimirSap.open();
+		const filas: { titulo: string; url: string; nombre: string; error: string }[] = [];
+		for (const numero of numeros) {
+			const titulo = i18n.getText("impresionSapOferta", [numero]) as string;
+			try {
+				const pdf = await leerPdfOferta(odata, numero);
+				const url = URL.createObjectURL(new Blob([pdf.bytes], { type: "application/pdf" }));
+				this.urlsPdf.push(url);
+				filas.push({ titulo, url, nombre: pdf.nombre, error: "" });
+			} catch (error) {
+				filas.push({ titulo, url: "", nombre: "", error: this.motivoDeError(error) });
+			}
+		}
+		modelo.setData({ cargando: false, filas });
+	}
+
+	public onAbrirPdfSap(evento: Event): void {
+		const url = (evento.getSource() as Button).getBindingContext("pdf")?.getProperty("url") as string | undefined;
+		if (url) {
+			window.open(url, "_blank");
+		}
+	}
+
+	/** Descarga con el nombre de la oferta: guardado desde el visor, el archivo tomaria el codigo de la direccion blob. */
+	public onDescargarPdfSap(evento: Event): void {
+		const contexto = (evento.getSource() as Button).getBindingContext("pdf");
+		const url = contexto?.getProperty("url") as string | undefined;
+		if (!url) {
+			return;
+		}
+		const enlace = document.createElement("a");
+		enlace.href = url;
+		enlace.download = (contexto?.getProperty("nombre") as string) || "Oferta.pdf";
+		document.body.appendChild(enlace);
+		enlace.click();
+		enlace.remove();
+	}
+
+	public onCerrarImprimirSap(): void {
+		this.dialogoImprimirSap?.close();
 	}
 
 	/** Imprime en un marco oculto (sin ventanas emergentes); el navegador permite "Guardar como PDF". */

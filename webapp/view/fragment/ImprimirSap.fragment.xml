@@ -1,0 +1,33 @@
+<core:FragmentDefinition
+	xmlns="sap.m"
+	xmlns:core="sap.ui.core">
+	<!-- PDF oficial de SAP (formulario ZFRSD_COTIVTA): uno por cada oferta grabada -->
+	<Dialog
+		id="dlgImprimirSap"
+		stretch="{= ${device>/ancho} &lt; 600 }"
+		title="{i18n>impresionSapTitulo}"
+		contentWidth="34rem">
+		<content>
+			<VBox class="sapUiSmallMargin">
+				<MessageStrip text="{i18n>impresionSapNota}" type="Information" showIcon="true" class="sapUiSmallMarginBottom" />
+				<List items="{pdf>/filas}" busy="{pdf>/cargando}" noDataText="{i18n>impresionSapCargando}">
+					<CustomListItem>
+						<HBox justifyContent="SpaceBetween" alignItems="Center" class="sapUiSmallMarginBeginEnd sapUiTinyMarginTopBottom">
+							<VBox>
+								<Title text="{pdf>titulo}" level="H5" />
+								<ObjectStatus text="{pdf>error}" state="Error" visible="{= !!${pdf>error} }" />
+							</VBox>
+							<HBox visible="{= !!${pdf>url} }">
+								<Button text="{i18n>impresionSapAbrir}" icon="sap-icon://pdf-attachment" type="Emphasized" press=".onAbrirPdfSap" class="sapUiTinyMarginEnd" />
+								<Button text="{i18n>impresionSapDescargar}" icon="sap-icon://download" press=".onDescargarPdfSap" />
+							</HBox>
+						</HBox>
+					</CustomListItem>
+				</List>
+			</VBox>
+		</content>
+		<endButton>
+			<Button text="{i18n>cerrar}" press=".onCerrarImprimirSap" />
+		</endButton>
+	</Dialog>
+</core:FragmentDefinition>
