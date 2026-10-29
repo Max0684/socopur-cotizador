@@ -111,7 +111,7 @@
 									<Label text="{i18n>altaNroDoc}" />
 									<Input value="{oferta>/alta/doc}" maxLength="11" enabled="{= ${oferta>/pedidos}.length === 0 }" />
 									<Label text="" />
-									<Button text="{i18n>altaConsultarApi}" icon="sap-icon://search" press=".onConsultarApi" width="14rem" enabled="{= ${oferta>/pedidos}.length === 0 }" />
+									<Button text="{i18n>altaConsultarApi}" icon="sap-icon://search" press=".onConsultarApi" width="14rem" busy="{= !!${oferta>/alta/consultando} }" busyIndicatorDelay="0" enabled="{= ${oferta>/pedidos}.length === 0 }" />
 									<Label text="{i18n>altaRazon}" required="true" />
 									<!-- Un solo campo: al crear se reparte entre palabras en las 3 partes de 35 de SAP (107 = 3 x 35 + los 2 espacios del corte) -->
 									<Input value="{oferta>/alta/razon}" maxLength="107" enabled="{= ${oferta>/pedidos}.length === 0 }" />

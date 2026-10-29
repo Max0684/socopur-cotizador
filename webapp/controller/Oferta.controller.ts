@@ -22,6 +22,7 @@ import { leerTipoCambio, tipoCambioPublicado, tipoCambioTexto } from "com/socopu
 import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerDatosGuardados, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type EntregaParaGuardar, ENVIO_UNICO, type VinAsignado, esperarVinculos, leerMotivoVinculo, anularGrupo } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
 import { validarDocumento } from "com/socopur/cotizador/model/Documento";
+import { conAdvertencia, consultarDocumento, documentoPublicado, tipoDeDocumento } from "com/socopur/cotizador/model/DocumentoService";
 import { usarOData as usarODataActual } from "com/socopur/cotizador/model/Modo";
 import { AltaEnProcesoError, cargarUbigeo, crearClienteSap, leerBloqueoEdicion, leerCambiosCliente, modificarClienteSap, partirRazon, serviciosDeCliente, type CambiosCliente, type DatosAlta } from "com/socopur/cotizador/model/ClienteEscrituraService";
 import { buscarRepuestosConStock, disponibilidadPorAlmacen, motivoVacio } from "com/socopur/cotizador/model/MaterialesService";
@@ -4304,11 +4305,53 @@ export default class Oferta extends Controller {
 		oferta.setProperty("/alta/dist", "");
 	}
 
-	/** SIMULADO: con la API real (APIDNI, plan Plata) esta llamada devuelve razon social, direccion y ubigeo. */
-	public onConsultarApi(): void {
+	/**
+	 * Story 1.2: razon social, direccion y ubigeo de SUNAT (RUC) o RENIEC (DNI) por la entidad DocumentoIdentidad (SAP llama a tools.devex.pe).
+	 * Sin conexion, sin token o con un numero que no existe, SAP lo dice y el alta sigue a mano. Sin la entidad publicada: los datos de ejemplo.
+	 */
+	public async onConsultarApi(): Promise<void> {
 		const oferta = this.modeloOferta();
 		const i18n = this.i18n();
 		const doc = String(oferta.getProperty("/alta/doc") ?? "").trim();
+		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel | undefined;
+		if (this.usarOData() && odata && (await documentoPublicado(odata))) {
+			const tipo = tipoDeDocumento(doc, String(oferta.getProperty("/alta/tipoDoc") ?? ""));
+			const errorDoc = validarDocumento(tipo, doc, true);
+			if (errorDoc) {
+				oferta.setProperty("/alta/nota", i18n.getText({ dniFormato: "altaErrDni", dniFalso: "altaErrDniFalso", rucFormato: "altaErrRuc", rucDigito: "altaErrRucDigito" }[errorDoc]) as string);
+				oferta.setProperty("/alta/notaTipo", "Warning");
+				return;
+			}
+			oferta.setProperty("/alta/consultando", true);
+			try {
+				const d = await consultarDocumento(odata, tipo, doc);
+				if (!d.ok) {
+					oferta.setProperty("/alta/nota", d.mensaje || (i18n.getText("altaApiSinDatos") as string));
+					oferta.setProperty("/alta/notaTipo", "Warning");
+					return;
+				}
+				oferta.setProperty("/alta/tipoDoc", tipo);
+				oferta.setProperty("/alta/razon", d.nombre);
+				const [d1, d2, d3] = partirRazon(d.direccion);
+				oferta.setProperty("/alta/dir1", d1 ?? "");
+				oferta.setProperty("/alta/dir2", d2 ?? "");
+				oferta.setProperty("/alta/dir3", d3 ?? "");
+				oferta.setProperty("/alta/dep", d.departamento);
+				this.onCambiaDpto();
+				oferta.setProperty("/alta/prov", d.provincia);
+				this.onCambiaProv();
+				oferta.setProperty("/alta/dist", d.distrito);
+				oferta.setProperty("/alta/errores", "");
+				oferta.setProperty("/alta/nota", i18n.getText("altaApiSap", [d.mensaje]) as string);
+				oferta.setProperty("/alta/notaTipo", conAdvertencia(d) ? "Warning" : "Success");
+			} catch (error) {
+				oferta.setProperty("/alta/nota", i18n.getText("altaApiError", [this.motivoDeError(error)]) as string);
+				oferta.setProperty("/alta/notaTipo", "Warning");
+			} finally {
+				oferta.setProperty("/alta/consultando", false);
+			}
+			return;
+		}
 		const r = (this.modeloMock().getProperty("/apiDocumentos") as Record<string, { tipoDoc: string; razon: string; direccion: string; dep: string; prov: string; dist: string; ubigeoApi: string; formato: string }>)[doc];
 		if (!r) {
 			oferta.setProperty("/alta/nota", i18n.getText("altaApiSinDatos"));
