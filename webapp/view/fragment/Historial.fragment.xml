@@ -1,0 +1,45 @@
+<core:FragmentDefinition
+	xmlns="sap.m"
+	xmlns:core="sap.ui.core">
+	<!-- Historial de la cotizacion en SAP (YCOTIZ_LOG): quien, cuando y que cambio -->
+	<Dialog
+		id="dlgHistorial"
+		stretch="{= ${device>/ancho} &lt; 600 }"
+		title="{i18n>historialTitulo}"
+		contentWidth="64rem"
+		draggable="true"
+		resizable="true">
+		<content>
+			<VBox class="sapUiSmallMargin">
+				<MessageStrip text="{i18n>historialNota}" type="Information" showIcon="true" class="sapUiSmallMarginBottom" />
+				<MessageStrip
+					visible="{= !!${historial>/aviso} }"
+					text="{historial>/aviso}"
+					type="Warning"
+					showIcon="true"
+					class="sapUiSmallMarginBottom" />
+				<Table items="{historial>/filas}" busy="{historial>/cargando}" noDataText="{i18n>historialVacio}" contextualWidth="Auto">
+					<columns>
+						<Column width="10rem"><Text text="{i18n>historialColFecha}" /></Column>
+						<Column width="16rem"><Text text="{i18n>historialColUsuario}" /></Column>
+						<Column width="12rem"><Text text="{i18n>historialColOperacion}" /></Column>
+						<Column minScreenWidth="40rem" demandPopin="true"><Text text="{i18n>historialColDetalle}" /></Column>
+					</columns>
+					<items>
+						<ColumnListItem>
+							<cells>
+								<Text text="{historial>fecha}" />
+								<ObjectIdentifier title="{historial>usuario}" text="{historial>usuarioNota}" />
+								<ObjectIdentifier title="{historial>operacion}" text="{historial>lugar}" />
+								<Text text="{historial>detalle}" />
+							</cells>
+						</ColumnListItem>
+					</items>
+				</Table>
+			</VBox>
+		</content>
+		<endButton>
+			<Button text="{i18n>cerrar}" press=".onCerrarHistorial" />
+		</endButton>
+	</Dialog>
+</core:FragmentDefinition>

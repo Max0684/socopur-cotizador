@@ -13,6 +13,9 @@ import { type CondicionServicio, type FilaCondicion, descuentosAplicados, filasD
 import { agruparVehiculos, buscarVehiculos, filtrarVehiculos, textoDetalleVehiculo } from "com/socopur/cotizador/model/VehiculosService";
 import { areasOrgCanal, textoSolicitudAmpliacion, type CondicionArea, type OpcionAreaCliente, condicionDeArea, opcionesAreaCliente, almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, gruposParaGuardar, igvExonerado, MODALIDAD_DESPACHO, modalidadParaEntrega, modalidadPorDefecto, oficinaDe, orgVehiculosDe, puedeVenderOtroCentro, sectorDeCabecera, sectoresDeLineas, sectorQueFalta, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
 import { evaluarBloqueoPedido, type BloqueoPedido } from "com/socopur/cotizador/model/BloqueoPedido";
+import { correoUsuarioBtp } from "com/socopur/cotizador/model/UsuarioBtp";
+import { almacenDelNavegador, borrarRespaldo, claveRespaldo, guardarRespaldo, leerRespaldo, siguienteContador, type DatosRespaldo, type Respaldo } from "com/socopur/cotizador/model/RespaldoOferta";
+import { historialPublicado, leerHistorial, textoDetalle, textoLugar, textoOperacion } from "com/socopur/cotizador/model/HistorialService";
 import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerDatosGuardados, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type EntregaParaGuardar, ENVIO_UNICO, type VinAsignado, esperarVinculos, leerMotivoVinculo, anularGrupo } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
 import { validarDocumento } from "com/socopur/cotizador/model/Documento";
@@ -53,6 +56,7 @@ import Fragment from "sap/ui/core/Fragment";
 import { ListBase$SelectionChangeEvent } from "sap/m/ListBase";
 import { Panel$ExpandEvent } from "sap/m/Panel";
 import { Route$PatternMatchedEvent } from "sap/ui/core/routing/Route";
+import type { Router$RouteMatchedEvent } from "sap/ui/core/routing/Router";
 import ObjectPageLayout from "sap/uxap/ObjectPageLayout";
 
 
@@ -201,6 +205,8 @@ interface FilaVin {
 	/** Con la clave de la posicion cuando el VIN se elige entre los de SAP (key = Vhcle). */
 	posnr?: string;
 	vin: string;
+	/** VIN ya reservado en la oferta: no se puede cambiar desde este dialogo. */
+	fijo?: boolean;
 }
 
 interface Bonificacion {
@@ -370,6 +376,13 @@ export default class Oferta extends Controller {
 	private instantanea = "[]";
 	private dialogoSolicitud?: Dialog;
 	private dialogoVin?: Dialog;
+	private dialogoHistorial?: Dialog;
+	/** Respaldo local de la oferta nueva: lo ultimo escrito (para no reescribir si nada cambio) y si hay una pregunta de recuperar abierta. */
+	private ultimoRespaldo = "";
+	private esperandoRespaldo = false;
+	/** Solo se respalda mientras la ruta es la de oferta nueva: la vista sigue viva (con sus lineas) al volver a la lista. */
+	private enOfertaNueva = false;
+	private temporizadorRespaldo?: ReturnType<typeof setInterval>;
 
 	public onInit(): void {
 		this.router = (this.getOwnerComponent() as UIComponent).getRouter();
@@ -387,6 +400,18 @@ export default class Oferta extends Controller {
 			this.cargar(args.numero);
 			this.irAlInicio();
 		}, this);
+		this.router.attachRouteMatched((evento: Router$RouteMatchedEvent) => {
+			this.enOfertaNueva = evento.getParameter("name") === "nueva";
+		}, this);
+		// Respaldo en el navegador de la oferta nueva: si se cierra antes de guardar, los articulos se recuperan al volver a entrar.
+		this.temporizadorRespaldo = setInterval(() => this.respaldar(), 5000);
+		globalThis.addEventListener?.("pagehide", () => this.respaldar());
+	}
+
+	public onExit(): void {
+		if (this.temporizadorRespaldo) {
+			clearInterval(this.temporizadorRespaldo);
+		}
 	}
 
 	/** La pagina conserva la seccion y el scroll de la oferta anterior: cada oferta se abre desde arriba. */
@@ -423,6 +448,7 @@ export default class Oferta extends Controller {
 			emphasizedAction: i18n.getText("salirSeguir") as string,
 			onClose: (accion: string) => {
 				if (accion === i18n.getText("salirDescartar")) {
+					this.descartarRespaldo();
 					this.router.navTo("lista");
 				}
 			}
@@ -3148,6 +3174,31 @@ export default class Oferta extends Controller {
 	}
 
 	/**
+	 * Reserva en SAP el VIN de cada vehiculo del grupo sobre la OFERTA, antes de crear el pedido (SAP no graba el pedido de un vehiculo sin
+	 * VIN). Las posiciones que ya tienen VIN se dejan como estan. Devuelve "material: motivo" de las que no se pudieron reservar.
+	 */
+	private async reservarVinsDelGrupo(odata: ODataModel, cotizId: string, grupoNo: string, elegidos: Record<string, string>, usuario: string): Promise<string[]> {
+		let items: VinAsignado[];
+		try {
+			items = await leerVinsGrupo(odata, cotizId, grupoNo);
+		} catch (error) {
+			return [this.motivoDeError(error)];
+		}
+		const errores: string[] = [];
+		for (const i of items) {
+			if (i.vhcle || i.vin) {
+				continue;
+			}
+			try {
+				await asignarVinItem(odata, cotizId, i.posnr, elegidos[i.posnr] || undefined, usuario);
+			} catch (error) {
+				errores.push(`${i.material}: ${this.motivoDeError(error)}`);
+			}
+		}
+		return errores;
+	}
+
+	/**
 	 * Una fila por vehiculo de las ofertas guardadas en SAP, con los VIN libres de SAP (entidad Vehiculo) del mas antiguo al mas nuevo.
 	 * El mas antiguo no usado en otra fila viene marcado. Si un vehiculo no se puede resolver (cantidad mayor a 1, error de lectura) se
 	 * devuelve vacio y el pedido sigue con la asignacion automatica de SAP.
@@ -3163,7 +3214,20 @@ export default class Oferta extends Controller {
 			for (const o of guardadas) {
 				const items = await leerVinsGrupo(odata, o.cotizId as string, o.grupoNo as string);
 				for (const item of items) {
-					if ((item.cantidad ?? 1) > 1 || item.vin || !item.werks || !item.vkorg || !item.vtweg) {
+					const lineaPantalla = ((this.modeloOferta().getProperty("/lineas") as Linea[]) ?? []).find((l) => l.material === item.material);
+					const base = {
+						material: item.material,
+						posnr: item.posnr,
+						denominacion: lineaPantalla?.denominacion ?? item.material,
+						detalle: [item.material, item.variante].filter(Boolean).join(" · ")
+					};
+					if (item.vhcle) {
+						// VIN ya reservado en la oferta: se muestra fijo y el pedido sale con ese.
+						usados.add(item.vhcle);
+						filas.push({ ...base, opciones: [{ key: item.vhcle, text: `${item.vin || item.vhcle} · ${i18n.getText("vinReservado") as string}`, enabled: true }], vin: item.vhcle, fijo: true });
+						continue;
+					}
+					if ((item.cantidad ?? 1) > 1 || !item.werks || !item.vkorg || !item.vtweg) {
 						return [];
 					}
 					const libres = await leerVinsLibres(odata, { vkorg: item.vkorg, vtweg: item.vtweg, matnr: item.material, werks: item.werks, variante: item.variante || undefined });
@@ -3183,15 +3247,7 @@ export default class Oferta extends Controller {
 							.join(" · "),
 						enabled: true
 					}));
-					const lineaPantalla = ((this.modeloOferta().getProperty("/lineas") as Linea[]) ?? []).find((l) => l.material === item.material);
-					filas.push({
-						material: item.material,
-						posnr: item.posnr,
-						denominacion: lineaPantalla?.denominacion ?? item.material,
-						detalle: [item.material, item.variante].filter(Boolean).join(" · "),
-						opciones,
-						vin: propuesto?.vhcle ?? ""
-					});
+					filas.push({ ...base, opciones, vin: propuesto?.vhcle ?? "" });
 				}
 			}
 		} catch {
@@ -3557,7 +3613,7 @@ export default class Oferta extends Controller {
 		vista?.setBusy(true);
 		MessageToast.show(i18n.getText("anularEnCurso") as string, { duration: 6000 });
 		try {
-			const r = await anularGrupo(odata, cotizId, grupoNo, motivo);
+			const r = await anularGrupo(odata, cotizId, grupoNo, motivo, {}, await correoUsuarioBtp());
 			const numeroOferta = (this.modeloOferta().getProperty("/pedidos/0/oferta") as string) ?? "";
 			if (r.estado === "X") {
 				MessageToast.show(i18n.getText("anularOk") as string);
@@ -3641,18 +3697,32 @@ export default class Oferta extends Controller {
 			MessageBox.error(i18n.getText("pedidoSinDisponible", [faltan.join("\n")]) as string);
 			return;
 		}
+		const usuario = await correoUsuarioBtp();
+		// SAP exige el VIN para grabar el pedido de un vehiculo: primero se reserva sobre la oferta. Si alguno no se puede reservar no se crea
+		// ningun pedido y se dice cual (los ya reservados quedan para esta oferta). Con un SAP anterior el VIN se asigna despues del pedido.
+		if (await historialPublicado(odata)) {
+			const sinVin: string[] = [];
+			for (const o of guardadas) {
+				sinVin.push(...(await this.reservarVinsDelGrupo(odata, o.cotizId as string, o.grupoNo as string, elegidos, usuario)));
+			}
+			if (sinVin.length > 0) {
+				vista?.setBusy(false);
+				MessageBox.error(i18n.getText("vinNoReservado", [sinVin.join("\n")]) as string);
+				return;
+			}
+		}
 		// SAP crea el pedido en segundo plano: puede tardar hasta un minuto; se avisa para que no parezca colgado.
 		MessageToast.show(i18n.getText("creandoPedidoEspera") as string, { duration: 6000 });
 		try {
 			for (const o of guardadas) {
-				const pedido = await crearPedidoGrupo(odata, o.cotizId as string, o.grupoNo as string);
+				const pedido = await crearPedidoGrupo(odata, o.cotizId as string, o.grupoNo as string, {}, usuario);
 				numeros.push(pedido.vbelnPedido);
 				creados.push({ cotizId: o.cotizId as string, grupoNo: o.grupoNo as string });
 				// Estado REAL leido de SAP (vista GrupoEstado sobre VBAK); si no se puede leer, se dice que no hay informacion.
 				const real = await leerEstadoPedido(odata, o.cotizId as string, o.grupoNo as string);
 				estadosReales.push({ real, clase: o.clasePedido ?? "", numeroPedido: pedido.vbelnPedido });
 				const base = this.filaPedidoReal(real, pedido.vbelnPedido, o.numero, o.titulo, o.clasePedido ?? "", await this.impuestosDeOferta(odata, o.numero));
-				const vins = await this.asignarVinsDelGrupo(odata, o.cotizId as string, o.grupoNo as string, elegidos);
+				const vins = await this.asignarVinsDelGrupo(odata, o.cotizId as string, o.grupoNo as string, elegidos, usuario);
 				if (vins.length === 0) {
 					filas.push(base);
 				}
@@ -3686,7 +3756,7 @@ export default class Oferta extends Controller {
 	 * Asigna el VIN de cada vehiculo del grupo despues de crear el pedido (asignarVin: SAP propone el mas antiguo del mismo modelo,
 	 * centro y variante). Si falla para un vehiculo, el pedido queda y ese vehiculo queda "VIN pendiente" con el motivo.
 	 */
-	private async asignarVinsDelGrupo(odata: ODataModel, cotizId: string, grupoNo: string, elegidos: Record<string, string> = {}): Promise<(VinAsignado & { error?: string })[]> {
+	private async asignarVinsDelGrupo(odata: ODataModel, cotizId: string, grupoNo: string, elegidos: Record<string, string> = {}, usuario = ""): Promise<(VinAsignado & { error?: string })[]> {
 		let items: VinAsignado[] = [];
 		try {
 			items = await leerVinsGrupo(odata, cotizId, grupoNo);
@@ -3701,7 +3771,7 @@ export default class Oferta extends Controller {
 				continue;
 			}
 			try {
-				resultado.push(await asignarVinItem(odata, cotizId, i.posnr, elegidos[i.posnr] || undefined));
+				resultado.push(await asignarVinItem(odata, cotizId, i.posnr, elegidos[i.posnr] || undefined, usuario));
 			} catch (error) {
 				resultado.push({ ...i, error: (error as Error).message });
 			}
@@ -4436,8 +4506,10 @@ export default class Oferta extends Controller {
 			return;
 		}
 		const perfil = oferta.getProperty("/perfil") as Record<string, string>;
+		const usuarioBtp = await correoUsuarioBtp();
 		const datos: OfertaParaGuardar = {
 			kunnr: cliente.kunnr,
+			usuarioBtp,
 			moneda: perfil.moneda || "PEN",
 			// La forma de pago elegida en la pantalla viaja a SAP; antes el pedido heredaba la del maestro del cliente.
 			zterm: perfil.formaPago || "",
@@ -4483,6 +4555,9 @@ export default class Oferta extends Controller {
 			oferta.setProperty("/pedidos", []);
 			oferta.setProperty("/vigencia", this.calcularVigencia(new Date().toISOString().slice(0, 10), false));
 			oferta.setProperty("/guardado", { visible: true, texto: i18n.getText("guardadoOk", [numeros.join(", ")]) as string });
+			oferta.setProperty("/historial/cotizId", resultado.cotizId);
+			// Ya esta en SAP: el respaldo del navegador sobra.
+			this.descartarRespaldo();
 		} catch (error) {
 			if (error instanceof OfertaEnProcesoError) {
 				MessageBox.information(error.message);
@@ -4672,7 +4747,7 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 		const vista = this.getView();
 		vista?.setBusy(true);
 		try {
-			const r = await renovarCotizacion(odata, cab.cotizId);
+			const r = await renovarCotizacion(odata, cab.cotizId, await correoUsuarioBtp());
 			if (r.error) {
 				MessageBox.error(r.error);
 				return;
@@ -4837,6 +4912,8 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 				oferta.setProperty("/numero", esperaNumero ? "" : numero);
 				// Oferta real (lista leida del servicio) con numero SAP: el detalle se carga del documento SAP.
 				const numeroSap = cabecera?.numero || numero;
+				// Historial de SAP (quien cambio que): solo para ofertas reales, que tienen cotizacion.
+				oferta.setProperty("/historial/cotizId", this.usarOData() ? (cabecera?.cotizId ?? "") : "");
 				// Una oferta con pedido o ya anulada no se ofrece de nuevo para copiar a pedido.
 				const sinPedido = cabecera?.estado !== this.i18n().getText("estadoPedido") && cabecera?.estado !== this.i18n().getText("estadoAnulada");
 				if (this.usarOData() && /^\d{10}$/.test(numeroSap)) {
@@ -4893,6 +4970,9 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 			this.recalcular();
 			// Punto de partida para saber si el usuario cambio algo (aviso al salir).
 			this.instantanea = clonada ? "[]" : JSON.stringify(oferta.getProperty("/lineas") ?? []);
+			if (!numero && !clonada) {
+				this.ofrecerRespaldo();
+			}
 			if (clonada) {
 				MessageToast.show(i18n.getText("clonada") as string);
 			}
@@ -4940,7 +5020,8 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 			textoGenerar: "",
 			faltaTalla: false,
 			totales: { subtotal: 0, neto: 0, isc: 0, hayIsc: false, igv: 0, total: 0 },
-			guardado: { visible: false, texto: "" }
+			guardado: { visible: false, texto: "" },
+			historial: { cotizId: "" }
 		};
 	}
 
@@ -5127,6 +5208,149 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 		Object.entries(listas).forEach(([k, v]) => b.setProperty(`/${k}`, v));
 		b.setProperty("/clase", clase);
 		b.setProperty("/familia", familia);
+	}
+
+	/* ---------- Respaldo local de la oferta nueva ---------- */
+
+	/** Un respaldo por vendedor: en un equipo compartido cada vendedor recupera solo lo suyo. */
+	private claveDeRespaldo(): string {
+		return claveRespaldo(String(this.modeloMock()?.getProperty("/perfil/pernr") ?? ""));
+	}
+
+	/**
+	 * Guarda en el navegador la oferta NUEVA que aun no esta en SAP (cliente, lineas y datos de entrega). Sin lineas no escribe ni borra:
+	 * al entrar la pantalla arranca vacia y no debe pisar el respaldo que se va a ofrecer recuperar.
+	 */
+	private respaldar(): void {
+		const oferta = this.modeloOferta();
+		if (!oferta || !this.enOfertaNueva || this.esperandoRespaldo || oferta.getProperty("/numero") || oferta.getProperty("/guardado/visible")) {
+			return;
+		}
+		const lineas = (oferta.getProperty("/lineas") as Linea[]) ?? [];
+		if (lineas.length === 0 || ((oferta.getProperty("/pedidos") as unknown[]) ?? []).length > 0) {
+			return;
+		}
+		const datos: DatosRespaldo = {
+			cliente: oferta.getProperty("/cliente") ?? null,
+			lineas,
+			perfil: (oferta.getProperty("/perfil") as Record<string, unknown>) ?? {},
+			entrega: String(oferta.getProperty("/entrega") ?? ""),
+			entregaDatos: (oferta.getProperty("/entregaDatos") as Record<string, unknown>) ?? {},
+			fechaEntrega: String(oferta.getProperty("/fechaEntrega") ?? ""),
+			modalidadesGrupo: (oferta.getProperty("/modalidadesGrupo") as Record<string, unknown>) ?? {}
+		};
+		const huella = JSON.stringify(datos);
+		if (huella !== this.ultimoRespaldo && guardarRespaldo(almacenDelNavegador(), this.claveDeRespaldo(), datos)) {
+			this.ultimoRespaldo = huella;
+		}
+	}
+
+	private descartarRespaldo(): void {
+		borrarRespaldo(almacenDelNavegador(), this.claveDeRespaldo());
+		this.ultimoRespaldo = "";
+	}
+
+	/** Al abrir una oferta nueva: si quedo una sin guardar en este navegador (se cerro, se corto la luz), se ofrece recuperarla. */
+	private ofrecerRespaldo(): void {
+		const respaldo = leerRespaldo(almacenDelNavegador(), this.claveDeRespaldo());
+		if (!respaldo) {
+			return;
+		}
+		const i18n = this.i18n();
+		const cliente = (respaldo.cliente as Cliente | null)?.nombre || (i18n.getText("hdrSinCliente") as string);
+		const cuando = new Date(respaldo.guardadoEn).toLocaleString("es-PE", { dateStyle: "short", timeStyle: "short" });
+		this.esperandoRespaldo = true;
+		MessageBox.confirm(i18n.getText("respaldoTexto", [String(respaldo.lineas.length), cliente, cuando]) as string, {
+			title: i18n.getText("respaldoTitulo") as string,
+			actions: [i18n.getText("respaldoRecuperar") as string, i18n.getText("respaldoDescartar") as string],
+			emphasizedAction: i18n.getText("respaldoRecuperar") as string,
+			onClose: (accion: string | null) => {
+				this.esperandoRespaldo = false;
+				if (accion === i18n.getText("respaldoRecuperar")) {
+					this.recuperarRespaldo(respaldo);
+				} else if (accion === i18n.getText("respaldoDescartar")) {
+					this.descartarRespaldo();
+				}
+			}
+		});
+	}
+
+	/** Vuelve a poner cliente, lineas y entrega del respaldo; los precios se piden de nuevo a SAP porque pudieron cambiar. */
+	private recuperarRespaldo(respaldo: Respaldo): void {
+		const oferta = this.modeloOferta();
+		const lineas = respaldo.lineas as Linea[];
+		const cliente = (respaldo.cliente as Cliente | null) ?? null;
+		this.contadorLinea = siguienteContador(lineas, this.contadorLinea);
+		oferta.setProperty("/perfil", { ...((oferta.getProperty("/perfil") as Record<string, unknown>) ?? {}), ...respaldo.perfil });
+		oferta.setProperty("/fechaEntrega", respaldo.fechaEntrega || oferta.getProperty("/fechaEntrega"));
+		oferta.setProperty("/entrega", respaldo.entrega || oferta.getProperty("/entrega"));
+		oferta.setProperty("/modalidadesGrupo", respaldo.modalidadesGrupo ?? {});
+		oferta.setProperty("/cliente", cliente);
+		oferta.setProperty("/lineas", lineas);
+		if (cliente) {
+			this.cargarAreasCliente();
+			this.aplicarDireccionEnvio();
+		}
+		// Despues de aplicarDireccionEnvio, que limpia la eleccion: vuelve la entrega que el vendedor habia elegido.
+		oferta.setProperty("/entregaDatos", { ...((oferta.getProperty("/entregaDatos") as Record<string, unknown>) ?? {}), ...respaldo.entregaDatos });
+		this.recalcular();
+		void this.repreciarLineasSap();
+		if (cliente?.kunnr && this.usarOData()) {
+			void this.cargarDatosCliente(cliente.kunnr, cliente.estado === "Bloqueado");
+		}
+		// Hay trabajo sin guardar: al salir se vuelve a preguntar.
+		this.instantanea = "[]";
+		MessageToast.show(this.i18n().getText("respaldoRecuperado", [String(lineas.length)]) as string);
+	}
+
+	/* ---------- Historial de cambios (YCOTIZ_LOG) ---------- */
+
+	/** Quien (correo BTP), cuando y que cambio en la cotizacion, segun SAP. */
+	public async onHistorial(): Promise<void> {
+		const cotizId = this.modeloOferta().getProperty("/historial/cotizId") as string;
+		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel | undefined;
+		if (!cotizId || !odata) {
+			return;
+		}
+		if (!this.dialogoHistorial) {
+			this.dialogoHistorial = (await Fragment.load({
+				id: this.getView()?.getId(),
+				name: "com.socopur.cotizador.view.fragment.Historial",
+				controller: this
+			})) as Dialog;
+			this.getView()?.addDependent(this.dialogoHistorial);
+			this.dialogoHistorial.setModel(new JSONModel(), "historial");
+		}
+		const modelo = this.dialogoHistorial.getModel("historial") as JSONModel;
+		const i18n = this.i18n();
+		const t = (clave: string, parametros?: string[]): string => i18n.getText(clave, parametros) as string;
+		modelo.setData({ filas: [], cargando: true, aviso: "" });
+		this.dialogoHistorial.open();
+		if (!(await historialPublicado(odata))) {
+			modelo.setData({ filas: [], cargando: false, aviso: t("historialNoPublicado") });
+			return;
+		}
+		try {
+			const filas = await leerHistorial(odata, cotizId);
+			modelo.setData({
+				cargando: false,
+				aviso: "",
+				filas: filas.map((f) => ({
+					fecha: f.fecha ? new Date(f.fecha).toLocaleString("es-PE", { dateStyle: "short", timeStyle: "medium" }) : "—",
+					usuario: f.usuario || "—",
+					usuarioNota: f.conCorreo ? "" : t("historialSinCorreo"),
+					operacion: textoOperacion(f.operacion, t),
+					lugar: textoLugar(f, t),
+					detalle: textoDetalle(f, t)
+				}))
+			});
+		} catch (error) {
+			modelo.setData({ filas: [], cargando: false, aviso: t("historialError", [this.motivoDeError(error)]) });
+		}
+	}
+
+	public onCerrarHistorial(): void {
+		this.dialogoHistorial?.close();
 	}
 
 	private modeloBusqueda(): JSONModel {

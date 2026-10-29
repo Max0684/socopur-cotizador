@@ -1,9 +1,19 @@
 import type ODataModel from "sap/ui/model/odata/v4/ODataModel";
 import type Context from "sap/ui/model/odata/v4/Context";
 import type { Cotizacion, Grupo, GrupoEstado, Item, ItemCar, Material } from "./odata/Entidades";
-import { entidadTieneCampo } from "./CamposServicio";
+import { accionTieneParametro, entidadTieneCampo } from "./CamposServicio";
 
 const NS = "com.sap.gateway.srvd_a2x.yui_cotiz_srv.v0001";
+
+/**
+ * Correo BTP de quien pide la accion (parametro UsuarioBtp): SAP lo guarda en el historial YCOTIZ_LOG. Solo se manda si el $metadata
+ * publica el parametro en esa accion: un parametro desconocido haria rechazar la accion.
+ */
+async function ponerUsuario(modelo: ODataModel, operacion: { setParameter(nombre: string, valor: unknown): unknown }, entidad: string, accion: string, usuario: string): Promise<void> {
+	if (usuario && (await accionTieneParametro(modelo, entidad, `${NS}.${accion}`, "UsuarioBtp"))) {
+		operacion.setParameter("UsuarioBtp", usuario);
+	}
+}
 
 /** Linea del carrito tal como la necesita el servicio. Las lineas de regalo ZNA0 NO se envian: SAP las genera solo. */
 export interface LineaParaGuardar {
@@ -62,6 +72,8 @@ export interface OfertaParaGuardar {
 	entrega?: EntregaParaGuardar;
 	comentario: string;
 	grupos: GrupoParaGuardar[];
+	/** Correo BTP de quien guarda: SAP lo deja en la cabecera y en el historial. Solo se envia si el servicio publica el campo. */
+	usuarioBtp?: string;
 }
 
 export interface OfertaGenerada {
@@ -220,6 +232,7 @@ export async function guardarCotizacion(modelo: ODataModel, datos: OfertaParaGua
 	// Un campo desconocido en el create haria rechazar toda la oferta: la entrega viaja solo si el $metadata ya trae los campos WE/ZT.
 	const conEntrega = datos.entrega && (await entidadTieneCampo(modelo, "Cotizacion", "AddrnumberWe")) ? datos.entrega : undefined;
 	const entrega = conEntrega?.lifnrSp && !(await entidadTieneCampo(modelo, "Cotizacion", "LifnrSp")) ? { ...conEntrega, lifnrSp: undefined } : conEntrega;
+	const conUsuario = !!datos.usuarioBtp && (await entidadTieneCampo(modelo, "Cotizacion", "UsuarioBtp"));
 	const cabecera = raiz.create(
 		{
 			Kunnr: datos.kunnr,
@@ -228,6 +241,7 @@ export async function guardarCotizacion(modelo: ODataModel, datos: OfertaParaGua
 			...(datos.zterm ? { Zterm: datos.zterm } : {}),
 			...(conPernr ? { Pernr: datos.pernr } : {}),
 			...(conVsbed ? { Vsbed: datos.vsbed } : {}),
+			...(conUsuario ? { UsuarioBtp: datos.usuarioBtp } : {}),
 			...camposEntrega(entrega)
 		},
 		true
@@ -333,7 +347,7 @@ export interface PedidoGenerado {
  * en el Comentario de la cotizacion. Solo repuestos: los vehiculos necesitan asignarVin, que aun no esta conectado.
  * SIN PROBAR contra SAP desde el front.
  */
-export async function crearPedidoGrupo(modelo: ODataModel, cotizId: string, grupoNo: string, espera: EsperaOfertas = {}): Promise<PedidoGenerado> {
+export async function crearPedidoGrupo(modelo: ODataModel, cotizId: string, grupoNo: string, espera: EsperaOfertas = {}, usuario = ""): Promise<PedidoGenerado> {
 	const ruta = `/Grupo(CotizId=${cotizId},GrupoNo='${grupoNo.replace(/'/g, "''")}',IsActiveEntity=true)`;
 	const leerComentario = async (): Promise<string> =>
 		(
@@ -344,6 +358,7 @@ export async function crearPedidoGrupo(modelo: ODataModel, cotizId: string, grup
 	// El Estado del grupo queda en "P" tanto si el pedido se crea como si SAP lo rechaza: el fallo solo se ve en el Comentario de la cotizacion.
 	const comentarioAntes = await leerComentario().catch(() => "");
 	const operacion = modelo.bindContext(`${ruta}/${NS}.crearPedido(...)`);
+	await ponerUsuario(modelo, operacion, "Grupo", "crearPedido", usuario);
 	// ui5lint-disable-next-line no-deprecated-api -- invoke() existe desde UI5 1.123; el servidor de Socopur y los tipos son 1.120
 	await operacion.execute("$auto", true);
 	let grupo = operacion.getBoundContext().getObject() as Grupo;
@@ -407,10 +422,11 @@ export interface ResultadoAnulacion {
  * y el job lo pasa a X (listo) o R (revisar). Se sondea el Estado hasta que cambie o se agote la espera.
  * SIN PROBAR contra SAP desde el front.
  */
-export async function anularGrupo(modelo: ODataModel, cotizId: string, grupoNo: string, motivo: string, espera: EsperaOfertas = {}): Promise<ResultadoAnulacion> {
+export async function anularGrupo(modelo: ODataModel, cotizId: string, grupoNo: string, motivo: string, espera: EsperaOfertas = {}, usuario = ""): Promise<ResultadoAnulacion> {
 	const ruta = `/Grupo(CotizId=${cotizId},GrupoNo='${grupoNo.replace(/'/g, "''")}',IsActiveEntity=true)`;
 	const operacion = modelo.bindContext(`${ruta}/${NS}.anularGrupo(...)`);
 	operacion.setParameter("Motivo", motivo.slice(0, 200));
+	await ponerUsuario(modelo, operacion, "Grupo", "anularGrupo", usuario);
 	// ui5lint-disable-next-line no-deprecated-api -- invoke() existe desde UI5 1.123; el servidor de Socopur y los tipos son 1.120
 	await operacion.execute("$auto", true);
 	const intervalo = espera.intervaloMs ?? 3000;
@@ -569,17 +585,19 @@ export async function leerVinsGrupo(modelo: ODataModel, cotizId: string, grupoNo
  * modelo, centro y variante; con vhcle se valida el elegido. Siempre se manda el cuerpo, aunque vaya vacio.
  * Un rechazo de SAP llega como error HTTP con el mensaje de negocio. SIN PROBAR contra SAP desde el front.
  */
-export async function asignarVinItem(modelo: ODataModel, cotizId: string, posnr: string, vhcle?: string): Promise<VinAsignado> {
+export async function asignarVinItem(modelo: ODataModel, cotizId: string, posnr: string, vhcle?: string, usuario = ""): Promise<VinAsignado> {
 	const operacion = modelo.bindContext(`${claveItem(cotizId, posnr)}/${NS}.asignarVin(...)`);
 	operacion.setParameter("Vhcle", vhcle ?? "");
+	await ponerUsuario(modelo, operacion, "Item", "asignarVin", usuario);
 	// ui5lint-disable-next-line no-deprecated-api -- invoke() existe desde UI5 1.123; el servidor de Socopur y los tipos son 1.120
 	await operacion.execute("$auto", true);
 	return vinDeItem(operacion.getBoundContext().getObject() as Item);
 }
 
 /** liberarVin: libera el VIN (el bloqueo pasa a L) para poder asignar otro. Usar siempre antes de borrar una linea con VIN. */
-export async function liberarVinItem(modelo: ODataModel, cotizId: string, posnr: string): Promise<void> {
+export async function liberarVinItem(modelo: ODataModel, cotizId: string, posnr: string, usuario = ""): Promise<void> {
 	const operacion = modelo.bindContext(`${claveItem(cotizId, posnr)}/${NS}.liberarVin(...)`);
+	await ponerUsuario(modelo, operacion, "Item", "liberarVin", usuario);
 	// ui5lint-disable-next-line no-deprecated-api -- invoke() existe desde UI5 1.123; el servidor de Socopur y los tipos son 1.120
 	await operacion.execute("$auto", true);
 }
@@ -602,10 +620,12 @@ export interface ResultadoRenovar {
  * pedido se omiten. Si el BAPI falla en el guardado SAP deja el motivo en Cotizacion.Comentario con el prefijo "[Renovar grupo NN]",
  * por eso se vuelve a leer. Lanza el error si ningun grupo se puede renovar. SIN PROBAR contra SAP desde el front.
  */
-export async function renovarCotizacion(modelo: ODataModel, cotizId: string): Promise<ResultadoRenovar> {
+export async function renovarCotizacion(modelo: ODataModel, cotizId: string, usuario = ""): Promise<ResultadoRenovar> {
 	const activa = `/Cotizacion(CotizId=${cotizId},IsActiveEntity=true)`;
+	const operacion = modelo.bindContext(`${activa}/${NS}.renovar(...)`);
+	await ponerUsuario(modelo, operacion, "Cotizacion", "renovar", usuario);
 	// ui5lint-disable-next-line no-deprecated-api -- invoke() existe desde UI5 1.123; el servidor de Socopur y los tipos son 1.120
-	await modelo.bindContext(`${activa}/${NS}.renovar(...)`).execute("$auto", true);
+	await operacion.execute("$auto", true);
 	const leido = (await modelo
 		.bindContext(activa, undefined, { $select: "CotizId,Comentario", $expand: { _Grupo: { $select: "GrupoNo,VbelnOferta,VigenciaHasta", $orderby: "GrupoNo" } }, $$ownRequest: true })
 		.requestObject()) as Cotizacion & { _Grupo?: Pick<Grupo, "GrupoNo" | "VbelnOferta" | "VigenciaHasta">[] };

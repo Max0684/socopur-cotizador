@@ -34,7 +34,7 @@
 									selectedKey="{asignar>vin}"
 									items="{asignar>opciones}"
 									change=".onCambiaVin"
-									enabled="{= ${asignar>opciones}.length > 0 }">
+									enabled="{= ${asignar>opciones}.length > 0 &amp;&amp; !${asignar>fijo} }">
 									<core:Item key="{asignar>key}" text="{asignar>text}" enabled="{asignar>enabled}" />
 								</Select>
 							</cells>

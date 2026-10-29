@@ -374,6 +374,8 @@ export interface Cotizacion {
 	AddrnumberZt: string;
 	/** Transportista que solo es proveedor (interlocutor SP); publicado el 28/10/2026, puede faltar en un servicio anterior. */
 	LifnrSp?: string;
+	/** Correo BTP de quien guardo (historial YCOTIZ_LOG); publicado el 28/10/2026, puede faltar en un servicio anterior. */
+	UsuarioBtp?: string;
 	Kostl: string;
 	Augru: string;
 	LocalCreatedAt?: string;

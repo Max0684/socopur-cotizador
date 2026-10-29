@@ -28,3 +28,8 @@ export function entidadTieneCampo(modelo: ODataModel, entidad: string, campo: st
 	}
 	return respuesta;
 }
+
+/** Igual que entidadTieneCampo, para un parametro de una accion ligada a la entidad (p. ej. Grupo, crearPedido, UsuarioBtp). */
+export function accionTieneParametro(modelo: ODataModel, entidad: string, accion: string, parametro: string): Promise<boolean> {
+	return entidadTieneCampo(modelo, entidad, `${accion}/$Parameter/${parametro}`);
+}

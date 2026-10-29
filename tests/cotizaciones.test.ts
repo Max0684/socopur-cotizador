@@ -540,3 +540,24 @@ test("datosGuardadosDe: direccion de un solo uso sale de la fila Direc con rol W
 	assert.equal(d.addrnumberWe, ENVIO_UNICO);
 	assert.equal(d.direccionUnica, "JR. LOS OLIVOS 123");
 });
+
+test("guardarCotizacion envia el correo BTP solo si el servicio publica Cotizacion/UsuarioBtp", async () => {
+	const con = crearModeloFalso({ gruposLeidos: [{ GrupoNo: "01", VbelnOferta: "3100007390" }], camposPublicados: ["Cotizacion/UsuarioBtp"] });
+	await guardarCotizacion(como(con.modelo), { ...oferta(), usuarioBtp: "vendedora@socopur.pe" });
+	assert.equal(con.creadas[0].datos.UsuarioBtp, "vendedora@socopur.pe");
+	const sin = crearModeloFalso({ gruposLeidos: [{ GrupoNo: "01", VbelnOferta: "3100007390" }] });
+	await guardarCotizacion(como(sin.modelo), { ...oferta(), usuarioBtp: "vendedora@socopur.pe" });
+	assert.equal("UsuarioBtp" in sin.creadas[0].datos, false);
+});
+
+test("asignarVinItem manda UsuarioBtp solo si la accion lo publica en el $metadata", async () => {
+	const item = { Posnr: "000010", Matnr: "CAR200B", Vhcle: "1000006683" };
+	const sin = modeloVin(item);
+	await asignarVinItem(como(sin.modelo), "COT-1", "000010", "1000006683", "vendedora@socopur.pe");
+	assert.deepEqual(sin.parametros, { Vhcle: "1000006683" });
+	const con = modeloVin(item);
+	const publicado = "/Item/com.sap.gateway.srvd_a2x.yui_cotiz_srv.v0001.asignarVin/$Parameter/UsuarioBtp";
+	(con.modelo as Record<string, unknown>).getMetaModel = () => ({ requestObject: async (ruta: string) => (ruta === publicado ? {} : undefined) });
+	await asignarVinItem(como(con.modelo), "COT-1", "000010", "1000006683", "vendedora@socopur.pe");
+	assert.deepEqual(con.parametros, { Vhcle: "1000006683", UsuarioBtp: "vendedora@socopur.pe" });
+});

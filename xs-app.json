@@ -3,6 +3,11 @@
 	"authenticationMethod": "route",
 	"routes": [
 		{
+			"source": "^/user-api(.*)",
+			"target": "$1",
+			"service": "sap-approuter-userapi"
+		},
+		{
 			"source": "^/sap/(.*)$",
 			"target": "/sap/$1",
 			"destination": "S4HANA_AROJAS2",

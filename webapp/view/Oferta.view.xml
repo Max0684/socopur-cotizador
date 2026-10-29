@@ -25,6 +25,7 @@
 				</uxap:snappedHeading>
 				<uxap:actions>
 					<Button text="{i18n>imprimir}" icon="sap-icon://print" type="Transparent" enabled="{= ${oferta>/grupos}.length > 0 }" press=".onVistaOferta" />
+					<Button text="{i18n>historial}" icon="sap-icon://history" type="Transparent" visible="{= !!${oferta>/historial/cotizId} }" press=".onHistorial" />
 					<Button text="{i18n>clonar}" icon="sap-icon://duplicate" type="Transparent" visible="{= !!${oferta>/numero} }" press=".onClonar" />
 					<Button icon="sap-icon://nav-back" text="{i18n>volverOfertas}" type="Transparent" press=".onCerrar" />
 				</uxap:actions>
