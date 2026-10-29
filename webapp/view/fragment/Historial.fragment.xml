@@ -20,7 +20,7 @@
 					class="sapUiSmallMarginBottom" />
 				<Table items="{historial>/filas}" busy="{historial>/cargando}" noDataText="{i18n>historialVacio}" contextualWidth="Auto">
 					<columns>
-						<Column width="10rem"><Text text="{i18n>historialColFecha}" /></Column>
+						<Column width="12rem"><Text text="{i18n>historialColFecha}" /></Column>
 						<Column width="16rem"><Text text="{i18n>historialColUsuario}" /></Column>
 						<Column width="12rem"><Text text="{i18n>historialColOperacion}" /></Column>
 						<Column minScreenWidth="40rem" demandPopin="true"><Text text="{i18n>historialColDetalle}" /></Column>

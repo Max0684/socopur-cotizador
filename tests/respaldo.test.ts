@@ -67,6 +67,21 @@ test("sin almacen o con el almacen lleno no falla: no guarda y no hay respaldo",
 	borrarRespaldo(undefined, "k");
 });
 
+test("perfilRecuperado: el vendedor es el identificado ahora; del respaldo solo vienen las elecciones de la oferta", async () => {
+	const { perfilRecuperado } = await import("../webapp/model/RespaldoOferta.ts");
+	const actual = { pernr: "99000406", vendedor: "99000406 — VENDEDORA", canal: "11", moneda: "PEN", busqueda: { tipo: "repuestos" } };
+	const respaldado = { pernr: "", vendedor: "", canal: "10", moneda: "USD", formaPago: "", centro: "1103", busqueda: { tipo: "vehiculos" } };
+	const p = perfilRecuperado(actual, respaldado);
+	assert.equal(p.vendedor, "99000406 — VENDEDORA");
+	assert.equal(p.pernr, "99000406");
+	assert.equal(p.canal, "10");
+	assert.equal(p.moneda, "USD");
+	assert.equal(p.centro, "1103");
+	assert.equal("formaPago" in p, false);
+	assert.deepEqual(p.busqueda, { tipo: "repuestos" });
+	assert.notEqual(p.busqueda, actual.busqueda);
+});
+
 test("siguienteContador sigue despues del mayor uid L<n> recuperado y nunca baja", () => {
 	assert.equal(siguienteContador([{ uid: "L3" }, { uid: "L12" }, { uid: "P10" }, {}], 5), 12);
 	assert.equal(siguienteContador([{ uid: "L2" }], 9), 9);

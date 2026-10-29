@@ -14,7 +14,7 @@ import { agruparVehiculos, buscarVehiculos, filtrarVehiculos, textoDetalleVehicu
 import { areasOrgCanal, textoSolicitudAmpliacion, type CondicionArea, type OpcionAreaCliente, condicionDeArea, opcionesAreaCliente, almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, gruposParaGuardar, igvExonerado, MODALIDAD_DESPACHO, modalidadParaEntrega, modalidadPorDefecto, oficinaDe, orgVehiculosDe, puedeVenderOtroCentro, sectorDeCabecera, sectoresDeLineas, sectorQueFalta, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
 import { evaluarBloqueoPedido, type BloqueoPedido } from "com/socopur/cotizador/model/BloqueoPedido";
 import { correoUsuarioBtp } from "com/socopur/cotizador/model/UsuarioBtp";
-import { almacenDelNavegador, borrarRespaldo, claveRespaldo, guardarRespaldo, leerRespaldo, siguienteContador, type DatosRespaldo, type Respaldo } from "com/socopur/cotizador/model/RespaldoOferta";
+import { almacenDelNavegador, borrarRespaldo, claveRespaldo, guardarRespaldo, leerRespaldo, perfilRecuperado, siguienteContador, type DatosRespaldo, type Respaldo } from "com/socopur/cotizador/model/RespaldoOferta";
 import { historialPublicado, leerHistorial, textoDetalle, textoLugar, textoOperacion } from "com/socopur/cotizador/model/HistorialService";
 import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerDatosGuardados, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type EntregaParaGuardar, ENVIO_UNICO, type VinAsignado, esperarVinculos, leerMotivoVinculo, anularGrupo } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
@@ -5281,7 +5281,7 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 		const lineas = respaldo.lineas as Linea[];
 		const cliente = (respaldo.cliente as Cliente | null) ?? null;
 		this.contadorLinea = siguienteContador(lineas, this.contadorLinea);
-		oferta.setProperty("/perfil", { ...((oferta.getProperty("/perfil") as Record<string, unknown>) ?? {}), ...respaldo.perfil });
+		oferta.setProperty("/perfil", perfilRecuperado((this.modeloMock().getProperty("/perfil") as Record<string, unknown>) ?? {}, respaldo.perfil ?? {}));
 		oferta.setProperty("/fechaEntrega", respaldo.fechaEntrega || oferta.getProperty("/fechaEntrega"));
 		oferta.setProperty("/entrega", respaldo.entrega || oferta.getProperty("/entrega"));
 		oferta.setProperty("/modalidadesGrupo", respaldo.modalidadesGrupo ?? {});
@@ -5338,7 +5338,7 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 				filas: filas.map((f) => ({
 					fecha: f.fecha ? new Date(f.fecha).toLocaleString("es-PE", { dateStyle: "short", timeStyle: "medium" }) : "—",
 					usuario: f.usuario || "—",
-					usuarioNota: f.conCorreo ? "" : t("historialSinCorreo"),
+					usuarioNota: [f.conCorreo ? "" : t("historialSinCorreo"), f.vendedor ? t("historialVendedor", [f.vendedor]) : ""].filter(Boolean).join(" · "),
 					operacion: textoOperacion(f.operacion, t),
 					lugar: textoLugar(f, t),
 					detalle: textoDetalle(f, t)

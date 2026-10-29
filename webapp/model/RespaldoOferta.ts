@@ -89,6 +89,24 @@ export function leerRespaldo(almacen: Almacen | undefined, clave: string, ahora 
 	return null;
 }
 
+/** Lo que el vendedor puede cambiar en una oferta sin tocar su perfil; lo demas (PERNR, nombre, busqueda) es de quien esta identificado. */
+const CAMPOS_DE_OFERTA = ["canal", "oficina", "centro", "almacen", "moneda", "formaPago", "expedicion"];
+
+/**
+ * Perfil de la oferta recuperada: el del vendedor identificado AHORA, con las elecciones de la oferta que traia el respaldo. Asi un respaldo
+ * escrito antes de identificarse (sin vendedor) no deja la oferta sin vendedor.
+ */
+export function perfilRecuperado(actual: Record<string, unknown>, respaldado: Record<string, unknown>): Record<string, unknown> {
+	const perfil = JSON.parse(JSON.stringify(actual ?? {})) as Record<string, unknown>;
+	CAMPOS_DE_OFERTA.forEach((campo) => {
+		const valor = respaldado?.[campo];
+		if (valor !== undefined && valor !== null && valor !== "") {
+			perfil[campo] = valor;
+		}
+	});
+	return perfil;
+}
+
 /** Siguiente numero para los uid "L<n>": las lineas que se agreguen despues de recuperar no deben repetir el de una recuperada. */
 export function siguienteContador(lineas: { uid?: string }[], actual: number): number {
 	return lineas.reduce((mayor, l) => {
