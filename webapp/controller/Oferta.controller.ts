@@ -1276,6 +1276,16 @@ export default class Oferta extends Controller {
 		void this.repreciarLineasSap();
 	}
 
+	/**
+	 * Oficina o centro de la cabecera: de ellos dependen el precio de SAP, los regalos (la ZNA0 de SFX428H-150-MTK es solo de la oficina 1101)
+	 * y el stock del regalo. Pruebas del 29/10/2026: al pasar del centro 1101 al 1102 el regalo seguia sin aviso de stock hasta tocar la cantidad.
+	 */
+	public onCambiaOficinaCentro(): void {
+		this.modeloOferta().setProperty("/guardado", { visible: false, texto: "" });
+		this.recalcular();
+		void this.repreciarLineasSap();
+	}
+
 	/** 01 Envio / 02 Recojo: define como se entrega (la modalidad tambien lo propone al cambiarla). */
 	public onCambiaExpedicion(): void {
 		const oferta = this.modeloOferta();
@@ -5038,7 +5048,9 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 			const tc = await leerTipoCambio(odata);
 			const texto = tipoCambioTexto(tc.cambio);
 			const nota = this.i18n().getText("tipoCambioSap", [fechaDdMmAaaa(tc.desde)]) as string;
+			// En el perfil base tambien la nota: al recuperar un respaldo el perfil de la oferta se arma desde este (pruebas del 29/10/2026).
 			this.modeloMock().setProperty("/perfil/tipoCambio", texto);
+			this.modeloMock().setProperty("/perfil/tipoCambioNota", nota);
 			const oferta = this.modeloOferta();
 			oferta.setProperty("/perfil/tipoCambio", texto);
 			oferta.setProperty("/perfil/tipoCambioNota", nota);

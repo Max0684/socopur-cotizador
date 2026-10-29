@@ -194,9 +194,9 @@
 								<Label text="{i18n>canal}" />
 								<Select selectedKey="{oferta>/perfil/canal}" forceSelection="false" change=".onCambiaCanal" items="{oferta>/opciones/canales}" enabled="{= ${oferta>/pedidos}.length === 0 }"><core:Item key="{oferta>key}" text="{oferta>text}" /></Select>
 								<Label text="{i18n>oficina}" />
-								<Select selectedKey="{oferta>/perfil/oficina}" forceSelection="false" items="{oferta>/oficinasSede}" enabled="{= ${oferta>/pedidos}.length === 0 }"><core:Item key="{oferta>key}" text="{oferta>text}" /></Select>
+								<Select selectedKey="{oferta>/perfil/oficina}" forceSelection="false" change=".onCambiaOficinaCentro" items="{oferta>/oficinasSede}" enabled="{= ${oferta>/pedidos}.length === 0 }"><core:Item key="{oferta>key}" text="{oferta>text}" /></Select>
 								<Label text="{i18n>centro}" />
-								<Select selectedKey="{oferta>/perfil/centro}" forceSelection="false" items="{oferta>/opcionesCentro}" enabled="{= ${oferta>/pedidos}.length === 0 }"><core:Item key="{oferta>key}" text="{oferta>text}" /></Select>
+								<Select selectedKey="{oferta>/perfil/centro}" forceSelection="false" change=".onCambiaOficinaCentro" items="{oferta>/opcionesCentro}" enabled="{= ${oferta>/pedidos}.length === 0 }"><core:Item key="{oferta>key}" text="{oferta>text}" /></Select>
 								<Label text="{i18n>almacenPerfil}" />
 								<Input value="{parts: ['oferta>/perfil/centro', 'oferta>/perfil/almacen'], formatter: '.formatAlmacenPerfil'}" editable="false" description="{i18n>almacenPerfilNota}" />
 								<Label text="{i18n>moneda}" />
