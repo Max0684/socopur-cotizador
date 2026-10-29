@@ -1,4 +1,5 @@
 import type ODataModel from "sap/ui/model/odata/v4/ODataModel";
+import { entidadTieneCampo } from "./CamposServicio";
 
 /**
  * Promociones de regalo de un material (entidad Regalo de YUI_COTIZ_SRV = YCL_COTIZ_REGALO, publicada el 28/10/2026). SAP devuelve una fila
@@ -14,6 +15,9 @@ export interface ConsultaRegalo {
 	vkbur?: string;
 	/** Sin cantidad (o 0) solo se listan las promociones. */
 	cantidad?: number;
+	/** Centro y almacen de la cabecera: con ellos SAP informa el stock libre del regalo ahi (SAP del 29/10/2026 en adelante). */
+	werks?: string;
+	lgort?: string;
 }
 
 /** ZNA0: SAP agrega sola la linea de regalo al crear la oferta. ZETA: no la agrega; la envia el Cotizador (Bonif "Z"). */
@@ -41,6 +45,8 @@ export interface PromoRegalo {
 	estado: EstadoRegalo;
 	cantidadRegalo: number;
 	mensaje: string;
+	/** Stock libre del regalo en el centro/almacen de la cabecera; sin valor si SAP no lo consulto. */
+	stockRegalo?: number;
 }
 
 interface FilaRegalo {
@@ -59,6 +65,8 @@ interface FilaRegalo {
 	Estado?: string;
 	CantidadRegalo?: string | number;
 	Mensaje?: string;
+	StockRegalo?: string | number;
+	StockLeido?: string;
 }
 
 const comillas = (texto: string): string => texto.replace(/'/g, "''");
@@ -73,6 +81,12 @@ export function filtroRegalo(c: ConsultaRegalo): string {
 	}
 	if (c.cantidad && c.cantidad > 0) {
 		partes.push(`Cantidad eq ${c.cantidad}`);
+	}
+	if (c.werks) {
+		partes.push(`Werks eq '${comillas(c.werks)}'`);
+		if (c.lgort) {
+			partes.push(`Lgort eq '${comillas(c.lgort)}'`);
+		}
 	}
 	return partes.join(" and ");
 }
@@ -95,12 +109,21 @@ export function promoDeFila(f: FilaRegalo): PromoRegalo {
 		tipo: texto(f.Tipo),
 		estado: estado === "A" || estado === "N" || estado === "E" ? estado : "",
 		cantidadRegalo: Number(f.CantidadRegalo ?? 0),
-		mensaje: texto(f.Mensaje)
+		mensaje: texto(f.Mensaje),
+		...(texto(f.StockLeido) === "X" ? { stockRegalo: Number(f.StockRegalo ?? 0) } : {})
 	};
 }
 
+/** El servicio informa el stock del regalo (Werks/Lgort y StockRegalo, desde el 29/10/2026). */
+export function regaloConStock(modelo: ODataModel): Promise<boolean> {
+	return entidadTieneCampo(modelo, "Regalo", "StockRegalo");
+}
+
 export async function consultarRegalos(modelo: ODataModel, consulta: ConsultaRegalo): Promise<PromoRegalo[]> {
-	const filas = await modelo.bindList("/Regalo", undefined, undefined, undefined, { $filter: filtroRegalo(consulta) }).requestContexts(0, 100);
+	// Un filtro por un campo que el servicio no tiene hace que SAP rechace la consulta: centro y almacen solo si los publica.
+	const conStock = !!consulta.werks && (await regaloConStock(modelo));
+	const pedida = conStock ? consulta : { ...consulta, werks: undefined, lgort: undefined };
+	const filas = await modelo.bindList("/Regalo", undefined, undefined, undefined, { $filter: filtroRegalo(pedida) }).requestContexts(0, 100);
 	return filas.map((c) => promoDeFila(c.getObject() as FilaRegalo));
 }
 
@@ -112,6 +135,28 @@ export function regalosQueAplican(promos: PromoRegalo[]): PromoRegalo[] {
 /** 10 -> "10", 2.5 -> "2.5": las cantidades llegan con 3 decimales y en pantalla se ven sin los ceros. */
 export function cantidadTxt(n: number): string {
 	return String(Math.round(n * 1000) / 1000);
+}
+
+/** Cuanto falta de stock para entregar el regalo (0 si alcanza o si SAP no informo el stock). Solo avisa: la oferta se guarda igual. */
+export function faltanteStock(p: PromoRegalo): number {
+	return p.stockRegalo === undefined ? 0 : Math.max(0, Math.round((p.cantidadRegalo - p.stockRegalo) * 1000) / 1000);
+}
+
+/** La escala mas cercana que la cantidad todavia no alcanza (estado N): para decir "llevando N UN recibe ...". */
+export function proximoRegalo(promos: PromoRegalo[], cantidad: number): PromoRegalo | undefined {
+	return promos.filter((p) => p.estado === "N" && p.desde > cantidad).sort((a, b) => a.desde - b.desde)[0];
+}
+
+/**
+ * Regalos de venta cruzada (Zeta) que SAP no da porque el material tiene una ZNA0: la clase de condicion es exclusiva y gana la ZNA0,
+ * aunque la cantidad no llegue a su minimo (SFX428H-150-MTK con 50 UN no recibe nada). Si alguna Zeta aplica, la exclusion de las
+ * otras es por un registro mas especifico, no por la ZNA0.
+ */
+export function zetaExcluidasPorZna0(promos: PromoRegalo[]): PromoRegalo[] {
+	if (!promos.some((p) => p.mecanismo === "ZNA0") || promos.some((p) => p.mecanismo === "ZETA" && p.estado === "A")) {
+		return [];
+	}
+	return promos.filter((p) => p.mecanismo === "ZETA" && p.estado === "E");
 }
 
 /** Clave para saber si los regalos de una linea cambiaron (y avisar solo entonces). */

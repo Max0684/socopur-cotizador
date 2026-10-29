@@ -443,6 +443,9 @@
 													<Text text="{oferta>denominacion}" />
 													<VBox>
 														<Text text="{oferta>detalle}" visible="{= !${oferta>bonificacion} || !!${oferta>sinTalla} }" />
+														<!-- Story 1.17: regalo sin stock en el almacen de la cabecera (solo aviso) y lo que aun no da la promocion -->
+														<ObjectStatus text="{oferta>avisoStock}" state="Warning" icon="sap-icon://message-warning" visible="{= !!${oferta>avisoStock} }" />
+														<ObjectStatus text="{oferta>proximoRegalo}" state="Information" visible="{= !${oferta>bonificacion} &amp;&amp; !!${oferta>proximoRegalo} }" />
 														<Select visible="{= !!${oferta>bonificacion} &amp;&amp; !${oferta>sinTalla} }" selectedKey="{oferta>talla}" forceSelection="false" width="9rem" change=".onCambiaTalla" enabled="{= ${oferta>/pedidos}.length === 0 }" items="{oferta>tallas}">
 															<core:Item key="{oferta>key}" text="{oferta>text}" enabled="{oferta>enabled}" />
 														</Select>

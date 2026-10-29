@@ -95,6 +95,8 @@
 					<VBox class="sapUiSmallMarginBottom" width="30rem">
 						<Title text="{i18n>detalleRegalos}" level="H5" class="sapUiTinyMarginBottom" />
 						<MessageStrip text="{detalle>/avisoRegalo}" type="Success" showIcon="true" visible="{= !!${detalle>/avisoRegalo} }" class="sapUiTinyMarginBottom" />
+						<MessageStrip text="{detalle>/stockRegalo}" type="Warning" showIcon="true" visible="{= !!${detalle>/stockRegalo} }" class="sapUiTinyMarginBottom" />
+						<MessageStrip text="{detalle>/proximoRegalo}" type="Information" showIcon="true" visible="{= !!${detalle>/proximoRegalo} }" class="sapUiTinyMarginBottom" />
 						<Table items="{detalle>/regalos}" noDataText="{= ${detalle>/cargandoRegalos} ? ${i18n>regaloCargando} : ${i18n>detalleSinRegalos} }">
 							<columns>
 								<Column width="5rem" hAlign="End"><Text text="{i18n>detalleMinimo}" /></Column>
@@ -109,6 +111,7 @@
 										<VBox>
 											<Text text="{detalle>regla}" />
 											<ObjectStatus text="{detalle>estadoTxt}" state="{detalle>estadoState}" visible="{= !!${detalle>estadoTxt} }" />
+											<ObjectStatus text="{detalle>stockTxt}" state="{detalle>stockState}" visible="{= !!${detalle>stockTxt} }" />
 										</VBox>
 									</cells>
 								</ColumnListItem>

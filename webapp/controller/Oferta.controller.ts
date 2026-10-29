@@ -8,7 +8,7 @@ import { buscarMateriales, cargarSegmentos, disponibilidadPorCentro, filasDeStoc
 import { entidadTieneCampo } from "com/socopur/cotizador/model/CamposServicio";
 import { cargarFormasPago } from "com/socopur/cotizador/model/FormasPagoService";
 import { consultarCondiciones, consultarEscalas, consultarPrecio, impuestosDeCondiciones, siguienteTramo, tramosDeEscalas, tramoVigente, type EscalaSap, type TramoPrecio } from "com/socopur/cotizador/model/PreciosService";
-import { cantidadTxt, claveRegalos, consultarRegalos, regalosQueAplican, type ConsultaRegalo, type PromoRegalo } from "com/socopur/cotizador/model/RegalosService";
+import { cantidadTxt, claveRegalos, consultarRegalos, faltanteStock, proximoRegalo, regalosQueAplican, zetaExcluidasPorZna0, type ConsultaRegalo, type PromoRegalo } from "com/socopur/cotizador/model/RegalosService";
 import { type CondicionServicio, type FilaCondicion, descuentosAplicados, filasDeCondiciones } from "com/socopur/cotizador/model/Condiciones";
 import { agruparVehiculos, buscarVehiculos, filtrarVehiculos, textoDetalleVehiculo } from "com/socopur/cotizador/model/VehiculosService";
 import { areasOrgCanal, textoSolicitudAmpliacion, type CondicionArea, type OpcionAreaCliente, condicionDeArea, opcionesAreaCliente, almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, gruposParaGuardar, igvExonerado, MODALIDAD_DESPACHO, modalidadParaEntrega, modalidadPorDefecto, oficinaDe, orgVehiculosDe, puedeVenderOtroCentro, sectorDeCabecera, sectoresDeLineas, sectorQueFalta, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
@@ -274,6 +274,10 @@ interface Linea extends LineaMock {
 	mecanismo?: string;
 	/** Solo regalos de promocion: sector del material de regalo (el de un regalo Zeta tambien se revisa en el area del cliente). */
 	sectorRegalo?: string;
+	/** Solo regalos de promocion: no hay stock suficiente en el almacen de la cabecera. Solo avisa, la oferta se guarda igual. */
+	avisoStock?: string;
+	/** Linea con promociones de SAP: la escala mas cercana que aun no alcanza y la venta cruzada que la ZNA0 deja sin efecto. */
+	proximoRegalo?: string;
 	origen?: string;
 	talla?: string;
 	tallas?: { key: string; text: string; enabled: boolean }[];
@@ -1543,6 +1547,9 @@ export default class Oferta extends Controller {
 		const canal = canalDe(String(oferta.getProperty("/perfil/busqueda/canal") ?? "11"));
 		const canalDoc = this.canalDeDocumento(m.orgVentas, m.sector, "repuestos") || canal;
 		const vkbur = oficinaDe((oferta.getProperty("/perfil") as Record<string, string> | undefined)?.oficina);
+		// El regalo sale del centro y almacen de la cabecera (los mismos del pedido): SAP informa su stock ahi.
+		const werks = String(oferta.getProperty("/perfil/centro") ?? "");
+		const lgort = werks ? this.almacenDelPerfil() : "";
 		return {
 			kunnr,
 			vkorg: m.orgVentas,
@@ -1550,8 +1557,37 @@ export default class Oferta extends Controller {
 			matnr: m.material,
 			spart: sectorDeCabecera(canalDoc, m.sectorMaterial ?? m.sector, m.orgVentas),
 			...(vkbur ? { vkbur } : {}),
-			cantidad
+			cantidad,
+			...(werks ? { werks, ...(lgort ? { lgort } : {}) } : {})
 		};
+	}
+
+	/**
+	 * Lo que todavia no da la promocion: "Llevando 100 UN recibe 10 UN de PM-13008-C por cada 100 UN" y, si el material tiene una ZNA0, que su
+	 * venta cruzada (Zeta) no se entrega (la clase de condicion es exclusiva; SFX428H-150-MTK con 50 UN no recibe nada). Vacio si no aplica.
+	 */
+	private textoProximoRegalo(promos: PromoRegalo[], cantidad: number): string {
+		const i18n = this.i18n();
+		const partes: string[] = [];
+		const p = proximoRegalo(promos, cantidad);
+		if (p) {
+			partes.push(i18n.getText("regaloProximo", [cantidadTxt(p.desde), p.unidad || "UN", cantidadTxt(p.regaloPorCada), p.unidadRegalo || "UN", `${p.matnrRegalo} ${p.descRegalo}`.trim(), cantidadTxt(p.porCada), p.unidad || "UN"]) as string);
+		}
+		const excluidas = [...new Set(zetaExcluidasPorZna0(promos).map((z) => `${z.matnrRegalo} ${z.descRegalo}`.trim()))];
+		if (excluidas.length) {
+			partes.push(i18n.getText("regaloZetaExcluida", [excluidas.join(", ")]) as string);
+		}
+		return partes.join(" ");
+	}
+
+	/** Aviso largo (toast y detalle del material) de un regalo sin stock suficiente en el almacen de la cabecera; vacio si alcanza. */
+	private textoSinStockRegalo(p: PromoRegalo): string {
+		const falta = faltanteStock(p);
+		if (falta <= 0) {
+			return "";
+		}
+		const werks = String(this.modeloOferta().getProperty("/perfil/centro") ?? "");
+		return this.i18n().getText("regaloSinStock", [`${p.matnrRegalo} ${p.descRegalo}`.trim(), this.almacenDelPerfil() || "—", werks, cantidadTxt(p.stockRegalo ?? 0), cantidadTxt(p.cantidadRegalo)]) as string;
 	}
 
 	/** "Con 200 UN de SFX428H-150-MTK recibe 20 UN de PM-13008-C FILTRO COMB de regalo." (uno por regalo). */
@@ -1573,12 +1609,20 @@ export default class Oferta extends Controller {
 					: p.estado === "E"
 						? { estadoTxt: p.mensaje, estadoState: "Warning", highlight: "None" }
 						: { estadoTxt: "", estadoState: "None", highlight: "None" };
+		const stock =
+			p.stockRegalo === undefined
+				? { stockTxt: "", stockState: "None" }
+				: {
+						stockTxt: i18n.getText("regaloStockDetalle", [this.almacenDelPerfil() || "—", cantidadTxt(p.stockRegalo), p.unidadRegalo || "UN"]) as string,
+						stockState: p.estado === "A" && faltanteStock(p) > 0 ? "Warning" : "None"
+					};
 		return {
 			minimo: `${cantidadTxt(p.desde)} ${p.unidad || "UN"}`,
 			articulo: p.matnrRegalo,
 			descripcion: p.descRegalo,
 			regla: p.tipo === "2" ? regla : `${regla} · ${i18n.getText("regaloIncluido") as string}`,
-			...estado
+			...estado,
+			...stock
 		};
 	}
 
@@ -1598,6 +1642,8 @@ export default class Oferta extends Controller {
 			}
 			modelo.setProperty("/regalos", promos.map((p) => this.filaRegaloDetalle(p, cantidad)));
 			modelo.setProperty("/avisoRegalo", this.textoAvisoRegalo(m.material, cantidad, "UN", regalosQueAplican(promos)));
+			modelo.setProperty("/proximoRegalo", this.textoProximoRegalo(promos, cantidad));
+			modelo.setProperty("/stockRegalo", regalosQueAplican(promos).map((p) => this.textoSinStockRegalo(p)).filter(Boolean).join("\n"));
 		} catch (error) {
 			// Las promociones son informativas: si SAP no responde, el material se puede agregar igual.
 			console.warn(`[Cotizador] promociones de ${m.material}: ${(error as Error).message}`);
@@ -1683,6 +1729,9 @@ export default class Oferta extends Controller {
 	private lineaDeRegalo(padre: Linea, p: PromoRegalo): Linea {
 		const i18n = this.i18n();
 		const detalle = i18n.getText("regaloLineaDetalle", [cantidadTxt(padre.cantidad), p.unidad || "UN", padre.material]) as string;
+		const werks = String(this.modeloOferta().getProperty("/perfil/centro") ?? "");
+		const avisoStock =
+			faltanteStock(p) > 0 ? (i18n.getText("regaloSinStockLinea", [werks, this.almacenDelPerfil() || "—", cantidadTxt(p.stockRegalo ?? 0), cantidadTxt(p.cantidadRegalo)]) as string) : "";
 		return {
 			uid: `L${(this.contadorLinea += 1)}`,
 			grupo: padre.grupo,
@@ -1706,6 +1755,7 @@ export default class Oferta extends Controller {
 			sinTalla: true,
 			mecanismo: p.mecanismo,
 			...(p.spartRegalo ? { sectorRegalo: p.spartRegalo } : {}),
+			...(avisoStock ? { avisoStock } : {}),
 			origen: padre.uid
 		};
 	}
@@ -1752,9 +1802,11 @@ export default class Oferta extends Controller {
 			}
 			const aplican = regalosQueAplican(promos);
 			aplican.forEach((p) => nuevas.push(this.lineaDeRegalo(l, p)));
+			l.proximoRegalo = this.textoProximoRegalo(promos, l.cantidad);
 			const clave = claveRegalos(promos);
 			if (clave && clave !== this.regalosAvisados.get(l.uid as string)) {
 				avisos.push(this.textoAvisoRegalo(l.material, l.cantidad, "UN", aplican));
+				aplican.map((p) => this.textoSinStockRegalo(p)).filter(Boolean).forEach((t) => avisos.push(t));
 			}
 			this.regalosAvisados.set(l.uid as string, clave);
 		}
@@ -2765,6 +2817,8 @@ export default class Oferta extends Controller {
 			escalas: [],
 			regalos: [],
 			avisoRegalo: "",
+			proximoRegalo: "",
+			stockRegalo: "",
 			cargandoRegalos: false,
 			proximoTramo: "",
 			cargandoEscalas: false,

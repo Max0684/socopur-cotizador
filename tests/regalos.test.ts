@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cantidadTxt, claveRegalos, consultarRegalos, filtroRegalo, promoDeFila, regalosQueAplican, type ConsultaRegalo } from "../webapp/model/RegalosService.ts";
+import { cantidadTxt, claveRegalos, consultarRegalos, faltanteStock, filtroRegalo, promoDeFila, proximoRegalo, regalosQueAplican, zetaExcluidasPorZna0, type ConsultaRegalo } from "../webapp/model/RegalosService.ts";
 import { crearModeloFalso } from "./helpers/modeloFalso.ts";
 
 const consulta: ConsultaRegalo = { kunnr: "0100025848", vkorg: "1103", vtweg: "10", matnr: "SFX428H-150-MTK", spart: "50", vkbur: "1101", cantidad: 200 };
@@ -73,4 +73,52 @@ test("consultarRegalos lee la entidad Regalo con el filtro y devuelve las promoc
 	const promos = await consultarRegalos(modelo as unknown as Parameters<typeof consultarRegalos>[0], consulta);
 	assert.equal(promos.length, 3);
 	assert.match(llamadas[0], /^read \/Regalo Kunnr eq '0100025848'/);
+});
+
+// Story 1.17 (29/10/2026): stock del regalo, proxima escala y la venta cruzada que la ZNA0 deja sin efecto.
+// Filas reales de YCL_COTIZ_REGALO en el 130 con 50 UN de SFX428H-150-MTK: ninguna escala ZNA0 alcanza y el candado queda excluido.
+const filas50 = [
+	{ ...filas200[0], Estado: "N", CantidadRegalo: "0.000" },
+	{ ...filas200[1] },
+	{ ...filas200[2] }
+];
+
+test("filtroRegalo agrega centro y almacen de la cabecera cuando se piden", () => {
+	assert.equal(
+		filtroRegalo({ ...consulta, werks: "1101", lgort: "0001" }),
+		"Kunnr eq '0100025848' and Vkorg eq '1103' and Vtweg eq '10' and Matnr eq 'SFX428H-150-MTK' and Spart eq '50' and Vkbur eq '1101' and Cantidad eq 200 and Werks eq '1101' and Lgort eq '0001'"
+	);
+	assert.doesNotMatch(filtroRegalo({ ...consulta, lgort: "0001" }), /Lgort/);
+});
+
+test("consultarRegalos no filtra por centro si el servicio no publica el stock del regalo", async () => {
+	const { modelo, llamadas } = crearModeloFalso({ precios: filas200 });
+	await consultarRegalos(modelo as unknown as Parameters<typeof consultarRegalos>[0], { ...consulta, werks: "1101", lgort: "0001" });
+	assert.doesNotMatch(llamadas[0], /Werks/);
+});
+
+test("promoDeFila lee el stock del regalo solo si SAP lo consulto", () => {
+	assert.equal(promoDeFila({ ...filas200[0], StockRegalo: "7.000", StockLeido: "X" }).stockRegalo, 7);
+	assert.equal(promoDeFila({ ...filas200[0], StockRegalo: "0.000", StockLeido: "" }).stockRegalo, undefined);
+});
+
+test("faltanteStock: cuanto falta para entregar el regalo; sin stock informado no avisa", () => {
+	const p = promoDeFila(filas200[0]);
+	assert.equal(faltanteStock({ ...p, stockRegalo: 7 }), 13);
+	assert.equal(faltanteStock({ ...p, stockRegalo: 2000 }), 0);
+	assert.equal(faltanteStock(p), 0);
+});
+
+test("proximoRegalo: con 50 UN la escala mas cercana es la de 100 (10 filtros); con 200, la de 640 (bateria)", () => {
+	assert.equal(proximoRegalo(filas50.map(promoDeFila), 50)?.matnrRegalo, "PM-13008-C");
+	assert.equal(proximoRegalo(filas200.map(promoDeFila), 200)?.matnrRegalo, "12N7A-3A-AGM-SFX");
+	assert.equal(proximoRegalo([], 50), undefined);
+});
+
+test("zetaExcluidasPorZna0: el candado no se da mientras el material tenga ZNA0, alcance o no su minimo", () => {
+	assert.deepEqual(zetaExcluidasPorZna0(filas50.map(promoDeFila)).map((p) => p.matnrRegalo), ["CANDADO-DURO-001"]);
+	assert.deepEqual(zetaExcluidasPorZna0(filas200.map(promoDeFila)).map((p) => p.matnrRegalo), ["CANDADO-DURO-001"]);
+	// Sin ZNA0 (Lima, oficina 1001) la Zeta aplica y otra Zeta excluida lo es por un registro mas especifico, no por la ZNA0.
+	const soloZeta = [promoDeFila({ ...filas200[2], Estado: "A", CantidadRegalo: "2.000" }), promoDeFila({ ...filas200[2], Promocion: "0000000196", Estado: "E" })];
+	assert.deepEqual(zetaExcluidasPorZna0(soloZeta), []);
 });
