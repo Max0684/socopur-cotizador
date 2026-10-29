@@ -16,7 +16,8 @@ import { evaluarBloqueoPedido, type BloqueoPedido } from "com/socopur/cotizador/
 import { correoUsuarioBtp } from "com/socopur/cotizador/model/UsuarioBtp";
 import { almacenDelNavegador, borrarRespaldo, claveRespaldo, guardarRespaldo, leerRespaldo, perfilRecuperado, siguienteContador, type DatosRespaldo, type Respaldo } from "com/socopur/cotizador/model/RespaldoOferta";
 import { historialPublicado, leerHistorial, textoDetalle, textoLugar, textoOperacion } from "com/socopur/cotizador/model/HistorialService";
-import { leerPdfOferta, numerosParaImprimir, pdfPublicado } from "com/socopur/cotizador/model/ImpresionService";
+import { impresionPublicada, leerImpresion, leerPdfOferta, numerosParaImprimir, pdfPublicado } from "com/socopur/cotizador/model/ImpresionService";
+import { htmlVehiculo, type TextosVehiculo } from "com/socopur/cotizador/model/ImpresionVehiculo";
 import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerDatosGuardados, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type EntregaParaGuardar, ENVIO_UNICO, type VinAsignado, esperarVinculos, leerMotivoVinculo, anularGrupo } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
 import { validarDocumento } from "com/socopur/cotizador/model/Documento";
@@ -4682,6 +4683,11 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 			await this.abrirPdfsSap(odata, numeros);
 			return;
 		}
+		await this.abrirVistaHtml(this.armarHtmlOferta(), this.i18n().getText("impresionNota") as string);
+	}
+
+	/** Dialogo de vista previa con su boton Imprimir: borrador de la oferta o formato de vehiculos. */
+	private async abrirVistaHtml(html: string, nota: string): Promise<void> {
 		if (!this.dialogoVistaOferta) {
 			this.dialogoVistaOferta = (await Fragment.load({
 				id: this.getView()?.getId(),
@@ -4691,7 +4697,7 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 			this.getView()?.addDependent(this.dialogoVistaOferta);
 			this.dialogoVistaOferta.setModel(new JSONModel(), "print");
 		}
-		(this.dialogoVistaOferta.getModel("print") as JSONModel).setData({ html: this.armarHtmlOferta() });
+		(this.dialogoVistaOferta.getModel("print") as JSONModel).setData({ html, nota });
 		this.dialogoVistaOferta.open();
 	}
 
@@ -4716,16 +4722,23 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 		const i18n = this.i18n();
 		modelo.setData({ cargando: true, filas: [] });
 		this.dialogoImprimirSap.open();
-		const filas: { titulo: string; url: string; nombre: string; error: string }[] = [];
+		const filas: { titulo: string; url: string; nombre: string; html: string; error: string }[] = [];
+		const conFormatoVehiculo = await impresionPublicada(odata);
 		for (const numero of numeros) {
 			const titulo = i18n.getText("impresionSapOferta", [numero]) as string;
 			try {
+				// Vehiculos: formato simple de Socopur con los datos de SAP; lo demas, el PDF del formulario de SAP.
+				const impresion = conFormatoVehiculo ? await leerImpresion(odata, numero) : { tipo: "R" as const };
+				if (impresion.tipo === "V" && impresion.datos) {
+					filas.push({ titulo, url: "", nombre: "", html: htmlVehiculo(impresion.datos, this.textosVehiculo(), this.urlLogo()), error: "" });
+					continue;
+				}
 				const pdf = await leerPdfOferta(odata, numero);
 				const url = URL.createObjectURL(new Blob([pdf.bytes], { type: "application/pdf" }));
 				this.urlsPdf.push(url);
-				filas.push({ titulo, url, nombre: pdf.nombre, error: "" });
+				filas.push({ titulo, url, nombre: pdf.nombre, html: "", error: "" });
 			} catch (error) {
-				filas.push({ titulo, url: "", nombre: "", error: this.motivoDeError(error) });
+				filas.push({ titulo, url: "", nombre: "", html: "", error: this.motivoDeError(error) });
 			}
 		}
 		modelo.setData({ cargando: false, filas });
@@ -4753,6 +4766,24 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 		enlace.remove();
 	}
 
+	public async onVerFormatoVehiculo(evento: Event): Promise<void> {
+		const html = (evento.getSource() as Button).getBindingContext("pdf")?.getProperty("html") as string | undefined;
+		if (html) {
+			await this.abrirVistaHtml(html, this.i18n().getText("impVehNota") as string);
+		}
+	}
+
+	/** Logo del formato (el de los documentos de Socopur), con direccion absoluta: el marco de impresion no hereda la ruta de la app. */
+	private urlLogo(): string {
+		return new URL(sap.ui.require.toUrl("com/socopur/cotizador/img/logo-scp.png"), document.baseURI).href;
+	}
+
+	private textosVehiculo(): TextosVehiculo {
+		const i18n = this.i18n();
+		const claves = ["caracteristicas", "valorVenta", "isc", "igv", "precioVenta", "tipoCambio", "cuentas", "banco", "cuentaSoles", "cuentaDolares", "dirFiscal", "dirEmision", "telefono", "nroOferta", "fechaOferta", "validoHasta", "cliente", "documento", "correo", "celular", "dirFactura", "dirLlegada", "vendedor", "tienda", "condicionPago", "moneda", "transportista", "codigo", "descripcion", "marca", "unidad", "cantidad", "observacion", "legal", "privacidad"];
+		return Object.fromEntries(claves.map((c) => [c, i18n.getText(`impVeh_${c}`) as string]));
+	}
+
 	public onCerrarImprimirSap(): void {
 		this.dialogoImprimirSap?.close();
 	}
@@ -4771,10 +4802,14 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 		doc.write(`<!doctype html><html><head><meta charset="utf-8"><title>${this.esc(this.i18n().getText("impresionOferta"))}</title></head><body>${html}</body></html>`);
 		doc.close();
 		marco.contentWindow?.focus();
-		setTimeout(() => {
-			marco.contentWindow?.print();
-			setTimeout(() => marco.remove(), 2000);
-		}, 300);
+		// El logo del formato de vehiculos debe estar cargado antes de imprimir, o sale en blanco.
+		const imagenes = Array.from(doc.images).map((img) => (img.complete ? Promise.resolve() : new Promise<void>((listo) => { img.onload = () => listo(); img.onerror = () => listo(); })));
+		void Promise.all(imagenes).then(() => {
+			setTimeout(() => {
+				marco.contentWindow?.print();
+				setTimeout(() => marco.remove(), 2000);
+			}, 300);
+		});
 	}
 
 	/** Vigencia de la oferta: fecha + dias del perfil (en SAP ZTSD_CONFIG_OFER campo 01 = 7 dias). */

@@ -1,5 +1,6 @@
 import type ODataModel from "sap/ui/model/odata/v4/ODataModel";
 import { entidadTieneCampo } from "./CamposServicio";
+import type { DatosVehiculo } from "./ImpresionVehiculo";
 
 /**
  * PDF oficial de la oferta: SAP lo genera con su formulario ZFRSD_COTIVTA (el mismo que imprimia el cotizador anterior) y lo
@@ -34,6 +35,23 @@ export function base64ABytes(texto: string): Uint8Array<ArrayBuffer> {
 	const normal = texto.replace(/-/g, "+").replace(/_/g, "/");
 	const binario = atob(normal + "=".repeat((4 - (normal.length % 4)) % 4));
 	return Uint8Array.from(binario, (c) => c.charCodeAt(0));
+}
+
+/** El servicio publica OfertaImpresion: dice si la oferta es de vehiculos y trae los datos de su formato (desde el 29/10/2026). */
+export function impresionPublicada(modelo: ODataModel): Promise<boolean> {
+	return entidadTieneCampo(modelo, "OfertaImpresion", "Datos");
+}
+
+/** Formato que lleva la oferta: V vehiculos (con sus datos) o R repuestos (PDF de SAP). */
+export async function leerImpresion(modelo: ODataModel, numero: string): Promise<{ tipo: "V" | "R"; datos?: DatosVehiculo }> {
+	const contextos = await modelo
+		.bindList("/OfertaImpresion", undefined, undefined, undefined, { $filter: `Vbeln eq '${numero.replace(/'/g, "''")}'` })
+		.requestContexts(0, 1);
+	const fila = (contextos[0]?.getObject() ?? {}) as { Tipo?: string; Datos?: string; Mensaje?: string };
+	if (fila.Mensaje) {
+		throw new Error(fila.Mensaje);
+	}
+	return fila.Tipo === "V" && fila.Datos ? { tipo: "V", datos: JSON.parse(fila.Datos) as DatosVehiculo } : { tipo: "R" };
 }
 
 /** PDF de una oferta SAP. Falla con el motivo de SAP si no lo pudo generar. */

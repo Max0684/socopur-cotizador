@@ -11,7 +11,7 @@
 		resizable="true">
 		<content>
 			<VBox class="sapUiSmallMargin">
-				<MessageStrip text="{i18n>impresionNota}" type="Information" showIcon="true" class="sapUiSmallMarginBottom" />
+				<MessageStrip text="{print>/nota}" type="Information" showIcon="true" class="sapUiSmallMarginBottom" />
 				<core:HTML content="{print>/html}" />
 			</VBox>
 		</content>

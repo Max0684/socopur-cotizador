@@ -17,6 +17,7 @@
 								<Title text="{pdf>titulo}" level="H5" />
 								<ObjectStatus text="{pdf>error}" state="Error" visible="{= !!${pdf>error} }" />
 							</VBox>
+							<Button text="{i18n>impVehVer}" icon="sap-icon://print" type="Emphasized" visible="{= !!${pdf>html} }" press=".onVerFormatoVehiculo" />
 							<HBox visible="{= !!${pdf>url} }">
 								<Button text="{i18n>impresionSapAbrir}" icon="sap-icon://pdf-attachment" type="Emphasized" press=".onAbrirPdfSap" class="sapUiTinyMarginEnd" />
 								<Button text="{i18n>impresionSapDescargar}" icon="sap-icon://download" press=".onDescargarPdfSap" />
