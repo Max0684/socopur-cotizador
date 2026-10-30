@@ -11,7 +11,7 @@ import { consultarCondiciones, consultarEscalas, consultarPrecio, impuestosDeCon
 import { cantidadTxt, claveRegalos, consultarRegalos, faltanteStock, proximoRegalo, regalosQueAplican, zetaExcluidasPorZna0, type ConsultaRegalo, type PromoRegalo } from "com/socopur/cotizador/model/RegalosService";
 import { type CondicionServicio, type FilaCondicion, descuentosAplicados, filasDeCondiciones } from "com/socopur/cotizador/model/Condiciones";
 import { agruparVehiculos, buscarVehiculos, filtrarVehiculos, textoDetalleVehiculo } from "com/socopur/cotizador/model/VehiculosService";
-import { areasOrgCanal, textoSolicitudAmpliacion, type CondicionArea, type OpcionAreaCliente, condicionDeArea, opcionesAreaCliente, almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, gruposParaGuardar, igvExonerado, MODALIDAD_DESPACHO, modalidadParaEntrega, modalidadPorDefecto, oficinaDe, orgVehiculosDe, puedeVenderOtroCentro, sectorDeCabecera, sectoresDeLineas, sectorQueFalta, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
+import { opcionesAlmacen, repartoAlmacen, type AlmacenLinea, areasOrgCanal, textoSolicitudAmpliacion, type CondicionArea, type OpcionAreaCliente, condicionDeArea, opcionesAreaCliente, almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, gruposParaGuardar, igvExonerado, MODALIDAD_DESPACHO, modalidadParaEntrega, modalidadPorDefecto, oficinaDe, orgVehiculosDe, puedeVenderOtroCentro, sectorDeCabecera, sectoresDeLineas, sectorQueFalta, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
 import { evaluarBloqueoPedido, type BloqueoPedido } from "com/socopur/cotizador/model/BloqueoPedido";
 import { correoUsuarioBtp } from "com/socopur/cotizador/model/UsuarioBtp";
 import { almacenDelNavegador, borrarRespaldo, claveRespaldo, guardarRespaldo, leerRespaldo, perfilRecuperado, siguienteContador, type DatosRespaldo, type Respaldo } from "com/socopur/cotizador/model/RespaldoOferta";
@@ -263,6 +263,15 @@ interface Linea extends LineaMock {
 	impuestoEstimado?: boolean;
 	iscPct?: number;
 	unica?: boolean;
+	/**
+	 * Repuestos: almacen del centro del perfil del que sale la linea, sus opciones con el disponible de SAP y el aviso si no alcanza (dolores #160
+	 * y #161: stock repartido entre almacenes). Sin elegir, el del perfil.
+	 */
+	almacenLinea?: string;
+	almacenes?: { key: string; text: string }[];
+	disponiblesAlmacen?: AlmacenLinea[];
+	avisoAlmacen?: string;
+	puedeRepartir?: boolean;
 	/** Solo vehiculos de SAP: variante, centro y VIN del vehiculo elegido. */
 	variante?: string;
 	centroVeh?: string;
@@ -821,9 +830,10 @@ export default class Oferta extends Controller {
 				try {
 					const canal = this.canalDeDocumento(l.orgVentas, l.sector, "repuestos");
 					const almacenes = await disponibilidadPorAlmacen(odata, l.orgVentas, canal, centro, l.material);
-					const delAlmacen = almacenes.find((a) => a.lgort === almacen);
+					const delLinea = l.almacenLinea || almacen;
+					const delAlmacen = almacenes.find((a) => a.lgort === delLinea);
 					if (almacenes.length > 0 && (delAlmacen?.disponible ?? 0) < l.cantidad) {
-						faltan.push(`${l.material}: ${this.i18n().getText("pideDispone", [String(l.cantidad), almacen, String(delAlmacen?.disponible ?? 0)]) as string}`);
+						faltan.push(`${l.material}: ${this.i18n().getText("pideDispone", [String(l.cantidad), delLinea, String(delAlmacen?.disponible ?? 0)]) as string}`);
 					}
 				} catch {
 					// Sin lectura no se bloquea: SAP lo comprueba al crear el pedido.
@@ -1467,7 +1477,9 @@ export default class Oferta extends Controller {
 	): void {
 		const oferta = this.modeloOferta();
 		const lineas = (oferta.getProperty("/lineas") as Linea[]) ?? [];
-		const existente = m.tipo === "repuestos" ? lineas.find((l) => l.material === m.material) : undefined;
+		// Un repuesto que ya esta se suma a su linea solo si sale del mismo almacen (el del perfil): una linea repartida queda aparte.
+		const almacenPerfil = this.almacenDelPerfil();
+		const existente = m.tipo === "repuestos" ? lineas.find((l) => l.material === m.material && !l.bonificacion && (l.almacenLinea || almacenPerfil) === almacenPerfil) : undefined;
 		if (existente) {
 			existente.cantidad += cantidad;
 			existente.precio = final;
@@ -1477,6 +1489,7 @@ export default class Oferta extends Controller {
 			existente.condiciones = m.condiciones ?? existente.condiciones;
 			this.repreciarPorEscala(existente);
 			existente.total = Math.round(existente.cantidad * existente.precio * 100) / 100;
+			this.actualizarAvisoAlmacen(existente);
 		} else {
 			const uid = `L${(this.contadorLinea += 1)}`;
 			lineas.push({
@@ -1494,13 +1507,100 @@ export default class Oferta extends Controller {
 				total: Math.round(cantidad * final * 100) / 100,
 				...(m.origen === "sap" ? { precioPenSap: m.precioPenSap, precioUsdSap: m.precioUsd } : {}),
 				...(m.condiciones ? { condicionesSap: m.condicionesSap, condiciones: m.condiciones } : {}),
-				...(m.tipo === "vehiculos" && m.variante ? { variante: m.variante, centroVeh: m.centro, almacenVeh: m.almacen, vin: m.vin } : {})
+				...(m.tipo === "vehiculos" && m.variante ? { variante: m.variante, centroVeh: m.centro, almacenVeh: m.almacen, vin: m.vin } : {}),
+				...(m.tipo === "repuestos" ? { almacenLinea: almacenPerfil } : {})
 			});
 			if (m.tipo === "vehiculos") {
 				this.agregarBonificaciones(lineas, uid, m);
 			}
+			if (m.tipo === "repuestos" && m.origen === "sap") {
+				void this.cargarAlmacenesLinea(uid);
+			}
 		}
 		oferta.setProperty("/lineas", lineas);
+	}
+
+	/** Disponible de SAP del repuesto en cada almacen del centro del perfil: las opciones del almacen de su linea. Sin lectura, queda el del perfil. */
+	private async cargarAlmacenesLinea(uid: string): Promise<void> {
+		const oferta = this.modeloOferta();
+		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel | undefined;
+		const linea = ((oferta.getProperty("/lineas") as Linea[]) ?? []).find((l) => l.uid === uid);
+		if (!odata || !linea) {
+			return;
+		}
+		try {
+			const centro = String(oferta.getProperty("/perfil/centro") ?? "");
+			const leidos = await disponibilidadPorAlmacen(odata, linea.orgVentas, this.canalDeDocumento(linea.orgVentas, linea.sector, "repuestos"), centro, linea.material);
+			linea.disponiblesAlmacen = leidos.map((a) => ({ lgort: a.lgort, disponible: a.disponible }));
+			this.actualizarAvisoAlmacen(linea);
+			oferta.setProperty("/lineas", [...((oferta.getProperty("/lineas") as Linea[]) ?? [])]);
+		} catch {
+			// Sin lectura de disponibilidad queda el almacen del perfil; SAP lo comprueba al crear el pedido.
+		}
+	}
+
+	/** Opciones del almacen de la linea, aviso si el elegido no alcanza y si se puede repartir con otro almacen. */
+	private actualizarAvisoAlmacen(linea: Linea): void {
+		if (!linea.disponiblesAlmacen) {
+			return;
+		}
+		const i18n = this.i18n();
+		const elegido = linea.almacenLinea || this.almacenDelPerfil();
+		linea.almacenes = opcionesAlmacen(linea.disponiblesAlmacen, this.almacenDelPerfil()).map((a) => ({
+			key: a.lgort,
+			text: i18n.getText("almacenOpcion", [a.lgort, cantidadTxt(a.disponible)]) as string
+		}));
+		if (!linea.almacenes.some((a) => a.key === elegido)) {
+			linea.almacenes.push({ key: elegido, text: i18n.getText("almacenOpcion", [elegido, "0"]) as string });
+		}
+		const disponible = Math.max(0, linea.disponiblesAlmacen.find((a) => a.lgort === elegido)?.disponible ?? 0);
+		const reparto = repartoAlmacen(linea.cantidad, elegido, linea.disponiblesAlmacen);
+		linea.avisoAlmacen = linea.cantidad > disponible ? (i18n.getText("almacenNoAlcanza", [elegido, cantidadTxt(disponible), cantidadTxt(linea.cantidad)]) as string) : "";
+		linea.puedeRepartir = !!reparto;
+	}
+
+	public onCambiaAlmacenLinea(event: Event): void {
+		const linea = (event.getSource() as unknown as Control).getBindingContext("oferta")?.getObject() as Linea | undefined;
+		if (!linea) {
+			return;
+		}
+		this.actualizarAvisoAlmacen(linea);
+		const oferta = this.modeloOferta();
+		oferta.setProperty("/guardado", { visible: false, texto: "" });
+		oferta.setProperty("/lineas", [...((oferta.getProperty("/lineas") as Linea[]) ?? [])]);
+	}
+
+	/**
+	 * El almacen elegido no alcanza: lo que falta pasa a una linea nueva del almacen con mas disponible (o, si el elegido no tiene nada, la linea
+	 * entera se cambia de almacen). En SAP cada posicion sale de su almacen, en la misma oferta.
+	 */
+	public onRepartirLinea(event: Event): void {
+		const linea = (event.getSource() as unknown as Control).getBindingContext("oferta")?.getObject() as Linea | undefined;
+		const oferta = this.modeloOferta();
+		const reparto = linea ? repartoAlmacen(linea.cantidad, linea.almacenLinea || this.almacenDelPerfil(), linea.disponiblesAlmacen ?? []) : null;
+		if (!linea || !reparto) {
+			return;
+		}
+		const lineas = (oferta.getProperty("/lineas") as Linea[]) ?? [];
+		if (reparto.queda === 0) {
+			linea.almacenLinea = reparto.otro;
+		} else {
+			const desde = linea.almacenLinea || this.almacenDelPerfil();
+			const nueva: Linea = { ...linea, uid: `L${(this.contadorLinea += 1)}`, cantidad: reparto.mueve, almacenLinea: reparto.otro, verCondiciones: false };
+			linea.cantidad = reparto.queda;
+			for (const l of [linea, nueva]) {
+				this.repreciarPorEscala(l);
+				l.total = this.redondear(l.cantidad * l.precio);
+			}
+			lineas.splice(lineas.indexOf(linea) + 1, 0, nueva);
+			this.actualizarAvisoAlmacen(nueva);
+			MessageToast.show(this.i18n().getText("almacenRepartido", [cantidadTxt(reparto.queda), desde, cantidadTxt(reparto.mueve), reparto.otro]) as string);
+		}
+		this.actualizarAvisoAlmacen(linea);
+		oferta.setProperty("/lineas", [...lineas]);
+		oferta.setProperty("/guardado", { visible: false, texto: "" });
+		this.recalcular();
+		void this.repreciarLineasSap();
 	}
 
 
@@ -2620,6 +2720,7 @@ export default class Oferta extends Controller {
 		linea.cantidad = Math.max(1, Number(linea.cantidad) || 1);
 		this.repreciarPorEscala(linea);
 		linea.total = this.redondear(linea.cantidad * linea.precio);
+		this.actualizarAvisoAlmacen(linea);
 		this.modeloOferta().setProperty("/guardado", { visible: false, texto: "" });
 		this.recalcular();
 		void this.repreciarLineasSap();

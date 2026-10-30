@@ -2,6 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
 	condicionDeArea,
+	opcionesAlmacen,
+	repartoAlmacen,
 	opcionesAreaCliente,
 	textoSolicitudAmpliacion,
 	valoresDistintos,
@@ -477,4 +479,28 @@ test("motivoOfertaFallida: el motivo de SAP sin el prefijo del grupo; otro comen
 	assert.equal(motivoOfertaFallida("[Pedido grupo 01] Billing block Z1 is not defined"), "");
 	assert.equal(motivoOfertaFallida("Entregar por la tarde"), "");
 	assert.equal(motivoOfertaFallida(undefined), "");
+});
+
+test("opcionesAlmacen: el del perfil primero aunque no tenga disponible; luego los demas con disponible, de mayor a menor", () => {
+	const d = [{ lgort: "0002", disponible: 4 }, { lgort: "0001", disponible: 0 }, { lgort: "0003", disponible: 9 }, { lgort: "0004", disponible: 0 }];
+	assert.deepEqual(opcionesAlmacen(d, "0001").map((a) => a.lgort), ["0001", "0003", "0002"]);
+	assert.deepEqual(opcionesAlmacen([], "0001"), [{ lgort: "0001", disponible: 0 }]);
+});
+
+test("repartoAlmacen: lo que falta va al almacen con mas disponible; si el elegido no tiene nada, se cambia entero", () => {
+	const d = [{ lgort: "0001", disponible: 6 }, { lgort: "0002", disponible: 3 }, { lgort: "0003", disponible: 10 }];
+	assert.equal(repartoAlmacen(5, "0001", d), null);
+	assert.deepEqual(repartoAlmacen(10, "0001", d), { queda: 6, otro: "0003", mueve: 4 });
+	assert.deepEqual(repartoAlmacen(8, "0004", d), { queda: 0, otro: "0003", mueve: 8 });
+	assert.deepEqual(repartoAlmacen(20, "0001", d), { queda: 10, otro: "0003", mueve: 10 });
+	assert.equal(repartoAlmacen(10, "0001", [{ lgort: "0001", disponible: 6 }]), null);
+});
+
+test("gruposParaGuardar: cada repuesto sale del almacen de su linea; sin almacen de linea, el del perfil", () => {
+	const g = gruposParaGuardar([{ canal: "11", lineas: [
+		{ orgVentas: "1103", sector: "99", material: "A", cantidad: 6, precio: 1, almacenLinea: "0001", uid: "L1" },
+		{ orgVentas: "1103", sector: "99", material: "A", cantidad: 4, precio: 1, almacenLinea: "0003", uid: "L2" },
+		{ orgVentas: "1103", sector: "99", material: "B", cantidad: 1, precio: 1, uid: "L3" }
+	] }], { oficina: "1001", centro: "1001" }, "0001");
+	assert.deepEqual(g[0].lineas.map((l) => l.almacen), ["0001", "0003", "0001"]);
 });

@@ -26,6 +26,8 @@ export interface LineaCarrito {
 	/** Identificador de la linea y, en un regalo, el de la linea que lo genera. */
 	uid?: string;
 	origen?: string;
+	/** Repuestos: almacen elegido para la linea (del centro del perfil); sin el, el del perfil. */
+	almacenLinea?: string;
 	/** Solo vehiculos de SAP: variante, centro y almacen del vehiculo elegido. */
 	variante?: string;
 	centroVeh?: string;
@@ -211,7 +213,8 @@ export function gruposParaGuardar(grupos: GrupoCarrito[], perfil: PerfilVenta, a
 				um: unidad,
 				// Un vehiculo se vende desde el centro y el almacen donde esta, no desde el centro del perfil.
 				centro: l.centroVeh || perfil.centro || "",
-				almacen: l.almacenVeh || (typeof almacen === "function" ? almacen(perfil.centro ?? "") : almacen),
+				// El repuesto sale del almacen elegido en su linea (pruebas: stock repartido entre almacenes, dolores #160 y #161).
+				almacen: l.almacenVeh || l.almacenLinea || (typeof almacen === "function" ? almacen(perfil.centro ?? "") : almacen),
 				precio: l.bonificacion ? 0 : (l.precioFinal ?? l.precio),
 				...(l.variante ? { variante: l.variante } : {}),
 				...(l.bonificacion ? { bonif: "Z" as const, padre: enviadas.findIndex((p) => !p.bonificacion && p.uid === l.origen) } : {})
@@ -397,4 +400,33 @@ export function sectorQueFalta(
 	sectoresLineas: string[]
 ): string | undefined {
 	return [...new Set([sectorCabecera, ...sectoresLineas].filter(Boolean))].find((s) => faltaSectorDeVentas(areasCliente, orgVentas, canal, s));
+}
+/** Disponible (ATP) de un material en un almacen del centro. */
+export interface AlmacenLinea {
+	lgort: string;
+	disponible: number;
+}
+
+/** Almacenes para la linea: el del perfil primero (aunque no tenga disponible) y despues los demas con disponible, de mayor a menor. */
+export function opcionesAlmacen(disponibles: AlmacenLinea[], almacenPerfil: string): AlmacenLinea[] {
+	const propio = disponibles.find((a) => a.lgort === almacenPerfil) ?? { lgort: almacenPerfil, disponible: 0 };
+	const otros = disponibles.filter((a) => a.lgort !== almacenPerfil && a.disponible > 0).sort((a, b) => b.disponible - a.disponible || a.lgort.localeCompare(b.lgort));
+	return almacenPerfil ? [propio, ...otros] : otros;
+}
+
+/**
+ * Si el almacen elegido no alcanza para la cantidad, cuanto se mueve al almacen con mas disponible y cuanto queda en la linea. queda = 0 quiere
+ * decir que conviene cambiar la linea entera de almacen. null si alcanza o si ningun otro almacen tiene disponible.
+ */
+export function repartoAlmacen(cantidad: number, elegido: string, disponibles: AlmacenLinea[]): { queda: number; otro: string; mueve: number } | null {
+	const propio = Math.max(0, disponibles.find((a) => a.lgort === elegido)?.disponible ?? 0);
+	if (cantidad <= propio) {
+		return null;
+	}
+	const otro = disponibles.filter((a) => a.lgort !== elegido && a.disponible > 0).sort((a, b) => b.disponible - a.disponible)[0];
+	if (!otro) {
+		return null;
+	}
+	const mueve = Math.min(cantidad - propio, otro.disponible);
+	return { queda: cantidad - mueve, otro: otro.lgort, mueve };
 }

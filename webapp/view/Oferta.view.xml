@@ -454,6 +454,15 @@
 														<!-- Story 1.17: regalo sin stock en el almacen de la cabecera (solo aviso) y lo que aun no da la promocion -->
 														<ObjectStatus text="{oferta>avisoStock}" state="Warning" icon="sap-icon://message-warning" visible="{= !!${oferta>avisoStock} }" />
 														<ObjectStatus text="{oferta>proximoRegalo}" state="Information" visible="{= !${oferta>bonificacion} &amp;&amp; !!${oferta>proximoRegalo} }" />
+														<!-- Repuestos: almacen del centro del que sale la linea, con el disponible de SAP; si no alcanza, se puede repartir con otro -->
+														<HBox alignItems="Center" wrap="Wrap" visible="{= !${oferta>bonificacion} &amp;&amp; !!${oferta>almacenes} &amp;&amp; ${oferta>almacenes}.length &gt; 0 }">
+															<Label text="{i18n>almacenLinea}" class="sapUiTinyMarginEnd" />
+															<Select selectedKey="{oferta>almacenLinea}" items="{oferta>almacenes}" width="12rem" change=".onCambiaAlmacenLinea" enabled="{= ${oferta>/pedidos}.length === 0 }">
+																<core:Item key="{oferta>key}" text="{oferta>text}" />
+															</Select>
+															<Button text="{i18n>almacenRepartir}" icon="sap-icon://split" type="Transparent" visible="{= !!${oferta>puedeRepartir} }" enabled="{= ${oferta>/pedidos}.length === 0 }" press=".onRepartirLinea" />
+														</HBox>
+														<ObjectStatus text="{oferta>avisoAlmacen}" state="Warning" icon="sap-icon://message-warning" visible="{= !!${oferta>avisoAlmacen} }" />
 														<Select visible="{= !!${oferta>bonificacion} &amp;&amp; !${oferta>sinTalla} }" selectedKey="{oferta>talla}" forceSelection="false" width="9rem" change=".onCambiaTalla" enabled="{= ${oferta>/pedidos}.length === 0 }" items="{oferta>tallas}">
 															<core:Item key="{oferta>key}" text="{oferta>text}" enabled="{oferta>enabled}" />
 														</Select>
