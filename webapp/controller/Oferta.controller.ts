@@ -25,7 +25,7 @@ import { AmpliacionEnProcesoError, ampliacionPublicada, ampliarRetail, filtrarPo
 import { tipoDocPorNumero, validarDocumento } from "com/socopur/cotizador/model/Documento";
 import { conAdvertencia, consultarDocumento, documentoPublicado, tipoDeDocumento } from "com/socopur/cotizador/model/DocumentoService";
 import { usarOData as usarODataActual } from "com/socopur/cotizador/model/Modo";
-import { AltaEnProcesoError, cargarUbigeo, crearClienteSap, esPersona, leerBloqueoEdicion, leerCambiosCliente, modificarClienteSap, partirNombres, partirRazon, serviciosDeCliente, TIPO_CLIENTE, tiposClientePara, type CambiosCliente, type DatosAlta } from "com/socopur/cotizador/model/ClienteEscrituraService";
+import { AltaEnProcesoError, cambiosDeEdicion, cargarUbigeo, crearClienteSap, esPersona, leerBloqueoEdicion, leerCambiosCliente, leerClienteEdicion, modificarClienteSap, partirNombres, partirRazon, serviciosDeCliente, TIPO_CLIENTE, tiposClientePara, ubicarEnArbol, type CambiosCliente, type DatosAlta, type DatosEdicion, type NodoUbigeo } from "com/socopur/cotizador/model/ClienteEscrituraService";
 import { buscarRepuestosConStock, disponibilidadPorAlmacen, motivoVacio } from "com/socopur/cotizador/model/MaterialesService";
 import { cargarPreciosLista, precioListaDisponible, textoPrecioLista } from "com/socopur/cotizador/model/PrecioListaService";
 import { textoOrganizacion } from "com/socopur/cotizador/model/VendedoresService";
@@ -373,6 +373,8 @@ export default class Oferta extends Controller {
 	private dialogoVistaOferta?: Dialog;
 	private dialogosCliente: Record<string, Dialog> = {};
 	private dialogoClienteActual?: Dialog;
+	/** Catalogo real de ubigeo para la edicion del cliente (se lee una vez). */
+	private ubigeoCache?: NodoUbigeo[];
 	private contadorLinea = 0;
 	/** Cada consulta de regalos lleva un turno: si mientras tanto cambio la cantidad, la respuesta vieja se descarta. */
 	private turnoRegalos = 0;
@@ -1937,6 +1939,9 @@ export default class Oferta extends Controller {
 		let real = false;
 		let bloqueoAviso = "";
 		let nombreBloqueado = false;
+		let direccionBloqueada = false;
+		let sap: DatosEdicion | null = null;
+		let ubigeo: NodoUbigeo[] = (this.modeloMock().getProperty("/ubigeo") as NodoUbigeo[]) ?? [];
 		if (this.usarOData() && cl.kunnr) {
 			const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel;
 			const servicios = await serviciosDeCliente(odata);
@@ -1944,19 +1949,68 @@ export default class Oferta extends Controller {
 			if (real && servicios.bloqueo) {
 				const bloqueo = await leerBloqueoEdicion(odata, cl.kunnr);
 				nombreBloqueado = !!bloqueo?.nombreBloqueado;
-				bloqueoAviso = nombreBloqueado ? bloqueo?.nombreMotivo || (this.i18n().getText("editarNombreBloqueado") as string) : "";
+				direccionBloqueada = !!bloqueo?.direccionBloqueada;
+				bloqueoAviso = [
+					nombreBloqueado ? bloqueo?.nombreMotivo || (this.i18n().getText("editarNombreBloqueado") as string) : "",
+					direccionBloqueada ? bloqueo?.direccionMotivo || "" : ""
+				]
+					.filter(Boolean)
+					.join(" ");
+			}
+			// Desde el 29/10/2026 la edicion trae la categoria (persona o empresa) y la direccion fiscal para editarla.
+			if (real && servicios.edicionPersona) {
+				sap = await leerClienteEdicion(odata, cl.kunnr).catch(() => null);
+				if (servicios.ubigeo) {
+					ubigeo = await this.ubigeoReal(odata);
+				}
 			}
 		}
+		const persona = sap?.categoria === "1";
+		const ubi = sap ? ubicarEnArbol(ubigeo, sap.dep, sap.prov, sap.dist) : { dep: "", prov: "", dist: "" };
+		const provincias = ubigeo.find((n) => n.dep === ubi.dep)?.provincias ?? [];
+		const datos: DatosEdicion = {
+			categoria: sap?.categoria ?? "2",
+			titulo: sap?.titulo ?? "",
+			nombres: sap?.nombres ?? "",
+			apePat: sap?.apePat ?? "",
+			apeMat: sap?.apeMat ?? "",
+			razon: persona ? "" : nombre,
+			celular: sap?.celular || cl.telefono || "",
+			email: sap?.email || cl.correo || "",
+			dir1: sap?.dir1 ?? "",
+			dir2: sap?.dir2 ?? "",
+			dir3: sap?.dir3 ?? "",
+			// El ubigeo con la escritura del catalogo: si no se encuentra queda vacio y solo se pide al cambiar la direccion.
+			...ubi
+		};
 		await this.abrirCliente("EditarCliente", {
 			real,
+			// Con un servicio anterior al 29/10/2026 la edicion real es solo de nombre, celular y correo de empresas.
+			conDireccion: !!sap,
+			persona,
 			nombreBloqueado,
+			direccionBloqueada,
 			bloqueoAviso,
 			tipoDoc: cl.tipoDoc,
 			doc: cl.doc,
-			razon: nombre,
-			telefono: cl.telefono,
-			correo: cl.correo,
-			original: { razon: nombre, telefono: cl.telefono, correo: cl.correo },
+			razon: datos.razon,
+			titulo: datos.titulo,
+			nombres: datos.nombres,
+			apePat: datos.apePat,
+			apeMat: datos.apeMat,
+			telefono: datos.celular,
+			correo: datos.email,
+			dir1: datos.dir1,
+			dir2: datos.dir2,
+			dir3: datos.dir3,
+			dep: datos.dep,
+			prov: datos.prov,
+			dist: datos.dist,
+			ubigeo,
+			provincias,
+			distritos: provincias.find((p) => p.prov === datos.prov)?.distritos ?? [],
+			tiposCliente: this.opcionesTipoCliente("DNI", ""),
+			original: datos,
 			direcciones: this.direccionesDe(cl).map((x) => ({ ...x })),
 			tiposDireccion: [
 				{ key: "Fiscal", text: this.i18n().getText("direccionFiscal") },
@@ -1965,6 +2019,30 @@ export default class Oferta extends Controller {
 			],
 			errores: ""
 		});
+	}
+
+	/** Catalogo real de ubigeo (unas 2 mil filas): se lee una vez por sesion. */
+	private async ubigeoReal(odata: ODataModel): Promise<NodoUbigeo[]> {
+		if (!this.ubigeoCache) {
+			this.ubigeoCache = await cargarUbigeo(odata).catch(() => []);
+		}
+		return this.ubigeoCache.length ? this.ubigeoCache : ((this.modeloMock().getProperty("/ubigeo") as NodoUbigeo[]) ?? []);
+	}
+
+	public onEditCambiaDpto(): void {
+		const modelo = this.dialogoClienteActual?.getModel("cli") as JSONModel;
+		const nodo = ((modelo.getProperty("/ubigeo") as NodoUbigeo[]) ?? []).find((x) => x.dep === modelo.getProperty("/dep"));
+		modelo.setProperty("/provincias", nodo?.provincias ?? []);
+		modelo.setProperty("/prov", "");
+		modelo.setProperty("/distritos", []);
+		modelo.setProperty("/dist", "");
+	}
+
+	public onEditCambiaProv(): void {
+		const modelo = this.dialogoClienteActual?.getModel("cli") as JSONModel;
+		const nodo = ((modelo.getProperty("/provincias") as NodoUbigeo["provincias"]) ?? []).find((p) => p.prov === modelo.getProperty("/prov"));
+		modelo.setProperty("/distritos", nodo?.distritos ?? []);
+		modelo.setProperty("/dist", "");
 	}
 
 	public onAgregarDireccion(): void {
@@ -1986,13 +2064,50 @@ export default class Oferta extends Controller {
 		return String(valor ?? "").replace(/\s+/g, " ").trim();
 	}
 
-	/** Con el servicio de edicion publicado guarda en SAP (nombre, telefono y correo); si no, queda simulado (en SAP lo hace ZSDSCPP002). */
+	/** Lo que hay en el dialogo, con los mismos campos que se leyeron de SAP. */
+	private datosDelDialogo(modelo: JSONModel): DatosEdicion {
+		const v = (p: string): string => String(modelo.getProperty(p) ?? "");
+		return {
+			categoria: (modelo.getProperty("/original") as DatosEdicion).categoria,
+			titulo: v("/titulo"),
+			nombres: v("/nombres"),
+			apePat: v("/apePat"),
+			apeMat: v("/apeMat"),
+			razon: v("/razon"),
+			celular: v("/telefono"),
+			email: v("/correo"),
+			dir1: v("/dir1"),
+			dir2: v("/dir2"),
+			dir3: v("/dir3"),
+			dep: v("/dep"),
+			prov: v("/prov"),
+			dist: v("/dist")
+		};
+	}
+
+	/**
+	 * Con el servicio de edicion publicado guarda en SAP: nombre o razon social, celular, correo y (desde el 29/10/2026) la direccion fiscal,
+	 * tambien de personas. Si no, queda simulado (en SAP lo hace ZSDSCPP002).
+	 */
 	public onGuardarCliente(): void {
 		const modelo = this.dialogoClienteActual?.getModel("cli") as JSONModel;
 		const i18n = this.i18n();
 		const errores: string[] = [];
 		const razon = this.razonLimpia(modelo.getProperty("/razon"));
-		if (!razon) {
+		if (modelo.getProperty("/persona")) {
+			if (!esPersona(String(modelo.getProperty("/titulo") ?? ""))) {
+				errores.push(i18n.getText("altaErrTipoCliente") as string);
+			}
+			const nombres = this.razonLimpia(modelo.getProperty("/nombres"));
+			if (!nombres) {
+				errores.push(i18n.getText("altaErrNombres") as string);
+			} else if (!partirNombres(nombres)) {
+				errores.push(i18n.getText("altaErrNombresLargos") as string);
+			}
+			if (!this.razonLimpia(modelo.getProperty("/apePat"))) {
+				errores.push(i18n.getText("altaErrApePat") as string);
+			}
+		} else if (!razon) {
 			errores.push(i18n.getText("altaErrRazon") as string);
 		} else if (partirRazon(razon).length > 3) {
 			errores.push(i18n.getText("altaErrRazonLarga") as string);
@@ -2002,6 +2117,18 @@ export default class Oferta extends Controller {
 		}
 		if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(modelo.getProperty("/correo") ?? ""))) {
 			errores.push(i18n.getText("altaErrEmail") as string);
+		}
+		// La direccion fiscal solo se valida si cambio: un ubigeo que no se encontro en el catalogo no bloquea cambiar el celular.
+		if (modelo.getProperty("/real") && modelo.getProperty("/conDireccion")) {
+			const c = cambiosDeEdicion(modelo.getProperty("/original") as DatosEdicion, this.datosDelDialogo(modelo));
+			if (c.dir1 !== undefined) {
+				if (!c.dep || !c.prov || !c.dist) {
+					errores.push(i18n.getText("altaErrUbigeo") as string);
+				}
+				if (!c.dir1) {
+					errores.push(i18n.getText("altaErrDireccion") as string);
+				}
+			}
 		}
 		const dirs = (modelo.getProperty("/direcciones") as Direccion[]) ?? [];
 		if (!modelo.getProperty("/real") && dirs.some((x) => !x.texto.trim())) {
@@ -2020,7 +2147,7 @@ export default class Oferta extends Controller {
 			return;
 		}
 		if (modelo.getProperty("/real") && cl.kunnr) {
-			void this.guardarClienteEnSap(modelo, cl, razon);
+			void this.guardarClienteEnSap(modelo, cl);
 			return;
 		}
 		const limpias = dirs.map((x) => ({ ...x, alias: x.alias.trim() || (i18n.getText("direccionSinNombre") as string), texto: x.texto.trim() }));
@@ -2040,40 +2167,41 @@ export default class Oferta extends Controller {
 		MessageToast.show(`${i18n.getText("editarOk")} (${i18n.getText("simulacion")})`);
 	}
 
-	/** PATCH de los campos que cambiaron. Las direcciones aun no se editan en SAP desde esta pantalla (ver contrato, seccion 2.3). */
-	private async guardarClienteEnSap(modelo: JSONModel, cl: Cliente, razon: string): Promise<void> {
+	/**
+	 * PATCH de lo que cambio (cambiosDeEdicion). Con un servicio anterior al 29/10/2026 (sin categoria ni direccion en ClienteEdicion) solo viajan
+	 * nombre, celular y correo. Despues se vuelven a leer de SAP el nombre, las direcciones y el contacto del cliente.
+	 */
+	private async guardarClienteEnSap(modelo: JSONModel, cl: Cliente): Promise<void> {
 		const i18n = this.i18n();
-		const orig = modelo.getProperty("/original") as Record<string, string>;
-		const actual: Record<string, string> = {
-			celular: String(modelo.getProperty("/telefono") ?? "").replace(/\s/g, ""),
-			email: String(modelo.getProperty("/correo") ?? "")
-		};
-		const origen: Record<string, string> = { celular: orig.telefono, email: orig.correo };
-		const cambios: CambiosCliente = {};
-		for (const [k, v] of Object.entries(actual)) {
-			if (v !== origen[k]) {
-				(cambios as Record<string, string>)[k] = v;
-			}
-		}
-		// El nombre viaja completo (las tres partes, aunque alguna quede vacia): la particion de SAP puede no coincidir con la de aqui.
-		if (razon !== this.razonLimpia(orig.razon)) {
-			const [razon1 = "", razon2 = "", razon3 = ""] = partirRazon(razon);
-			Object.assign(cambios, { razon1, razon2, razon3 });
-		}
-		if (Object.keys(cambios).length === 0) {
+		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel;
+		const todos = cambiosDeEdicion(modelo.getProperty("/original") as DatosEdicion, this.datosDelDialogo(modelo));
+		const cambios: CambiosCliente = modelo.getProperty("/conDireccion")
+			? todos
+			: { razon1: todos.razon1, razon2: todos.razon2, razon3: todos.razon3, celular: todos.celular, email: todos.email };
+		if (Object.values(cambios).every((v) => v === undefined)) {
 			this.dialogoClienteActual?.close();
 			return;
 		}
 		quitarTodosLosMensajes();
 		this.dialogoClienteActual?.setBusy(true);
 		try {
-			await modificarClienteSap((this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel, cl.kunnr as string, cambios);
+			await modificarClienteSap(odata, cl.kunnr as string, cambios);
 			const oferta = this.modeloOferta();
-			oferta.setProperty("/cliente/nombre", razon);
-			oferta.setProperty("/cliente/telefono", actual.celular);
-			oferta.setProperty("/cliente/correo", actual.email);
+			const kunnr = cl.kunnr as string;
+			const encontrado = (await buscarClientes(odata, kunnr).catch(() => [] as ClienteSap[])).find((c) => c.kunnr === kunnr);
+			if (encontrado && this.clienteActual()?.kunnr === kunnr) {
+				oferta.setProperty("/cliente/nombre", encontrado.nombre);
+			}
+			if (cambios.celular !== undefined) {
+				oferta.setProperty("/cliente/telefono", cambios.celular);
+			}
+			if (cambios.email !== undefined) {
+				oferta.setProperty("/cliente/correo", cambios.email);
+			}
 			this.dialogoClienteActual?.close();
 			MessageToast.show(i18n.getText("editarOk") as string);
+			// Direcciones (la fiscal nueva) y contacto, tal como quedaron en SAP.
+			void this.cargarDatosCliente(kunnr, oferta.getProperty("/cliente/estadoState") === "Error");
 		} catch (error) {
 			modelo.setProperty("/errores", i18n.getText("editarErrSap", [this.motivoDeError(error)]) as string);
 		} finally {

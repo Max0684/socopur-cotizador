@@ -76,6 +76,101 @@ export interface CambiosCliente {
 	dep?: string;
 	prov?: string;
 	dist?: string;
+	/** Persona (Categoria 1): tratamiento, nombres y apellidos. */
+	titulo?: string;
+	nombres?: string;
+	apePat?: string;
+	apeMat?: string;
+}
+
+/** Lo que se edita de un cliente: lo que trae ClienteEdicion, con los nombres de la pantalla. */
+export interface DatosEdicion {
+	/** "1" persona, "2" empresa. */
+	categoria: string;
+	titulo: string;
+	nombres: string;
+	apePat: string;
+	apeMat: string;
+	/** Razon social completa (Razon1-3 unidas). */
+	razon: string;
+	celular: string;
+	email: string;
+	dir1: string;
+	dir2: string;
+	dir3: string;
+	dep: string;
+	prov: string;
+	dist: string;
+}
+
+export function aDatosEdicion(f: Record<string, unknown>): DatosEdicion {
+	const t = (v: unknown): string => texto(v).trim();
+	return {
+		categoria: t(f.Categoria),
+		titulo: t(f.Titulo),
+		nombres: t(f.Nombres).replace(/\s+/g, " "),
+		apePat: t(f.ApePaterno),
+		apeMat: t(f.ApeMaterno),
+		razon: [t(f.Razon1), t(f.Razon2), t(f.Razon3)].filter(Boolean).join(" "),
+		celular: t(f.Celular),
+		email: t(f.Email),
+		dir1: t(f.Dir1),
+		dir2: t(f.Dir2),
+		dir3: t(f.Dir3),
+		dep: t(f.Dep),
+		prov: t(f.Prov),
+		dist: t(f.Dist)
+	};
+}
+
+/** Datos actuales del cliente para editarlo. null si SAP no lo devuelve. */
+export async function leerClienteEdicion(modelo: ODataModel, kunnr: string): Promise<DatosEdicion | null> {
+	const filas = await modelo.bindList("/ClienteEdicion", undefined, undefined, undefined, { $filter: `Kunnr eq '${comillas(kunnr)}'` }).requestContexts(0, 1);
+	return filas.length ? aDatosEdicion(filas[0].getObject() as Record<string, unknown>) : null;
+}
+
+/**
+ * Que se manda a SAP: celular y correo si cambiaron; de una persona, tratamiento, nombres y apellidos juntos si cambio alguno; de una empresa,
+ * la razon social completa (las tres partes); y la direccion fiscal completa si cambio cualquiera de sus seis datos (SAP vuelve a resolver el
+ * ubigeo). Lo que no cambio no viaja.
+ */
+export function cambiosDeEdicion(original: DatosEdicion, actual: DatosEdicion): CambiosCliente {
+	const c: CambiosCliente = {};
+	const limpio = (v: string): string => v.replace(/\s+/g, " ").trim();
+	const cambio = (k: keyof DatosEdicion): boolean => limpio(original[k]) !== limpio(actual[k]);
+	if (cambio("celular")) {
+		c.celular = actual.celular.replace(/\s/g, "");
+	}
+	if (cambio("email")) {
+		c.email = actual.email.trim();
+	}
+	if (actual.categoria === "1") {
+		if (cambio("titulo") || cambio("nombres") || cambio("apePat") || cambio("apeMat")) {
+			Object.assign(c, { titulo: actual.titulo, nombres: limpio(actual.nombres), apePat: limpio(actual.apePat), apeMat: limpio(actual.apeMat) });
+		}
+	} else if (cambio("razon")) {
+		const [razon1 = "", razon2 = "", razon3 = ""] = partirRazon(limpio(actual.razon));
+		Object.assign(c, { razon1, razon2, razon3 });
+	}
+	const campos: (keyof DatosEdicion)[] = ["dir1", "dir2", "dir3", "dep", "prov", "dist"];
+	if (campos.some(cambio)) {
+		for (const k of campos) {
+			(c as Record<string, string>)[k] = limpio(actual[k]);
+		}
+	}
+	return c;
+}
+
+/**
+ * Departamento, provincia y distrito del catalogo (con su escritura) que corresponden a los de la direccion de SAP, sin importar mayusculas;
+ * vacio lo que no se encuentre. Para dejar los desplegables de la edicion en la direccion actual.
+ */
+export function ubicarEnArbol(arbol: NodoUbigeo[], dep: string, prov: string, dist: string): { dep: string; prov: string; dist: string } {
+	const igual = (a: string, b: string): boolean => a.trim().toUpperCase() === b.trim().toUpperCase();
+	const d = arbol.find((n) => igual(n.dep, dep));
+	const p = d?.provincias.find((x) => igual(x.prov, prov));
+	const s = p?.distritos.find((x) => igual(x, dist));
+	return { dep: d?.dep ?? "", prov: p?.prov ?? "", dist: s ?? "" };
 }
 
 export interface BloqueoEdicion {
@@ -102,6 +197,8 @@ export interface ServiciosDeCliente {
 	ubigeo: boolean;
 	/** El alta acepta personas (Titulo, Nombres y apellidos en ClienteAlta; v1.2 del 29/10/2026). */
 	persona: boolean;
+	/** La edicion acepta personas y trae la direccion fiscal para editarla (Categoria en ClienteEdicion; 29/10/2026). */
+	edicionPersona: boolean;
 }
 
 /** Arbol que usan los desplegables en cascada del alta. */
@@ -116,15 +213,16 @@ const verdadero = (v: unknown): boolean => v === true || v === "X";
 
 /** Que partes del contrato publica ya el servicio. Un campo o entidad desconocidos en una peticion hacen que SAP la rechace entera. */
 export async function serviciosDeCliente(modelo: ODataModel): Promise<ServiciosDeCliente> {
-	const [alta, edicion, bloqueo, historial, ubigeo, persona] = await Promise.all([
+	const [alta, edicion, bloqueo, historial, ubigeo, persona, edicionPersona] = await Promise.all([
 		entidadTieneCampo(modelo, "ClienteAlta", "Doc"),
 		entidadTieneCampo(modelo, "ClienteEdicion", "Kunnr"),
 		entidadTieneCampo(modelo, "ClienteEdicionBloqueo", "NombreBloqueado"),
 		entidadTieneCampo(modelo, "ClienteCambio", "Campo"),
 		entidadTieneCampo(modelo, "UbigeoCatalogo", "Distrito"),
-		entidadTieneCampo(modelo, "ClienteAlta", "Nombres")
+		entidadTieneCampo(modelo, "ClienteAlta", "Nombres"),
+		entidadTieneCampo(modelo, "ClienteEdicion", "Categoria")
 	]);
-	return { alta, edicion, bloqueo, historial, ubigeo, persona };
+	return { alta, edicion, bloqueo, historial, ubigeo, persona, edicionPersona };
 }
 
 /** Largo de cada parte del nombre en SAP (NAME1, NAME2 y NAME3 del BP; KNA1 guarda 35). */
@@ -209,7 +307,11 @@ export function cuerpoEdicion(cambios: CambiosCliente): Record<string, string> {
 		dir3: "Dir3",
 		dep: "Dep",
 		prov: "Prov",
-		dist: "Dist"
+		dist: "Dist",
+		titulo: "Titulo",
+		nombres: "Nombres",
+		apePat: "ApePaterno",
+		apeMat: "ApeMaterno"
 	};
 	const cuerpo: Record<string, string> = {};
 	for (const [clave, valor] of Object.entries(cambios) as [keyof CambiosCliente, string | undefined][]) {

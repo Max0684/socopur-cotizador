@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { aBloqueo, aCambio, AltaEnProcesoError, arbolUbigeo, crearClienteSap, cuerpoAlta, cuerpoEdicion, esPersona, leerBloqueoEdicion, partirNombres, serviciosDeCliente, tiposClientePara, type DatosAlta } from "../webapp/model/ClienteEscrituraService.ts";
+import { aBloqueo, aCambio, aDatosEdicion, AltaEnProcesoError, arbolUbigeo, cambiosDeEdicion, crearClienteSap, cuerpoAlta, cuerpoEdicion, esPersona, leerBloqueoEdicion, partirNombres, serviciosDeCliente, tiposClientePara, ubicarEnArbol, type DatosAlta } from "../webapp/model/ClienteEscrituraService.ts";
 import { crearModeloFalso } from "./helpers/modeloFalso.ts";
 
 const como = (m: unknown) => m as Parameters<typeof crearClienteSap>[0];
@@ -53,9 +53,9 @@ test("aBloqueo y aCambio: pasan la fila del servicio a lo que muestra la pantall
 
 test("serviciosDeCliente: solo marca lo que el $metadata ya publica", async () => {
 	const nada = crearModeloFalso();
-	assert.deepEqual(await serviciosDeCliente(como(nada.modelo)), { alta: false, edicion: false, bloqueo: false, historial: false, ubigeo: false, persona: false });
-	const parcial = crearModeloFalso({ camposPublicados: ["ClienteAlta/Doc", "ClienteAlta/Nombres", "ClienteEdicionBloqueo/NombreBloqueado"] });
-	assert.deepEqual(await serviciosDeCliente(como(parcial.modelo)), { alta: true, edicion: false, bloqueo: true, historial: false, ubigeo: false, persona: true });
+	assert.deepEqual(await serviciosDeCliente(como(nada.modelo)), { alta: false, edicion: false, bloqueo: false, historial: false, ubigeo: false, persona: false, edicionPersona: false });
+	const parcial = crearModeloFalso({ camposPublicados: ["ClienteAlta/Doc", "ClienteAlta/Nombres", "ClienteEdicionBloqueo/NombreBloqueado", "ClienteEdicion/Categoria"] });
+	assert.deepEqual(await serviciosDeCliente(como(parcial.modelo)), { alta: true, edicion: false, bloqueo: true, historial: false, ubigeo: false, persona: true, edicionPersona: true });
 });
 
 test("crearClienteSap: crea en ClienteAlta con el cuerpo recortado", async () => {
@@ -196,4 +196,44 @@ test("tiposClientePara y cuerpoAlta: carnet y pasaporte son de personas; el docu
 	const c = cuerpoAlta({ ...alta, tipoDoc: "PAS", doc: " aw0641531234567 ", titulo: "0001", nombres: "Ana", apePat: "Perez" });
 	assert.equal(c.TipoDoc, "PAS");
 	assert.equal(c.Doc, "AW0641531234");
+});
+
+// Fila de ClienteEdicion de 0100025861 en el 130 (persona creada por el Cotizador el 29/10/2026).
+const persona = aDatosEdicion({
+	Kunnr: "0100025861", Razon1: "PRUEBA NO USAR", Categoria: "1", Titulo: "0002", Nombres: "PRUEBA COTIZADOR", ApePaterno: "NO USAR", ApeMaterno: "",
+	Celular: "987654321", Email: "prueba.cotizador@example.com", Dir1: "AV PRUEBA 123", Dir2: "", Dir3: "", Dep: "Lima", Prov: "LIMA", Dist: "MIRAFLORES"
+});
+
+test("aDatosEdicion: une la razon social y limpia espacios", () => {
+	const e = aDatosEdicion({ Categoria: "2", Razon1: "JYAS MOTORS", Razon2: " E.I.R.L. ", Nombres: "  " });
+	assert.equal(e.razon, "JYAS MOTORS E.I.R.L.");
+	assert.equal(e.nombres, "");
+	assert.equal(persona.nombres, "PRUEBA COTIZADOR");
+});
+
+test("cambiosDeEdicion: sin cambios no viaja nada", () => {
+	assert.deepEqual(cambiosDeEdicion(persona, { ...persona }), {});
+});
+
+test("cambiosDeEdicion: persona manda tratamiento, nombres y apellidos juntos; no la razon social", () => {
+	const c = cambiosDeEdicion(persona, { ...persona, apeMat: " SEGUNDO " });
+	assert.deepEqual(c, { titulo: "0002", nombres: "PRUEBA COTIZADOR", apePat: "NO USAR", apeMat: "SEGUNDO" });
+});
+
+test("cambiosDeEdicion: empresa manda la razon social en tres partes", () => {
+	const empresa = { ...persona, categoria: "2", razon: "JYAS MOTORS" };
+	const c = cambiosDeEdicion(empresa, { ...empresa, razon: "JYAS MOTORS E.I.R.L." });
+	assert.equal(c.razon1, "JYAS MOTORS E.I.R.L.");
+	assert.equal(c.titulo, undefined);
+});
+
+test("cambiosDeEdicion: un cambio de distrito manda la direccion completa; el celular sin espacios", () => {
+	const c = cambiosDeEdicion(persona, { ...persona, dist: "BARRANCO", celular: "912 345 678" });
+	assert.deepEqual(c, { celular: "912345678", dir1: "AV PRUEBA 123", dir2: "", dir3: "", dep: "Lima", prov: "LIMA", dist: "BARRANCO" });
+});
+
+test("ubicarEnArbol: encuentra el ubigeo sin importar mayusculas y devuelve la escritura del catalogo", () => {
+	const arbol = [{ dep: "Lima", provincias: [{ prov: "LIMA", distritos: ["BARRANCO", "MIRAFLORES"] }] }];
+	assert.deepEqual(ubicarEnArbol(arbol, "LIMA", "Lima", "miraflores"), { dep: "Lima", prov: "LIMA", dist: "MIRAFLORES" });
+	assert.deepEqual(ubicarEnArbol(arbol, "Cusco", "Cusco", "Cusco"), { dep: "", prov: "", dist: "" });
 });

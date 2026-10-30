@@ -18,39 +18,74 @@
 				<form:SimpleForm editable="true" layout="ColumnLayout" columnsM="1" columnsL="1" columnsXL="2">
 					<Label text="{i18n>documento}" />
 					<Input value="{cli>/tipoDoc} {cli>/doc}" editable="false" />
-					<Label text="{i18n>editarRazon}" required="true" />
-					<Input value="{cli>/razon}" maxLength="107" editable="{= !${cli>/nombreBloqueado} }" />
+					<!-- Empresa: razon social. Persona (categoria 1 en SAP): tratamiento, nombres y apellidos, como el alta. -->
+					<Label text="{i18n>editarRazon}" required="true" visible="{= !${cli>/persona} }" />
+					<Input value="{cli>/razon}" maxLength="107" editable="{= !${cli>/nombreBloqueado} }" visible="{= !${cli>/persona} }" />
+					<Label text="{i18n>altaTipoCliente}" required="true" visible="{= !!${cli>/persona} }" />
+					<Select selectedKey="{cli>/titulo}" forceSelection="false" items="{cli>/tiposCliente}" enabled="{= !${cli>/nombreBloqueado} }" visible="{= !!${cli>/persona} }">
+						<core:Item key="{cli>key}" text="{cli>text}" />
+					</Select>
+					<Label text="{i18n>altaNombres}" required="true" visible="{= !!${cli>/persona} }" />
+					<Input value="{cli>/nombres}" maxLength="81" editable="{= !${cli>/nombreBloqueado} }" visible="{= !!${cli>/persona} }" />
+					<Label text="{i18n>altaApePat}" required="true" visible="{= !!${cli>/persona} }" />
+					<Input value="{cli>/apePat}" maxLength="40" editable="{= !${cli>/nombreBloqueado} }" visible="{= !!${cli>/persona} }" />
+					<Label text="{i18n>altaApeMat}" visible="{= !!${cli>/persona} }" />
+					<Input value="{cli>/apeMat}" maxLength="40" editable="{= !${cli>/nombreBloqueado} }" visible="{= !!${cli>/persona} }" />
 					<Label text="{i18n>telefono}" required="true" />
 					<Input value="{cli>/telefono}" type="Tel" maxLength="9" />
 					<Label text="{i18n>correo}" required="true" />
 					<Input value="{cli>/correo}" type="Email" />
 				</form:SimpleForm>
-				<Toolbar class="sapUiSmallMarginTop">
-					<Title text="{i18n>direccionesTitulo}" level="H4" />
-					<ToolbarSpacer />
-					<Button text="{i18n>direccionAgregar}" icon="sap-icon://add" press=".onAgregarDireccion" enabled="{= !${cli>/real} }" />
-				</Toolbar>
-				<Table items="{cli>/direcciones}" contextualWidth="Auto">
-					<columns>
-						<!-- En un telefono quedan el nombre y el boton; tipo y direccion bajan debajo de la fila -->
-						<Column width="13rem"><Text text="{i18n>direccionAlias}" /></Column>
-						<Column width="10rem" minScreenWidth="40rem" demandPopin="true"><Text text="{i18n>direccionTipo}" /></Column>
-						<Column minScreenWidth="30rem" demandPopin="true"><Text text="{i18n>direccion}" /></Column>
-						<Column width="3rem" />
-					</columns>
-					<items>
-						<ColumnListItem>
-							<cells>
-								<Input value="{cli>alias}" editable="{= !${cli>/real} }" />
-								<Select selectedKey="{cli>tipo}" width="100%" items="{cli>/tiposDireccion}" enabled="{= !${cli>/real} }">
-									<core:Item key="{cli>key}" text="{cli>text}" />
-								</Select>
-								<Input value="{cli>texto}" editable="{= !${cli>/real} }" />
-								<Button icon="sap-icon://delete" type="Transparent" tooltip="{i18n>quitarLinea}" press=".onQuitarDireccion" enabled="{= !${cli>/real} }" />
-							</cells>
-						</ColumnListItem>
-					</items>
-				</Table>
+				<!-- Con SAP real: la direccion fiscal del cliente (la que va en la factura). Las de envio se eligen en la oferta. -->
+				<VBox visible="{= !!${cli>/real} }">
+					<Title text="{i18n>editarDireccionFiscal}" level="H4" class="sapUiSmallMarginTop" />
+					<form:SimpleForm editable="true" layout="ColumnLayout" columnsM="1" columnsL="2" columnsXL="2">
+						<Label text="{i18n>altaDepartamento}" required="true" />
+						<Select selectedKey="{cli>/dep}" forceSelection="false" change=".onEditCambiaDpto" items="{cli>/ubigeo}" enabled="{= !${cli>/direccionBloqueada} }">
+							<core:Item key="{cli>dep}" text="{cli>dep}" />
+						</Select>
+						<Label text="{i18n>altaProvincia}" required="true" />
+						<Select selectedKey="{cli>/prov}" forceSelection="false" change=".onEditCambiaProv" items="{cli>/provincias}" enabled="{= !${cli>/direccionBloqueada} }">
+							<core:Item key="{cli>prov}" text="{cli>prov}" />
+						</Select>
+						<Label text="{i18n>altaDistrito}" required="true" />
+						<Select selectedKey="{cli>/dist}" forceSelection="false" items="{cli>/distritos}" enabled="{= !${cli>/direccionBloqueada} }">
+							<core:Item key="{cli>}" text="{cli>}" />
+						</Select>
+						<Label text="{i18n>altaDireccion}" required="true" />
+						<Input value="{cli>/dir1}" maxLength="35" editable="{= !${cli>/direccionBloqueada} }" />
+						<Input value="{cli>/dir2}" maxLength="35" editable="{= !${cli>/direccionBloqueada} }" />
+						<Input value="{cli>/dir3}" maxLength="35" editable="{= !${cli>/direccionBloqueada} }" />
+					</form:SimpleForm>
+				</VBox>
+				<VBox visible="{= !${cli>/real} }">
+					<Toolbar class="sapUiSmallMarginTop">
+						<Title text="{i18n>direccionesTitulo}" level="H4" />
+						<ToolbarSpacer />
+						<Button text="{i18n>direccionAgregar}" icon="sap-icon://add" press=".onAgregarDireccion" />
+					</Toolbar>
+					<Table items="{cli>/direcciones}" contextualWidth="Auto">
+						<columns>
+							<!-- En un telefono quedan el nombre y el boton; tipo y direccion bajan debajo de la fila -->
+							<Column width="13rem"><Text text="{i18n>direccionAlias}" /></Column>
+							<Column width="10rem" minScreenWidth="40rem" demandPopin="true"><Text text="{i18n>direccionTipo}" /></Column>
+							<Column minScreenWidth="30rem" demandPopin="true"><Text text="{i18n>direccion}" /></Column>
+							<Column width="3rem" />
+						</columns>
+						<items>
+							<ColumnListItem>
+								<cells>
+									<Input value="{cli>alias}" />
+									<Select selectedKey="{cli>tipo}" width="100%" items="{cli>/tiposDireccion}">
+										<core:Item key="{cli>key}" text="{cli>text}" />
+									</Select>
+									<Input value="{cli>texto}" />
+									<Button icon="sap-icon://delete" type="Transparent" tooltip="{i18n>quitarLinea}" press=".onQuitarDireccion" />
+								</cells>
+							</ColumnListItem>
+						</items>
+					</Table>
+				</VBox>
 			</VBox>
 		</content>
 		<beginButton>
