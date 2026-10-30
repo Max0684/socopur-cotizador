@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { aEstadoAmpliacion, AmpliacionEnProcesoError, ampliarRetail, filtrarPorOrg, gruposDeTexto, leerAmpliacion, organizacionesDe } from "../webapp/model/AmpliacionService.ts";
+import { aEstadoAmpliacion, AmpliacionEnProcesoError, ampliarRetail, filtrarPorOrg, gruposDeTexto, leerAmpliacion, organizacionesDe, solicitarAmpliacion, solicitudPublicada } from "../webapp/model/AmpliacionService.ts";
 
 const como = (m: unknown) => m as Parameters<typeof ampliarRetail>[0];
 const sinPausa = { pausa: async () => undefined };
@@ -17,7 +17,7 @@ const pendiente24840 = {
 };
 
 /** ClienteEdicion devuelve el cliente; ClienteAmpliacion devuelve las lecturas en orden (repite la ultima). */
-function modeloAmpliacion(lecturas: Record<string, unknown>[], opciones: { sinCliente?: boolean; rechazo?: string } = {}) {
+function modeloAmpliacion(lecturas: Record<string, unknown>[], opciones: { sinCliente?: boolean; rechazo?: string; conSolicitud?: boolean } = {}) {
 	const llamadas: string[] = [];
 	const modelo = {
 		bindList(ruta: string, _p?: unknown, _a?: unknown, _b?: unknown, parametros?: { $filter?: string }) {
@@ -32,8 +32,18 @@ function modeloAmpliacion(lecturas: Record<string, unknown>[], opciones: { sinCl
 				}
 			};
 		},
+		getMetaModel() {
+			return {
+				async requestObject(ruta: string) {
+					return opciones.conSolicitud && ruta.endsWith(".solicitarAmpliacion") ? [{ $kind: "Action" }] : undefined;
+				}
+			};
+		},
 		bindContext(ruta: string, contexto?: { getPath(): string }) {
 			return {
+				setParameter(nombre: string, valor: string) {
+					llamadas.push(`param ${nombre}=${valor}`);
+				},
 				async execute() {
 					llamadas.push(`execute ${contexto?.getPath() ?? ""}/${ruta}`);
 					if (opciones.rechazo) {
@@ -124,4 +134,23 @@ test("filtrarPorOrg: vacio deja todas; con organizacion, solo las suyas", () => 
 	assert.equal(filtrarPorOrg(filas, "").length, 3);
 	assert.deepEqual(filtrarPorOrg(filas, "1101").map((f) => f.t), ["a", "c"]);
 	assert.deepEqual(filtrarPorOrg(filas, "1301"), []);
+});
+
+test("solicitudPublicada: solo si el $metadata trae la accion solicitarAmpliacion", async () => {
+	assert.equal(await solicitudPublicada(como(modeloAmpliacion([], { conSolicitud: true }).modelo)), true);
+	assert.equal(await solicitudPublicada(como(modeloAmpliacion([]).modelo)), false);
+});
+
+test("solicitarAmpliacion: manda los parametros recortados sobre el cliente", async () => {
+	const { modelo, llamadas } = modeloAmpliacion([], { conSolicitud: true });
+	await solicitarAmpliacion(como(modelo), "0100024840", { vkorg: "1101", area: " 1101/10  Vehiculos · 10 Mayorista ", referencia: "", motivo: "x".repeat(300), vendedor: "99999999 ARNALDO" });
+	assert.ok(llamadas.includes("param Vkorg=1101"));
+	assert.ok(llamadas.includes("param AreaNueva=1101/10 Vehiculos · 10 Mayorista"));
+	assert.ok(llamadas.some((l) => l.startsWith("param Motivo=") && l.length === "param Motivo=".length + 255));
+	assert.ok(llamadas.some((l) => l.endsWith(".solicitarAmpliacion(...)")));
+});
+
+test("solicitarAmpliacion: el rechazo de SAP llega como error", async () => {
+	const { modelo } = modeloAmpliacion([], { conSolicitud: true, rechazo: "No hay a quien mandar la solicitud" });
+	await assert.rejects(solicitarAmpliacion(como(modelo), "0100024840", { vkorg: "1101", area: "a", referencia: "", motivo: "", vendedor: "" }), /a quien mandar/);
 });

@@ -43,6 +43,43 @@ const comillas = (texto: string): string => texto.replace(/'/g, "''");
 const texto = (v: unknown): string => (v === undefined || v === null ? "" : String(v));
 const pausaReal = (ms: number): Promise<void> => new Promise((resolver) => setTimeout(resolver, ms));
 
+/** Solicitud de ampliacion a un area que no es retail (mayorista): la envia SAP por correo a datos maestros. */
+export interface SolicitudOtraArea {
+	vkorg: string;
+	/** Area pedida, ya con sus nombres (p. ej. "1101/10 Vehiculos · 10 Mayorista"). */
+	area: string;
+	/** Area de la que copiar las condiciones (la elegida en la oferta), si hay. */
+	referencia: string;
+	motivo: string;
+	vendedor: string;
+}
+
+/** El servicio ya envia la solicitud por correo (accion solicitarAmpliacion de ClienteEdicion, 29/10/2026). */
+export async function solicitudPublicada(modelo: ODataModel): Promise<boolean> {
+	try {
+		return !!(await modelo.getMetaModel().requestObject(`/${NS}.solicitarAmpliacion`));
+	} catch {
+		return false;
+	}
+}
+
+/** Pide la ampliacion por correo. Un rechazo (sin destinatarios en ZBS_TB_CONSTA, cliente inexistente) llega como error con el motivo. */
+export async function solicitarAmpliacion(modelo: ODataModel, kunnr: string, s: SolicitudOtraArea): Promise<void> {
+	const filas = await modelo.bindList("/ClienteEdicion", undefined, undefined, undefined, { $filter: `Kunnr eq '${comillas(kunnr)}'` }).requestContexts(0, 1);
+	if (!filas[0]) {
+		throw new Error(`SAP no encontro al cliente ${kunnr}`);
+	}
+	const corto = (v: string, n: number): string => v.replace(/\s+/g, " ").trim().slice(0, n);
+	const operacion = modelo.bindContext(`${NS}.solicitarAmpliacion(...)`, filas[0]);
+	operacion.setParameter("Vkorg", s.vkorg);
+	operacion.setParameter("AreaNueva", corto(s.area, 120));
+	operacion.setParameter("Referencia", corto(s.referencia, 160));
+	operacion.setParameter("Motivo", corto(s.motivo, 255));
+	operacion.setParameter("Vendedor", corto(s.vendedor, 120));
+	// ui5lint-disable-next-line no-deprecated-api -- invoke() existe desde UI5 1.123; el servidor de Socopur y los tipos son 1.120
+	await operacion.execute("$auto", true);
+}
+
 /** El servicio ya publica la ampliacion. Sin ella, el dialogo solo arma la solicitud a datos maestros. */
 export function ampliacionPublicada(modelo: ODataModel): Promise<boolean> {
 	return entidadTieneCampo(modelo, "ClienteAmpliacion", "AreasTexto");

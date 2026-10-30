@@ -41,6 +41,13 @@
 						<core:Item key="{cli>key}" text="{cli>text}" />
 					</Select>
 				</HBox>
+				<!-- Va en el correo a datos maestros; vacio = "Cotizacion en el Cotizador" -->
+				<HBox alignItems="Center" wrap="Wrap" class="sapUiTinyMarginTop">
+					<Label text="{i18n>ampliarMotivo}" class="sapUiSmallMarginEnd" />
+					<Input value="{cli>/motivo}" maxLength="255" width="20rem" placeholder="{i18n>ampliarMotivoAyuda}" class="cotizAnchoMax">
+						<layoutData><FlexItemData styleClass="cotizAnchoMax" /></layoutData>
+					</Input>
+				</HBox>
 			</VBox>
 		</content>
 		<beginButton>

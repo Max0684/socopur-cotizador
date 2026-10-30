@@ -21,7 +21,7 @@ import { fechaDdMmAaaa, htmlVehiculo, type TextosVehiculo } from "com/socopur/co
 import { leerTipoCambio, tipoCambioPublicado, tipoCambioTexto } from "com/socopur/cotizador/model/TipoCambioService";
 import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerDatosGuardados, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type EntregaParaGuardar, ENVIO_UNICO, type VinAsignado, esperarVinculos, leerMotivoVinculo, anularGrupo } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
-import { AmpliacionEnProcesoError, ampliacionPublicada, ampliarRetail, filtrarPorOrg, leerAmpliacion, organizacionesDe, type EstadoAmpliacion, type FilaAmpliacion, type FilaPorOrg } from "com/socopur/cotizador/model/AmpliacionService";
+import { AmpliacionEnProcesoError, ampliacionPublicada, ampliarRetail, filtrarPorOrg, leerAmpliacion, organizacionesDe, solicitarAmpliacion, solicitudPublicada, type EstadoAmpliacion, type FilaAmpliacion, type FilaPorOrg } from "com/socopur/cotizador/model/AmpliacionService";
 import { tipoDocPorNumero, validarDocumento } from "com/socopur/cotizador/model/Documento";
 import { conAdvertencia, consultarDocumento, documentoPublicado, tipoDeDocumento } from "com/socopur/cotizador/model/DocumentoService";
 import { usarOData as usarODataActual } from "com/socopur/cotizador/model/Modo";
@@ -2496,6 +2496,7 @@ export default class Oferta extends Controller {
 		await this.abrirCliente("AmpliarArea", {
 			...this.areasParaAmpliar(cl),
 			nueva: "",
+			motivo: "",
 			filtroOrg: String(this.modeloOferta().getProperty("/perfil/orgVentas") ?? ""),
 			retail: { visible: conRetail, cargando: conRetail, gruposTodos: [] }
 		});
@@ -2666,26 +2667,52 @@ export default class Oferta extends Controller {
 	/**
 	 * Areas que no son retail (p. ej. mayorista, con condiciones de pago y credito propias): el vendedor no las amplia, arma la solicitud para
 	 * quien administra los datos maestros. Las retail se amplian en SAP con onAmpliarRetail.
-	 * Se copia al portapapeles y, si el manifest trae un correo (config/ampliacionCorreo), se abre el correo ya redactado.
+	 * Con SAP real (accion solicitarAmpliacion, 29/10/2026) la solicitud la envia SAP por correo a los destinatarios de ZBS_TB_CONSTA. Sin ella,
+	 * o si SAP no la acepta, se copia al portapapeles y, si el manifest trae un correo (config/ampliacionCorreo), se abre el correo ya redactado.
 	 */
-	public onAmpliarArea(): void {
+	public async onAmpliarArea(): Promise<void> {
 		const modelo = this.dialogoClienteActual?.getModel("cli") as JSONModel;
 		const cl = this.clienteActual();
 		const clave = modelo.getProperty("/nueva") as string;
 		if (!cl || !clave) {
 			return;
 		}
+		const i18n = this.i18n();
 		const oferta = this.modeloOferta();
 		const nueva = (modelo.getProperty("/disponibles") as { key: string; text: string }[]).find((a) => a.key === clave);
 		const referencia = ((oferta.getProperty("/areasCliente") as { key: string; text: string }[]) ?? []).find((o) => o.key !== "" && o.key === oferta.getProperty("/areaClienteSel"));
+		const vendedor = String(oferta.getProperty("/perfil/vendedor") ?? "");
+		const motivo = String(modelo.getProperty("/motivo") ?? "").trim();
+		const odata = this.usarOData() ? ((this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel | undefined) : undefined;
+		let motivoFallo = "";
+		if (odata && cl.kunnr && (await solicitudPublicada(odata))) {
+			quitarTodosLosMensajes();
+			this.dialogoClienteActual?.setBusy(true);
+			try {
+				await solicitarAmpliacion(odata, cl.kunnr, {
+					vkorg: clave.split("/")[0],
+					area: `${clave} ${nueva?.text ?? ""}`.trim(),
+					referencia: referencia?.text ?? "",
+					motivo,
+					vendedor
+				});
+				this.dialogoClienteActual?.close();
+				MessageToast.show(i18n.getText("ampliarSolicitudEnviada") as string, { duration: 6000 });
+				return;
+			} catch (error) {
+				motivoFallo = this.motivoDeError(error);
+			} finally {
+				this.dialogoClienteActual?.setBusy(false);
+			}
+		}
 		const { asunto, cuerpo } = textoSolicitudAmpliacion({
 			cliente: cl.nombre,
 			kunnr: cl.kunnr ?? "",
 			documento: `${cl.tipoDoc} ${cl.doc}`.trim(),
 			areaNueva: nueva?.text ?? clave,
 			areaReferencia: referencia?.text,
-			vendedor: String(oferta.getProperty("/perfil/vendedor") ?? ""),
-			motivo: ""
+			vendedor,
+			motivo
 		});
 		const correo = String((this.getOwnerComponent() as UIComponent).getManifestEntry("/sap.ui5/config/ampliacionCorreo") ?? "");
 		void navigator.clipboard?.writeText(`${asunto}\n\n${cuerpo}`).catch(() => undefined);
@@ -2693,7 +2720,12 @@ export default class Oferta extends Controller {
 			window.open(`mailto:${correo}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`, "_self");
 		}
 		this.dialogoClienteActual?.close();
-		MessageToast.show(this.i18n().getText(correo ? "ampliarSolicitudCorreo" : "ampliarSolicitudCopiada") as string, { duration: 6000 });
+		const aviso = i18n.getText(correo ? "ampliarSolicitudCorreo" : "ampliarSolicitudCopiada") as string;
+		if (motivoFallo) {
+			MessageBox.warning(i18n.getText("ampliarSolicitudNoEnviada", [motivoFallo, aviso]) as string);
+		} else {
+			MessageToast.show(aviso, { duration: 6000 });
+		}
 	}
 
 	public onCerrarCliente(): void {
