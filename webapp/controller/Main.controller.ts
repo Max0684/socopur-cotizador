@@ -16,6 +16,11 @@ import JSONModel from "sap/ui/model/json/JSONModel";
 import ODataModel from "sap/ui/model/odata/v4/ODataModel";
 import MessageToast from "sap/m/MessageToast";
 import { cargarOfertas } from "com/socopur/cotizador/model/OfertasService";
+import { csvVentas, fechaIso, leerVentas, periodoDelMes, resumirVentas, ventasPublicadas, type FilaVenta } from "com/socopur/cotizador/model/VentasService";
+import Fragment from "sap/ui/core/Fragment";
+import Dialog from "sap/m/Dialog";
+import ResourceModel from "sap/ui/model/resource/ResourceModel";
+import ResourceBundle from "sap/base/i18n/ResourceBundle";
 
 /**
  * Lista de ofertas (equivale a un List Report de Fiori).
@@ -256,5 +261,100 @@ export default class Main extends Controller {
 		vista.setProperty("/consultado", mostrar);
 		const binding = (this.byId("tabla") as List).getBinding("items") as ListBinding;
 		binding.filter(filtros);
+	}
+
+	/* ---------- Mis ventas (relevamiento #215-#217) ---------- */
+
+	private dialogoVentas?: Dialog;
+
+	/** Ventas del vendedor identificado: se abre con el mes en curso y se lee al momento. */
+	public async onMisVentas(): Promise<void> {
+		if (this.sinVendedor()) {
+			return;
+		}
+		if (!this.dialogoVentas) {
+			this.dialogoVentas = (await Fragment.load({ id: this.getView()?.getId(), name: "com.socopur.cotizador.view.fragment.MisVentas", controller: this })) as Dialog;
+			this.getView()?.addDependent(this.dialogoVentas);
+			this.dialogoVentas.setModel(new JSONModel(), "ventas");
+		}
+		const { desde, hasta } = periodoDelMes(new Date());
+		this.modeloVentas().setData({ desde, hasta, filas: [], visibles: [], resumen: [], filtro: "", cargando: false, error: "" });
+		this.dialogoVentas.open();
+		await this.onVerVentas();
+	}
+
+	private modeloVentas(): JSONModel {
+		return this.dialogoVentas?.getModel("ventas") as JSONModel;
+	}
+
+	private i18nTexto(clave: string, args?: string[]): string {
+		const textos = ((this.getOwnerComponent() as UIComponent).getModel("i18n") as ResourceModel).getResourceBundle() as ResourceBundle;
+		return textos.getText(clave, args) ?? clave;
+	}
+
+	private nombreTipoVenta(tipo: string): string {
+		return this.i18nTexto(({ OFERTA: "ventasOferta", PEDIDO: "ventasPedido", FACTURA: "ventasFactura" } as Record<string, string>)[tipo] ?? "ventasOtro");
+	}
+
+	public async onVerVentas(): Promise<void> {
+		const modelo = this.modeloVentas();
+		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel | undefined;
+		const desde = modelo.getProperty("/desde") as Date | null;
+		const hasta = (modelo.getProperty("/hasta") as Date | null) ?? desde;
+		modelo.setProperty("/error", "");
+		if (!this.usarOData() || !odata || !(await ventasPublicadas(odata))) {
+			modelo.setProperty("/error", this.i18nTexto("ventasSoloSap"));
+			return;
+		}
+		if (!desde || !hasta) {
+			modelo.setProperty("/error", this.i18nTexto("ventasSinPeriodo"));
+			return;
+		}
+		modelo.setProperty("/cargando", true);
+		try {
+			const formato = (n: number): string => n.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+			const filas = (await leerVentas(odata, this.pernrActual(), desde, hasta)).map((f) => ({
+				...f,
+				nombre: this.nombreTipoVenta(f.tipo),
+				fechaTxt: f.fecha.split("-").reverse().join("/"),
+				valorTxt: formato(f.valor)
+			}));
+			modelo.setProperty("/filas", filas);
+			modelo.setProperty("/resumen", resumirVentas(filas).map((r) => ({ ...r, nombre: this.nombreTipoVenta(r.tipo), totalTxt: formato(r.total) })));
+			this.onFiltrarVentas();
+		} catch (error) {
+			modelo.setProperty("/error", this.i18nTexto("ventasError", [(error as Error).message]));
+		} finally {
+			modelo.setProperty("/cargando", false);
+		}
+	}
+
+	public onFiltrarVentas(): void {
+		const modelo = this.modeloVentas();
+		const filtro = String(modelo.getProperty("/filtro") ?? "");
+		const filas = (modelo.getProperty("/filas") as FilaVenta[]) ?? [];
+		modelo.setProperty("/visibles", filtro ? filas.filter((f) => f.tipo === filtro) : filas);
+	}
+
+	/** CSV de todo el periodo (sin el filtro de tipo), como pedian: "poner una fecha y descargar todo". */
+	public onDescargarVentas(): void {
+		const modelo = this.modeloVentas();
+		const filas = (modelo.getProperty("/filas") as FilaVenta[]) ?? [];
+		const titulos = ["ventasFecha", "ventasTipo", "ventasDocumento", "ventasClase", "ventasCodCliente", "ventasCliente", "ventasOrg", "ventasTotal", "ventasMoneda"].map((c) => this.i18nTexto(c));
+		const csv = csvVentas(filas, titulos, (t) => this.nombreTipoVenta(t));
+		const desde = fechaIso(modelo.getProperty("/desde") as Date);
+		const hasta = fechaIso((modelo.getProperty("/hasta") as Date | null) ?? (modelo.getProperty("/desde") as Date));
+		const enlace = document.createElement("a");
+		enlace.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+		enlace.download = `ventas_${this.pernrActual()}_${desde}_${hasta}.csv`;
+		document.body.appendChild(enlace);
+		enlace.click();
+		enlace.remove();
+		URL.revokeObjectURL(enlace.href);
+		MessageToast.show(this.i18nTexto("ventasDescargado", [String(filas.length)]));
+	}
+
+	public onCerrarVentas(): void {
+		this.dialogoVentas?.close();
 	}
 }

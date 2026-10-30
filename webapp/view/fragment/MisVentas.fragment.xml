@@ -1,0 +1,71 @@
+<core:FragmentDefinition
+	xmlns="sap.m"
+	xmlns:core="sap.ui.core">
+	<!-- Relevamiento #215-#217: las ventas del vendedor del dia o del mes, sin pedirselas a nadie y descargables -->
+	<Dialog
+		id="dlgMisVentas"
+		title="{i18n>ventasTitulo}"
+		contentWidth="60rem"
+		draggable="true"
+		resizable="true">
+		<content>
+			<VBox class="sapUiSmallMargin" busy="{ventas>/cargando}" busyIndicatorDelay="0">
+				<MessageStrip text="{i18n>ventasNota}" type="Information" showIcon="true" class="sapUiSmallMarginBottom" />
+				<MessageStrip text="{ventas>/error}" type="Error" showIcon="true" visible="{= !!${ventas>/error} }" class="sapUiSmallMarginBottom" />
+				<HBox alignItems="Center" wrap="Wrap" class="sapUiSmallMarginBottom">
+					<Label text="{i18n>ventasPeriodo}" labelFor="rangoVentas" class="sapUiSmallMarginEnd" />
+					<DateRangeSelection id="rangoVentas" dateValue="{ventas>/desde}" secondDateValue="{ventas>/hasta}" width="16rem" class="sapUiSmallMarginEnd" />
+					<Button text="{i18n>ventasVer}" type="Emphasized" icon="sap-icon://search" press=".onVerVentas" class="sapUiSmallMarginEnd" />
+					<Button text="{i18n>ventasDescargar}" icon="sap-icon://download" enabled="{= ${ventas>/filas}.length > 0 }" press=".onDescargarVentas" />
+				</HBox>
+				<Table items="{ventas>/resumen}" noDataText="{i18n>ventasSinDatos}" class="sapUiSmallMarginBottom" width="32rem">
+					<columns>
+						<Column><Text text="{i18n>ventasTipo}" /></Column>
+						<Column hAlign="End"><Text text="{i18n>ventasCantidad}" /></Column>
+						<Column hAlign="End"><Text text="{i18n>ventasTotal}" /></Column>
+					</columns>
+					<items>
+						<ColumnListItem>
+							<cells>
+								<Text text="{ventas>nombre}" />
+								<Text text="{ventas>cantidad}" />
+								<ObjectNumber number="{ventas>totalTxt}" unit="{ventas>moneda}" emphasized="{= ${ventas>tipo} === 'FACTURA' }" />
+							</cells>
+						</ColumnListItem>
+					</items>
+				</Table>
+				<SegmentedButton selectedKey="{ventas>/filtro}" selectionChange=".onFiltrarVentas" class="sapUiTinyMarginBottom">
+					<items>
+						<SegmentedButtonItem key="" text="{i18n>ventasTodos}" />
+						<SegmentedButtonItem key="OFERTA" text="{i18n>ventasOfertas}" />
+						<SegmentedButtonItem key="PEDIDO" text="{i18n>ventasPedidos}" />
+						<SegmentedButtonItem key="FACTURA" text="{i18n>ventasFacturas}" />
+					</items>
+				</SegmentedButton>
+				<Table items="{ventas>/visibles}" noDataText="{i18n>ventasSinDatos}" growing="true" growingThreshold="50" contextualWidth="Auto">
+					<columns>
+						<Column width="7rem"><Text text="{i18n>ventasFecha}" /></Column>
+						<Column width="6rem"><Text text="{i18n>ventasTipo}" /></Column>
+						<Column width="8rem"><Text text="{i18n>ventasDocumento}" /></Column>
+						<Column minScreenWidth="40rem" demandPopin="true"><Text text="{i18n>ventasCliente}" /></Column>
+						<Column width="9rem" hAlign="End"><Text text="{i18n>ventasTotal}" /></Column>
+					</columns>
+					<items>
+						<ColumnListItem>
+							<cells>
+								<Text text="{ventas>fechaTxt}" />
+								<Text text="{ventas>nombre}" />
+								<ObjectIdentifier title="{ventas>documento}" text="{ventas>clase}" />
+								<Text text="{ventas>cliente}" />
+								<ObjectNumber number="{ventas>valorTxt}" unit="{ventas>moneda}" />
+							</cells>
+						</ColumnListItem>
+					</items>
+				</Table>
+			</VBox>
+		</content>
+		<endButton>
+			<Button text="{i18n>cerrar}" press=".onCerrarVentas" />
+		</endButton>
+	</Dialog>
+</core:FragmentDefinition>

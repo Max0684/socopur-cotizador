@@ -36,6 +36,12 @@
 						icon="sap-icon://list"
 						press=".onVerMisOfertas" />
 					<Button
+						id="misVentasBtn"
+						text="{i18n>misVentas}"
+						type="Transparent"
+						icon="sap-icon://line-chart"
+						press=".onMisVentas" />
+					<Button
 						id="vendedorBtn"
 						text="{= ${mock>/perfil/vendedor} || ${i18n>vendIdIdentificarse} }"
 						tooltip="{i18n>vendIdCambiar}"
