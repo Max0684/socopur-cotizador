@@ -29,14 +29,20 @@
 						description="{vend>pernr} · {vend>tipo} · {vend>vkorg} · {vend>werks}"
 						icon="sap-icon://person-placeholder" />
 				</List>
+				<MessageStrip text="{i18n>vendIdSinPin}" type="Warning" showIcon="true" visible="{vend>/sinPin}" class="sapUiSmallMarginBottom" />
+				<MessageStrip text="{i18n>vendIdCrearPinNota}" type="Information" showIcon="true" visible="{vend>/crearPin}" class="sapUiSmallMarginBottom" />
 				<HBox alignItems="Center" visible="{= !!${vend>/elegido} }">
-					<Label text="{i18n>vendIdPin}" labelFor="vendPin" class="sapUiSmallMarginEnd" visible="{vend>/pedirPin}" />
-					<Input id="vendPin" type="Password" width="12rem" value="{vend>/pin}" visible="{vend>/pedirPin}" valueState="{vend>/estadoPin}" valueStateText="{i18n>vendIdPinMal}" submit=".onVendedorEntrar" />
+					<Label text="{= ${vend>/crearPin} ? ${i18n>vendIdCrearPin} : ${i18n>vendIdPin} }" labelFor="vendPin" class="sapUiSmallMarginEnd" visible="{vend>/pedirPin}" />
+					<Input id="vendPin" type="Password" width="12rem" value="{vend>/pin}" visible="{vend>/pedirPin}" valueState="{vend>/estadoPin}" valueStateText="{vend>/textoPin}" submit=".onVendedorEntrar" />
+				</HBox>
+				<HBox alignItems="Center" visible="{vend>/crearPin}" class="sapUiTinyMarginTop">
+					<Label text="{i18n>vendIdRepitePin}" labelFor="vendPin2" class="sapUiSmallMarginEnd" />
+					<Input id="vendPin2" type="Password" width="12rem" value="{vend>/pin2}" valueState="{vend>/estadoPin2}" valueStateText="{i18n>vendIdPinNoCoincide}" submit=".onVendedorEntrar" />
 				</HBox>
 			</VBox>
 		</content>
 		<beginButton>
-			<Button text="{i18n>vendIdEntrar}" type="Emphasized" enabled="{= !!${vend>/elegido} }" press=".onVendedorEntrar" />
+			<Button text="{i18n>vendIdEntrar}" type="Emphasized" enabled="{= !!${vend>/elegido} &amp;&amp; !${vend>/sinPin} }" press=".onVendedorEntrar" />
 		</beginButton>
 		<endButton>
 			<Button text="{i18n>vendIdCancelar}" press=".onVendedorCancelar" />

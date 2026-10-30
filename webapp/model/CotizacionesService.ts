@@ -2,17 +2,22 @@ import type ODataModel from "sap/ui/model/odata/v4/ODataModel";
 import type Context from "sap/ui/model/odata/v4/Context";
 import type { Cotizacion, Grupo, GrupoEstado, Item, ItemCar, Material } from "./odata/Entidades";
 import { accionTieneParametro, entidadTieneCampo } from "./CamposServicio";
+import { sesionVendedor } from "./VendedoresService";
 
 const NS = "com.sap.gateway.srvd_a2x.yui_cotiz_srv.v0001";
 
 /**
- * Correo BTP de quien pide la accion (parametro UsuarioBtp): SAP lo guarda en el historial YCOTIZ_LOG. Si la accion publica el parametro
- * se manda SIEMPRE, vacio si no se obtuvo el correo: SAP lo trata como obligatorio y rechaza la accion si falta. Si no lo publica no se
+ * Correo BTP de quien pide la accion (parametro UsuarioBtp): SAP lo guarda en el historial YCOTIZ_LOG. Y la sesion del vendedor
+ * (parametro Sesion, la que dio verificarPin): SAP solo acepta la del vendedor de la cotizacion. Si la accion publica el parametro
+ * se manda SIEMPRE, vacio si no se tiene: SAP lo trata como obligatorio y rechaza la accion si falta. Si no lo publica no se
  * manda: un parametro desconocido tambien la haria rechazar.
  */
 async function ponerUsuario(modelo: ODataModel, operacion: { setParameter(nombre: string, valor: unknown): unknown }, entidad: string, accion: string, usuario: string): Promise<void> {
 	if (await accionTieneParametro(modelo, entidad, `${NS}.${accion}`, "UsuarioBtp")) {
 		operacion.setParameter("UsuarioBtp", usuario);
+	}
+	if (await accionTieneParametro(modelo, entidad, `${NS}.${accion}`, "Sesion")) {
+		operacion.setParameter("Sesion", sesionVendedor());
 	}
 }
 
@@ -309,8 +314,10 @@ export async function guardarCotizacion(modelo: ODataModel, datos: OfertaParaGua
 	}
 
 	const activa = `/Cotizacion(CotizId=${cotizId},IsActiveEntity=true)`;
+	const generar = modelo.bindContext(`${activa}/${NS}.generarOfertas(...)`);
+	await ponerUsuario(modelo, generar, "Cotizacion", "generarOfertas", datos.usuarioBtp ?? "");
 	// ui5lint-disable-next-line no-deprecated-api -- invoke() existe desde UI5 1.123; el servidor de Socopur y los tipos son 1.120
-	await modelo.bindContext(`${activa}/${NS}.generarOfertas(...)`).execute("$auto", true);
+	await generar.execute("$auto", true);
 	const leer = async () =>
 		(await modelo
 			.bindContext(activa, undefined, { $select: "CotizId,Comentario", $expand: { _Grupo: { $select: "GrupoNo,VbelnOferta,Estado", $orderby: "GrupoNo" } }, $$ownRequest: true })

@@ -114,29 +114,43 @@ export function buscarVendedores(lista: Vendedor[], texto: string): Vendedor[] {
 	return lista.filter((v) => limpiar(v.nombre).includes(t) || v.pernr.includes(normalizarPernr(texto)) || v.pernr.endsWith(t));
 }
 
-/** Comprueba el PIN. Con SAP lo hace la accion verificarPin (hash SHA256(pernr+vkorg+pin) en el servidor); sin SAP, contra el hash del prototipo. */
-export async function pinCorrecto(modelo: ODataModel | undefined, vendedor: Vendedor, pin: string): Promise<boolean> {
-	if (!vendedor.conPin) {
-		return true;
-	}
+/** Resultado de identificarse. Con SAP, sesion es la que firma verificarPin y piden las acciones que graban en SAP. */
+export interface Identificacion {
+	ok: boolean;
+	sesion: string;
+}
+
+/**
+ * Comprueba el PIN. Con SAP lo hace la accion verificarPin (hash SHA256(pernr+vkorg+pin) en el servidor), que devuelve la sesion
+ * firmada; un vendedor sin PIN no puede identificarse. Sin SAP (prototipo), contra el hash del prototipo, y sin PIN entra.
+ */
+export async function identificar(modelo: ODataModel | undefined, vendedor: Vendedor, pin: string): Promise<Identificacion> {
 	if (modelo) {
 		try {
 			const operacion = modelo.bindContext(`${rutaVendedor(vendedor)}/${NS}.verificarPin(...)`);
 			operacion.setParameter("Pin", pin);
 			await operacion.execute("$auto", true);
-			return true;
+			const resultado = operacion.getBoundContext().getObject() as { Sesion?: string } | undefined;
+			return { ok: true, sesion: resultado?.Sesion ?? "" };
 		} catch {
-			return false;
+			return { ok: false, sesion: "" };
 		}
 	}
-	return (await hashPin(pin)) === (vendedor.pinHash ?? "");
+	if (!vendedor.conPin) {
+		return { ok: true, sesion: "" };
+	}
+	return { ok: (await hashPin(pin)) === (vendedor.pinHash ?? ""), sesion: "" };
 }
 
-/** Fija o cambia el PIN (minimo 4 caracteres, lo valida SAP). Devuelve el vendedor ya con conPin. */
-export async function fijarPin(modelo: ODataModel | undefined, vendedor: Vendedor, pin: string): Promise<Vendedor> {
+/**
+ * Fija o cambia el PIN (minimo 4 caracteres, lo valida SAP). SAP pide la sesion de un administrador; la unica excepcion es el
+ * primer PIN de un administrador mientras ninguno tiene PIN (arranque), que va con la sesion vacia. Devuelve el vendedor con conPin.
+ */
+export async function fijarPin(modelo: ODataModel | undefined, vendedor: Vendedor, pin: string, sesion = sesionVendedor()): Promise<Vendedor> {
 	if (modelo) {
 		const operacion = modelo.bindContext(`${rutaVendedor(vendedor)}/${NS}.fijarPin(...)`);
 		operacion.setParameter("Pin", pin);
+		operacion.setParameter("Sesion", sesion);
 		await operacion.execute("$auto", true);
 		return { ...vendedor, conPin: true };
 	}
@@ -194,6 +208,53 @@ export function vendedorRecordado(): string {
 	}
 }
 
+const CLAVE_SESION_SAP = "cotizador.sesionSap";
+
+/** Guarda en la pestana la sesion de SAP del vendedor (vacia = la borra). Se pierde al cerrar la pestana. */
+export function recordarSesion(sesion: string): void {
+	try {
+		if (sesion) {
+			sessionStorage.setItem(CLAVE_SESION_SAP, sesion);
+		} else {
+			sessionStorage.removeItem(CLAVE_SESION_SAP);
+		}
+	} catch {
+		// sin almacenamiento: se vuelve a pedir el PIN en cada carga
+	}
+}
+
+/** Sesion de SAP del vendedor de esta pestana, vacia si no hay. La mandan las acciones que graban en SAP (parametro Sesion). */
+export function sesionVendedor(): string {
+	try {
+		return sessionStorage.getItem(CLAVE_SESION_SAP) ?? "";
+	} catch {
+		return "";
+	}
+}
+
+/**
+ * La sesion es de esa fila de vendedor y no vencio. Formato de SAP: pernr.vkorg.tipo.vence.firma, con vence en UTC (AAAAMMDDhhmmss).
+ * La firma solo la comprueba SAP: esto evita entrar tras recargar la pagina con una sesion que SAP ya rechazaria.
+ */
+export function sesionVigente(sesion: string, vendedor: Pick<Vendedor, "pernr" | "vkorg" | "tipo">, ahora = new Date()): boolean {
+	const partes = sesion.split(".");
+	if (partes.length !== 5 || partes[0] !== vendedor.pernr || partes[1] !== vendedor.vkorg || partes[2] !== (TIPO_SAP[vendedor.tipo] ?? "R")) {
+		return false;
+	}
+	const fecha = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/.exec(partes[3]);
+	if (!fecha) {
+		return false;
+	}
+	const [anio, mes, dia, hora, minuto, segundo] = fecha.slice(1).map(Number);
+	return Date.UTC(anio, mes - 1, dia, hora, minuto, segundo) > ahora.getTime();
+}
+
+/** La sesion guardada es del vendedor recordado en la pestana y no vencio. Sin ella SAP rechazaria lo que se grabe. */
+export function sesionDelVendedorRecordado(ahora = new Date()): boolean {
+	const [pernr, vkorg, tipo] = vendedorRecordado().split("|");
+	return !!pernr && sesionVigente(sesionVendedor(), { pernr, vkorg: vkorg ?? "", tipo: tipo ?? "" }, ahora);
+}
+
 const TIPO_SAP: Record<string, string> = { repuestos: "R", vehiculos: "V" };
 
 /** Fila de la entidad Vendedor a partir de la forma de pantalla. */
@@ -243,26 +304,21 @@ export function validarVendedor(v: Vendedor): string[] {
 /**
  * Crea o actualiza un vendedor en SAP (con modelo OData) y devuelve la lista actualizada. Sin modelo (prototipo)
  * solo cambia la lista que recibe, sin persistir. Nunca se borra: se desactiva para conservar el historial.
+ * SAP no publica create/update de Vendedor: el alta y los cambios van por la accion estatica guardar, con la sesion de un
+ * administrador (asi nadie se da el rol A llamando al servicio).
  */
-export async function guardarVendedor(modelo: ODataModel | undefined, lista: Vendedor[], v: Vendedor, esNuevo: boolean): Promise<Vendedor[]> {
+export async function guardarVendedor(modelo: ODataModel | undefined, lista: Vendedor[], v: Vendedor, esNuevo: boolean, sesion = sesionVendedor()): Promise<Vendedor[]> {
 	const mismo = (x: Vendedor): boolean => x.pernr === v.pernr && x.vkorg === v.vkorg && x.tipo === v.tipo;
 	if (esNuevo && lista.some(mismo)) {
 		throw new Error("vendAdmErrDuplicado");
 	}
 	if (modelo) {
-		if (esNuevo) {
-			const contexto = modelo.bindList("/Vendedor").create(aFilaSap(v), true);
-			await contexto.created();
-		} else {
-			const contexto = modelo.bindContext(rutaVendedor(v)).getBoundContext();
-			const fila = aFilaSap(v) as unknown as Record<string, unknown>;
-			for (const campo of Object.keys(fila)) {
-				if (campo !== "Pernr" && campo !== "Vkorg" && campo !== "TipoVenta") {
-					contexto.setProperty(campo, fila[campo]);
-				}
-			}
-			await modelo.submitBatch("$auto");
+		const operacion = modelo.bindContext(`/Vendedor/${NS}.guardar(...)`);
+		for (const [campo, valor] of Object.entries({ ...aFilaSap(v), Nuevo: esNuevo, Sesion: sesion })) {
+			operacion.setParameter(campo, valor);
 		}
+		// ui5lint-disable-next-line no-deprecated-api -- invoke() existe desde UI5 1.123; el servidor de Socopur y los tipos son 1.120
+		await operacion.execute("$auto", true);
 	}
 	return esNuevo ? [...lista, v] : lista.map((x) => (mismo(x) ? v : x));
 }

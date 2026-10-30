@@ -28,7 +28,7 @@ import { usarOData as usarODataActual } from "com/socopur/cotizador/model/Modo";
 import { AltaEnProcesoError, cambiosDeEdicion, cargarUbigeo, crearClienteSap, esPersona, leerBloqueoEdicion, leerCambiosCliente, leerClienteEdicion, modificarClienteSap, partirNombres, partirRazon, serviciosDeCliente, TIPO_CLIENTE, tiposClientePara, ubicarEnArbol, type CambiosCliente, type DatosAlta, type DatosEdicion, type NodoUbigeo } from "com/socopur/cotizador/model/ClienteEscrituraService";
 import { buscarRepuestosConStock, disponibilidadPorAlmacen, motivoVacio } from "com/socopur/cotizador/model/MaterialesService";
 import { cargarPreciosLista, precioListaDisponible, textoPrecioLista } from "com/socopur/cotizador/model/PrecioListaService";
-import { textoOrganizacion } from "com/socopur/cotizador/model/VendedoresService";
+import { sesionDelVendedorRecordado, textoOrganizacion } from "com/socopur/cotizador/model/VendedoresService";
 import { listaDeSede } from "com/socopur/cotizador/model/Ciudades";
 import { ciudadPorClave, principalDe, sociedadDeCentro } from "com/socopur/cotizador/model/Ciudades";
 import { cargarContacto, cargarDirecciones, cargarMovimientos, type Movimiento } from "com/socopur/cotizador/model/ClienteDetalleService";
@@ -37,6 +37,7 @@ import { cargarModalidades, type ModalidadPantalla } from "com/socopur/cotizador
 import { ordenarPorTexto } from "com/socopur/cotizador/model/Orden";
 import { buscarTransportistas, buscarTransportistasMock, cargarSedes, leerTransportistaPorKunnr, leerTransportistaPorLifnr, type FilaTransportista, type SedeTransportista, type TransportistaMock } from "com/socopur/cotizador/model/TransportistasService";
 import UIComponent from "sap/ui/core/UIComponent";
+import View from "sap/ui/core/mvc/View";
 import Router from "sap/ui/core/routing/Router";
 import JSONModel from "sap/ui/model/json/JSONModel";
 import ResourceModel from "sap/ui/model/resource/ResourceModel";
@@ -5091,6 +5092,13 @@ export default class Oferta extends Controller {
 		}
 		if (!oferta.getProperty("/perfil/vendedor")) {
 			MessageBox.error(i18n.getText("vendIdRequerido") as string);
+			return;
+		}
+		// SAP solo graba con la sesion del vendedor (la da su PIN y dura una jornada): vencida, se rechazaria a mitad del guardado.
+		if (!sesionDelVendedorRecordado()) {
+			MessageBox.error(i18n.getText("vendIdSesionVencida") as string);
+			const raiz = (this.getOwnerComponent() as UIComponent).getRootControl() as View;
+			void (raiz.getController() as unknown as { onCambiarVendedor(): Promise<void> }).onCambiarVendedor();
 			return;
 		}
 		if (!oferta.getProperty("/perfil/formaPago")) {

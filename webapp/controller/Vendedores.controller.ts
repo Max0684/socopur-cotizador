@@ -24,6 +24,10 @@ import {
 	type Empleado,
 	guardarVendedor,
 	fijarPin,
+	identificar,
+	recordarSesion,
+	sesionVendedor,
+	sesionVigente,
 	textoSociedad,
 	validarVendedor
 } from "com/socopur/cotizador/model/VendedoresService";
@@ -358,11 +362,22 @@ export default class Vendedores extends Controller {
 		await this.persistir({ ...fila }, false);
 	}
 
-	/** Fija el PIN con la accion de SAP; el PIN nunca se guarda en el front. */
+	/**
+	 * Fija el PIN con la accion de SAP; el PIN nunca se guarda en el front. Cambiar el PIN anula las sesiones de esa fila: si es la
+	 * del propio administrador, se identifica otra vez con el PIN nuevo para seguir trabajando.
+	 */
 	private async persistirPin(v: Vendedor, pin: string): Promise<void> {
+		const odata = this.odata();
+		const esLaPropia = sesionVigente(sesionVendedor(), v);
 		try {
-			const conPin = await fijarPin(this.odata(), v, pin);
+			const conPin = await fijarPin(odata, v, pin);
 			this.modeloMock().setProperty("/vendedores", this.lista().map((x) => (x.pernr === v.pernr && x.vkorg === v.vkorg && x.tipo === v.tipo ? conPin : x)));
+			if (odata && esLaPropia) {
+				const identificacion = await identificar(odata, conPin, pin);
+				if (identificacion.ok) {
+					recordarSesion(identificacion.sesion);
+				}
+			}
 		} catch (error) {
 			MessageBox.error((error as Error).message);
 		}

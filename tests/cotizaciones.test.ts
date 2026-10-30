@@ -566,6 +566,17 @@ test("asignarVinItem manda UsuarioBtp solo si la accion lo publica en el $metada
 	assert.equal(con.parametros.UsuarioBtp, "");
 });
 
+test("asignarVinItem manda la sesion del vendedor si la accion publica Sesion (vacia si no hay: SAP la rechaza con su mensaje)", async () => {
+	const item = { Posnr: "000010", Matnr: "CAR200B", Vhcle: "1000006683" };
+	const con = modeloVin(item);
+	const sobrecarga = "/Item/com.sap.gateway.srvd_a2x.yui_cotiz_srv.v0001.asignarVin/@$ui5.overload/0/$Parameter";
+	const lista = [{ $Name: "_it" }, { $Name: "Vhcle" }, { $Name: "UsuarioBtp" }, { $Name: "Sesion" }];
+	(con.modelo as Record<string, unknown>).getMetaModel = () => ({ requestObject: async (ruta: string) => (ruta === sobrecarga ? lista : undefined) });
+	await asignarVinItem(como(con.modelo), "COT-1", "000010", "1000006683", "vendedora@socopur.pe");
+	// En node no hay sessionStorage: sin sesion guardada se manda vacia.
+	assert.deepEqual(con.parametros, { Vhcle: "1000006683", UsuarioBtp: "vendedora@socopur.pe", Sesion: "" });
+});
+
 test("accionTieneParametro lee la lista de parametros de la accion, no un campo de la entidad con el mismo nombre", async () => {
 	const { accionTieneParametro } = await import("../webapp/model/CamposServicio.ts");
 	const NS = "com.sap.gateway.srvd_a2x.yui_cotiz_srv.v0001";

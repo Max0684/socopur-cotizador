@@ -16,11 +16,21 @@ import {
 	buscarVendedores,
 	claveVendedor,
 	cargarVendedores,
-	pinCorrecto,
+	fijarPin,
+	identificar,
 	textoOrganizacion,
+	recordarSesion,
 	recordarVendedor,
+	sesionVendedor,
+	sesionVigente,
 	vendedorRecordado
 } from "com/socopur/cotizador/model/VendedoresService";
+
+/** Minimo de caracteres del PIN (SAP tambien lo valida en fijarPin). */
+const PIN_MINIMO = 4;
+
+/** Estado inicial del dialogo de identificacion. crearPin: administrador sin PIN (lo crea); sinPin: vendedor sin PIN (no puede entrar). */
+const DIALOGO_VACIO = { elegido: "", pedirPin: false, crearPin: false, sinPin: false, pin: "", pin2: "", estadoPin: "None", textoPin: "", estadoPin2: "None" };
 
 /**
  * @namespace com.socopur.cotizador.controller
@@ -31,7 +41,7 @@ export default class App extends Controller {
 	public onInit(): void {
 		this.getView()?.addStyleClass("sapUiSizeCompact");
 		this.getView()?.setModel(new JSONModel({ layout: "OneColumn" }), "app");
-		this.getView()?.setModel(new JSONModel({ visibles: [], elegido: "", pedirPin: false, pin: "", estadoPin: "None" }), "vend");
+		this.getView()?.setModel(new JSONModel({ visibles: [], ...DIALOGO_VACIO }), "vend");
 
 		const router = (this.getOwnerComponent() as UIComponent).getRouter();
 		router.attachRouteMatched(this.onRouteMatched, this);
@@ -66,8 +76,9 @@ export default class App extends Controller {
 		}
 		// La lista vive en el modelo para que la pantalla de administracion y este dialogo vean lo mismo.
 		mock.setProperty("/vendedores", lista);
+		// Con SAP, ademas del vendedor recordado hace falta su sesion vigente: sin ella SAP rechazaria todo lo que grabe.
 		const recordado = this.activos().find((v) => claveVendedor(v) === vendedorRecordado());
-		if (recordado) {
+		if (recordado && (!odata || sesionVigente(sesionVendedor(), recordado))) {
 			this.entrarComo(mock, recordado);
 			return;
 		}
@@ -98,7 +109,7 @@ export default class App extends Controller {
 			this.getView()?.addDependent(this.dialogoVendedor);
 		}
 		const modelo = this.getView()?.getModel("vend") as JSONModel;
-		modelo.setData({ visibles: this.activos().map((v) => ({ ...v, clave: claveVendedor(v) })), elegido: "", pedirPin: false, pin: "", estadoPin: "None" });
+		modelo.setData({ visibles: this.activos().map((v) => ({ ...v, clave: claveVendedor(v) })), ...DIALOGO_VACIO });
 		this.dialogoVendedor.open();
 	}
 
@@ -122,23 +133,59 @@ export default class App extends Controller {
 		const contexto = lista.getSelectedItem()?.getBindingContext("vend");
 		const elegido = contexto?.getObject() as (Vendedor & { clave: string }) | undefined;
 		const modelo = this.getView()?.getModel("vend") as JSONModel;
-		modelo.setProperty("/elegido", elegido?.clave ?? "");
-		modelo.setProperty("/pedirPin", !!elegido?.conPin);
-		modelo.setProperty("/pin", "");
-		modelo.setProperty("/estadoPin", "None");
+		// Con SAP todos entran con PIN. Sin PIN, un administrador crea el suyo (solo lo acepta SAP mientras ningun administrador tenga
+		// PIN); un vendedor se lo pide al administrador. Sin SAP (prototipo) el vendedor sin PIN entra sin pedirlo.
+		const conSap = !!this.odata();
+		const sinPin = !!elegido && !elegido.conPin && conSap;
+		modelo.setData({
+			...modelo.getData(),
+			...DIALOGO_VACIO,
+			elegido: elegido?.clave ?? "",
+			pedirPin: !!elegido?.conPin || (sinPin && elegido?.rol === "A"),
+			crearPin: sinPin && elegido?.rol === "A",
+			sinPin: sinPin && elegido?.rol !== "A"
+		});
 	}
 
 	public async onVendedorEntrar(): Promise<void> {
 		const modelo = this.getView()?.getModel("vend") as JSONModel;
 		const vendedor = this.activos().find((v) => claveVendedor(v) === modelo.getProperty("/elegido"));
-		if (!vendedor) {
+		if (!vendedor || modelo.getProperty("/sinPin")) {
 			return;
 		}
-		if (!(await pinCorrecto(this.odata(), vendedor, String(modelo.getProperty("/pin") ?? "")))) {
+		const i18n = (this.getOwnerComponent() as UIComponent).getModel("i18n") as unknown as { getResourceBundle(): { getText(k: string, a?: string[]): string } };
+		const textos = i18n.getResourceBundle();
+		const error = (texto: string): void => {
 			modelo.setProperty("/estadoPin", "Error");
+			modelo.setProperty("/textoPin", texto);
+		};
+		const odata = this.odata();
+		const pin = String(modelo.getProperty("/pin") ?? "").trim();
+		const mock = (this.getOwnerComponent() as UIComponent).getModel("mock") as JSONModel;
+		if (odata && modelo.getProperty("/crearPin")) {
+			if (pin.length < PIN_MINIMO) {
+				error(textos.getText("vendAdmErrPinCorto", [String(PIN_MINIMO)]));
+				return;
+			}
+			if (pin !== String(modelo.getProperty("/pin2") ?? "").trim()) {
+				modelo.setProperty("/estadoPin2", "Error");
+				return;
+			}
+			try {
+				const conPin = await fijarPin(odata, vendedor, pin, "");
+				const lista = (mock.getProperty("/vendedores") as Vendedor[]) ?? [];
+				mock.setProperty("/vendedores", lista.map((v) => (claveVendedor(v) === claveVendedor(vendedor) ? conPin : v)));
+			} catch (e) {
+				error((e as Error).message);
+				return;
+			}
+		}
+		const identificacion = await identificar(odata, vendedor, pin);
+		if (!identificacion.ok) {
+			error(textos.getText("vendIdPinMal"));
 			return;
 		}
-		const mock = (this.getOwnerComponent() as UIComponent).getModel("mock") as JSONModel;
+		recordarSesion(identificacion.sesion);
 		this.entrarComo(mock, vendedor);
 		recordarVendedor(claveVendedor(vendedor));
 		this.dialogoVendedor?.close();
