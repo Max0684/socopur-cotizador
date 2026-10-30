@@ -50,3 +50,10 @@ test("palabrasDeNombre: quita signos y letras sueltas; no recorta palabras corta
 test("filtroClientes con solo signos no filtra por nombre", () => {
 	assert.ok(filtroClientes("'.", "1103").includes("or false)"));
 });
+
+test("filtroClientes: con otrosDocs busca tambien por carnet (Stcd3) y pasaporte (Stcd5, en mayusculas)", () => {
+	const f = filtroClientes("aw064153", [], true);
+	assert.ok(f.includes("Stcd3 eq 'aw064153'"));
+	assert.ok(f.includes("Stcd5 eq 'AW064153'"));
+	assert.ok(!filtroClientes("aw064153").includes("Stcd3"));
+});

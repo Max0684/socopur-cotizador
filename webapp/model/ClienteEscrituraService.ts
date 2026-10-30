@@ -38,11 +38,11 @@ export const TIPO_CLIENTE = { senora: "0001", senor: "0002", empresa: "0003" } a
 export const esPersona = (titulo?: string): boolean => titulo === TIPO_CLIENTE.senora || titulo === TIPO_CLIENTE.senor;
 
 /**
- * Tipos de cliente que admite el documento: DNI siempre persona; RUC 20 siempre empresa; los demas RUC (10 = persona con negocio, que en SAP
+ * Tipos de cliente que admite el documento: DNI, carnet de extranjeria y pasaporte siempre persona; RUC 20 siempre empresa; los demas RUC (10 = persona con negocio, que en SAP
  * esta casi siempre como persona: 2.651 de 2.968 en el 130) pueden ser cualquiera de los tres.
  */
 export function tiposClientePara(tipoDoc: string, doc: string): string[] {
-	if (tipoDoc === "DNI") {
+	if (tipoDoc === "DNI" || tipoDoc === "CE" || tipoDoc === "PAS") {
 		return [TIPO_CLIENTE.senora, TIPO_CLIENTE.senor];
 	}
 	return doc.trim().startsWith("20") ? [TIPO_CLIENTE.empresa] : [TIPO_CLIENTE.senora, TIPO_CLIENTE.senor, TIPO_CLIENTE.empresa];
@@ -179,7 +179,8 @@ export function cuerpoAlta(a: DatosAlta): Record<string, string> {
 	return {
 		...tipo,
 		TipoDoc: a.tipoDoc,
-		Doc: corto(a.doc, 11),
+		// Hasta 12 (carnet y pasaporte, como SUNAT) y en mayusculas: el pasaporte puede llevar letras.
+		Doc: corto(a.doc, 12).toUpperCase(),
 		Razon1: persona ? "" : corto(a.razon1, 35),
 		Razon2: persona ? "" : corto(a.razon2, 35),
 		Razon3: persona ? "" : corto(a.razon3, 35),

@@ -22,6 +22,8 @@ interface ClienteSapFila {
 	Name2?: string;
 	Stcd1?: string;
 	Stcd2?: string;
+	Stcd3?: string;
+	Stcd5?: string;
 	Land1?: string;
 	Ort01?: string;
 	Stras?: string;
@@ -63,14 +65,16 @@ const comillas = (texto: string): string => texto.replace(/'/g, "''");
  * STCD1 se usa como documento y, si esta vacio, STCD2 (RUC en STCD1 en Socopur; el DNI iria en STCD2 por confirmar).
  */
 export async function buscarClientes(modelo: ODataModel, texto: string, vkorg: string | string[] = [], maximo = 20): Promise<ClienteSap[]> {
-	const filtro = filtroClientes(texto, vkorg);
+	// Carnet de extranjeria (STCD3) y pasaporte (STCD5): solo si el $metadata ya los publica (desde el 29/10/2026).
+	const otrosDocs = texto.trim() !== "" && (await entidadTieneCampo(modelo, "Cliente", "Stcd3"));
+	const filtro = filtroClientes(texto, vkorg, otrosDocs);
 	if (!filtro) {
 		return [];
 	}
 	// La moneda del area solo se pide si el $metadata ya la trae: un campo desconocido en $select hace fallar toda la lectura.
 	const conWaers = await entidadTieneCampo(modelo, "Cliente", "Waers");
 	const binding = modelo.bindList("/Cliente", undefined, undefined, undefined, {
-		$select: `Kunnr,Vkorg,Vtweg,Spart,Kdgrp,KdgrpTexto,Zterm,ZtermTexto,${conWaers ? "Waers," : ""}Aufsd,Name1,Name2,Stcd1,Stcd2,Stras,Ort01,Sperr,Loevm`,
+		$select: `Kunnr,Vkorg,Vtweg,Spart,Kdgrp,KdgrpTexto,Zterm,ZtermTexto,${conWaers ? "Waers," : ""}Aufsd,Name1,Name2,Stcd1,Stcd2,${otrosDocs ? "Stcd3,Stcd5," : ""}Stras,Ort01,Sperr,Loevm`,
 		$filter: filtro,
 		$orderby: "Name1",
 		$count: false
@@ -87,12 +91,12 @@ export async function buscarClientes(modelo: ODataModel, texto: string, vkorg: s
 			existente.condicionesAreas.push(condicionDeFila(f));
 			continue;
 		}
-		const doc = f.Stcd1 || f.Stcd2 || "";
+		const doc = f.Stcd1 || f.Stcd2 || f.Stcd3 || f.Stcd5 || "";
 		porCliente.set(f.Kunnr, {
 			kunnr: f.Kunnr,
 			nombre: [f.Name1, f.Name2].filter(Boolean).join(" "),
 			doc,
-			tipoDoc: doc.length === 11 ? "RUC" : doc.length === 8 ? "DNI" : "",
+			tipoDoc: f.Stcd1 ? "RUC" : f.Stcd2 ? "DNI" : f.Stcd3 ? "CE" : f.Stcd5 ? "PAS" : "",
 			grupo: f.Kdgrp ?? "",
 			grupoTexto: f.KdgrpTexto ?? "",
 			zterm: f.Zterm ?? "",

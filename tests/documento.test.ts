@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { digitoVerificadorRuc, validarDocumento } from "../webapp/model/Documento.ts";
+import { digitoVerificadorRuc, tipoDocPorNumero, validarDocumento } from "../webapp/model/Documento.ts";
 
 test("digitoVerificadorRuc: RUC conocidos (modulo 11 de SUNAT)", () => {
 	assert.equal(digitoVerificadorRuc("2012345678"), 6);
@@ -31,5 +31,22 @@ test("validarDocumento DNI: 8 digitos y sin valores obviamente falsos", () => {
 });
 
 test("validarDocumento: un tipo desconocido no se valida aqui", () => {
-	assert.equal(validarDocumento("CE", "123"), null);
+	assert.equal(validarDocumento("XX", "123"), null);
+});
+
+test("validarDocumento: carnet y pasaporte de 6 a 12 letras o numeros", () => {
+	assert.equal(validarDocumento("CE", "001421198"), null);
+	assert.equal(validarDocumento("PAS", "AW064153"), null);
+	assert.equal(validarDocumento("PAS", "aw064153"), null);
+	assert.equal(validarDocumento("CE", "12345"), "ceFormato");
+	assert.equal(validarDocumento("PAS", "AW-064153"), "pasFormato");
+	assert.equal(validarDocumento("PAS", "1234567890123"), "pasFormato");
+});
+
+test("tipoDocPorNumero: 11 digitos RUC, 8 DNI, con letras pasaporte, otros numeros carnet", () => {
+	assert.equal(tipoDocPorNumero("20393772841"), "RUC");
+	assert.equal(tipoDocPorNumero("72467726"), "DNI");
+	assert.equal(tipoDocPorNumero("AW064153"), "PAS");
+	assert.equal(tipoDocPorNumero("001421198"), "CE");
+	assert.equal(tipoDocPorNumero(""), "DNI");
 });

@@ -19,7 +19,8 @@ export function palabrasDeNombre(texto: string): string[] {
 		.map((p) => (p.length >= 5 && p.endsWith("S") ? p.slice(0, -1) : p));
 }
 
-export function filtroClientes(texto: string, vkorg: string | string[] = []): string {
+/** otrosDocs: el servicio publica Stcd3 (carnet de extranjeria) y Stcd5 (pasaporte); el pasaporte se compara en mayusculas. */
+export function filtroClientes(texto: string, vkorg: string | string[] = [], otrosDocs = false): string {
 	const t = comillas(texto.trim());
 	if (!t) {
 		return "";
@@ -32,5 +33,6 @@ export function filtroClientes(texto: string, vkorg: string | string[] = []): st
 	// El numero de cliente (Kunnr) mide 10 caracteres: un valor mas largo (p. ej. un RUC de 11 digitos) no se le manda, porque SAP puede
 	// rechazar toda la consulta por valor demasiado largo. Textos de 10 o menos se completan con ceros a la izquierda.
 	const porCliente = t.length <= 10 ? ` or Kunnr eq '${t.padStart(10, "0")}'` : "";
-	return `${porOrg}(Stcd1 eq '${t}' or Stcd2 eq '${t}'${porCliente} or ${palabras.length ? `(${porNombre})` : "false"})`;
+	const porOtros = otrosDocs ? ` or Stcd3 eq '${t}' or Stcd5 eq '${t.toUpperCase()}'` : "";
+	return `${porOrg}(Stcd1 eq '${t}' or Stcd2 eq '${t}'${porOtros}${porCliente} or ${palabras.length ? `(${porNombre})` : "false"})`;
 }

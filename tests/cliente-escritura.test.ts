@@ -189,3 +189,11 @@ test("partirNombres: el primero y el resto, hasta 40 letras cada uno", () => {
 	assert.equal(partirNombres("X".repeat(41)), null);
 	assert.equal(partirNombres(`Ana ${"Y".repeat(41)}`), null);
 });
+
+test("tiposClientePara y cuerpoAlta: carnet y pasaporte son de personas; el documento va en mayusculas y hasta 12", () => {
+	assert.deepEqual(tiposClientePara("CE", "001421198"), ["0001", "0002"]);
+	assert.deepEqual(tiposClientePara("PAS", "AW064153"), ["0001", "0002"]);
+	const c = cuerpoAlta({ ...alta, tipoDoc: "PAS", doc: " aw0641531234567 ", titulo: "0001", nombres: "Ana", apePat: "Perez" });
+	assert.equal(c.TipoDoc, "PAS");
+	assert.equal(c.Doc, "AW0641531234");
+});

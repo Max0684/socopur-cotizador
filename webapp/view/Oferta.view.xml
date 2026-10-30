@@ -100,14 +100,14 @@
 								showIcon="true"
 								class="sapUiSmallMarginBottom" />
 							<Panel visible="{oferta>/altaAbierta}" headerText="{i18n>altaTitulo}" class="sapUiSmallMarginBottom">
-								<MessageStrip text="{i18n>altaSimulada}" type="Information" showIcon="true" class="sapUiSmallMarginBottom" />
+								<MessageStrip text="{i18n>altaSimulada}" type="Information" showIcon="true" visible="{= !${oferta>/alta/conSap} }" class="sapUiSmallMarginBottom" />
 								<MessageStrip visible="{= !!${oferta>/alta/nota} }" text="{oferta>/alta/nota}" type="{oferta>/alta/notaTipo}" showIcon="true" class="sapUiSmallMarginBottom" />
 								<MessageStrip visible="{= !!${oferta>/alta/errores} }" text="{oferta>/alta/errores}" type="Error" showIcon="true" class="sapUiSmallMarginBottom" />
 								<form:SimpleForm editable="true" layout="ColumnLayout" columnsM="2" columnsL="2" columnsXL="3">
 									<Label text="{i18n>altaTipoDoc}" />
-									<Select selectedKey="{oferta>/alta/tipoDoc}" change=".onCambiaDocAlta" enabled="{= ${oferta>/pedidos}.length === 0 }"><core:Item key="DNI" text="DNI" /><core:Item key="RUC" text="RUC" /></Select>
+									<Select selectedKey="{oferta>/alta/tipoDoc}" change=".onCambiaDocAlta" enabled="{= ${oferta>/pedidos}.length === 0 }"><core:Item key="DNI" text="DNI" /><core:Item key="RUC" text="RUC" /><core:Item key="CE" text="{i18n>docCarnet}" /><core:Item key="PAS" text="{i18n>docPasaporte}" /></Select>
 									<Label text="{i18n>altaNroDoc}" />
-									<Input value="{oferta>/alta/doc}" maxLength="11" change=".onCambiaDocAlta" enabled="{= ${oferta>/pedidos}.length === 0 }" />
+									<Input value="{oferta>/alta/doc}" maxLength="12" change=".onCambiaDocAlta" enabled="{= ${oferta>/pedidos}.length === 0 }" />
 									<!-- Tratamiento del BP en SAP: Senora/Senor = persona (DNI, o RUC 10), Empresa = organizacion (RUC 20). Como en ZSCPBP01. -->
 									<Label text="{i18n>altaTipoCliente}" required="true" />
 									<Select selectedKey="{oferta>/alta/tipoCliente}" forceSelection="false" items="{oferta>/tiposCliente}" change=".onCambiaTipoCliente" enabled="{= ${oferta>/pedidos}.length === 0 }"><core:Item key="{oferta>key}" text="{oferta>text}" /></Select>

@@ -22,7 +22,7 @@ import { leerTipoCambio, tipoCambioPublicado, tipoCambioTexto } from "com/socopu
 import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerDatosGuardados, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type EntregaParaGuardar, ENVIO_UNICO, type VinAsignado, esperarVinculos, leerMotivoVinculo, anularGrupo } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
 import { AmpliacionEnProcesoError, ampliacionPublicada, ampliarRetail, filtrarPorOrg, leerAmpliacion, organizacionesDe, type EstadoAmpliacion, type FilaAmpliacion, type FilaPorOrg } from "com/socopur/cotizador/model/AmpliacionService";
-import { validarDocumento } from "com/socopur/cotizador/model/Documento";
+import { tipoDocPorNumero, validarDocumento } from "com/socopur/cotizador/model/Documento";
 import { conAdvertencia, consultarDocumento, documentoPublicado, tipoDeDocumento } from "com/socopur/cotizador/model/DocumentoService";
 import { usarOData as usarODataActual } from "com/socopur/cotizador/model/Modo";
 import { AltaEnProcesoError, cargarUbigeo, crearClienteSap, esPersona, leerBloqueoEdicion, leerCambiosCliente, modificarClienteSap, partirNombres, partirRazon, serviciosDeCliente, TIPO_CLIENTE, tiposClientePara, type CambiosCliente, type DatosAlta } from "com/socopur/cotizador/model/ClienteEscrituraService";
@@ -4388,15 +4388,17 @@ export default class Oferta extends Controller {
 	/* ---------- Alta de cliente inline (datos de ZSCPBP01; la consulta a APIDNI es SIMULADA) ---------- */
 
 	private altaVacia(doc: string): Record<string, unknown> {
-		const tipoDoc = doc.length === 11 ? "RUC" : "DNI";
+		const tipoDoc = tipoDocPorNumero(doc);
 		// Con una sola opcion (RUC 20 = empresa) queda elegida; si no (DNI: senora o senor; RUC 10: cualquiera) la elige el vendedor.
 		const tipos = tiposClientePara(tipoDoc, doc);
 		return {
 			tipoCliente: tipos.length === 1 ? tipos[0] : "",
 			// Que campos se ven: los de persona (nombres y apellidos) o la razon social. Con DNI, persona desde el inicio.
-			persona: tipoDoc === "DNI" || esPersona(tipos.length === 1 ? tipos[0] : ""),
+			persona: tipoDoc !== "RUC" || esPersona(tipos.length === 1 ? tipos[0] : ""),
 			tipoDoc,
 			doc,
+			// Con SAP real el alta y la consulta van a SAP: el aviso de simulacion es solo del modo ejemplo.
+			conSap: this.usarOData(),
 			// Un solo campo; al crear se reparte en las tres partes de SAP (partirRazon).
 			razon: "",
 			// Persona (tipo 0001 o 0002), como la rama de persona de ZSCPBP01.
@@ -4424,7 +4426,7 @@ export default class Oferta extends Controller {
 		oferta.setProperty("/altaAbierta", true);
 		oferta.setProperty("/alta", this.altaVacia(doc));
 		oferta.setProperty("/ubigeo", this.modeloMock().getProperty("/ubigeo") ?? []);
-		oferta.setProperty("/tiposCliente", this.opcionesTipoCliente("DNI" === oferta.getProperty("/alta/tipoDoc") ? "DNI" : "RUC", doc));
+		oferta.setProperty("/tiposCliente", this.opcionesTipoCliente(String(oferta.getProperty("/alta/tipoDoc") ?? ""), doc));
 		void this.usarUbigeoReal();
 	}
 
@@ -4452,7 +4454,7 @@ export default class Oferta extends Controller {
 	public onCambiaTipoCliente(): void {
 		const oferta = this.modeloOferta();
 		const tipo = String(oferta.getProperty("/alta/tipoCliente") ?? "");
-		oferta.setProperty("/alta/persona", esPersona(tipo) || (!tipo && oferta.getProperty("/alta/tipoDoc") === "DNI"));
+		oferta.setProperty("/alta/persona", esPersona(tipo) || (!tipo && oferta.getProperty("/alta/tipoDoc") !== "RUC"));
 	}
 
 	/** Con SAP real y el catalogo publicado, los desplegables de departamento/provincia/distrito usan la lista real en vez de la de ejemplo. */
@@ -4507,11 +4509,18 @@ export default class Oferta extends Controller {
 		const i18n = this.i18n();
 		const doc = String(oferta.getProperty("/alta/doc") ?? "").trim();
 		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel | undefined;
+		const elegido = String(oferta.getProperty("/alta/tipoDoc") ?? "");
+		// SUNAT y RENIEC solo responden por RUC y DNI: el carnet y el pasaporte se llenan a mano.
+		if (elegido === "CE" || elegido === "PAS") {
+			oferta.setProperty("/alta/nota", i18n.getText("altaApiSoloRucDni") as string);
+			oferta.setProperty("/alta/notaTipo", "Information");
+			return;
+		}
 		if (this.usarOData() && odata && (await documentoPublicado(odata))) {
-			const tipo = tipoDeDocumento(doc, String(oferta.getProperty("/alta/tipoDoc") ?? ""));
+			const tipo = tipoDeDocumento(doc, elegido);
 			const errorDoc = validarDocumento(tipo, doc, true);
 			if (errorDoc) {
-				oferta.setProperty("/alta/nota", i18n.getText({ dniFormato: "altaErrDni", dniFalso: "altaErrDniFalso", rucFormato: "altaErrRuc", rucDigito: "altaErrRucDigito" }[errorDoc]) as string);
+				oferta.setProperty("/alta/nota", i18n.getText({ dniFormato: "altaErrDni", dniFalso: "altaErrDniFalso", rucFormato: "altaErrRuc", rucDigito: "altaErrRucDigito", ceFormato: "altaErrCe", pasFormato: "altaErrPas" }[errorDoc]) as string);
 				oferta.setProperty("/alta/notaTipo", "Warning");
 				return;
 			}
@@ -4587,7 +4596,7 @@ export default class Oferta extends Controller {
 		// El digito verificador del RUC se exige con SAP real; el RUC de ejemplo del prototipo no lo cumple.
 		const errorDoc = validarDocumento(a.tipoDoc, doc, this.usarOData());
 		if (errorDoc) {
-			errores.push(i18n.getText({ dniFormato: "altaErrDni", dniFalso: "altaErrDniFalso", rucFormato: "altaErrRuc", rucDigito: "altaErrRucDigito" }[errorDoc]) as string);
+			errores.push(i18n.getText({ dniFormato: "altaErrDni", dniFalso: "altaErrDniFalso", rucFormato: "altaErrRuc", rucDigito: "altaErrRucDigito", ceFormato: "altaErrCe", pasFormato: "altaErrPas" }[errorDoc]) as string);
 		}
 		if (!this.usarOData() && clientes[doc]) {
 			errores.push(i18n.getText("altaErrExiste") as string);
