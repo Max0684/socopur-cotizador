@@ -1,5 +1,5 @@
 import Controller from "sap/ui/core/mvc/Controller";
-import { mensajesVigentes, quitarTodosLosMensajes } from "com/socopur/cotizador/model/Mensajes";
+import { motivoDeError, quitarTodosLosMensajes } from "com/socopur/cotizador/model/Mensajes";
 import ODataModel from "sap/ui/model/odata/v4/ODataModel";
 import { cargarDetalleOferta } from "com/socopur/cotizador/model/OfertasService";
 import type { GrupoEstado } from "com/socopur/cotizador/model/odata/Entidades";
@@ -4331,6 +4331,8 @@ export default class Oferta extends Controller {
 		const estadosReales: { real: GrupoEstado | null; clase: string; numeroPedido: string }[] = [];
 		const creados: { cotizId: string; grupoNo: string }[] = [];
 		vista?.setBusy(true);
+		// Sin los mensajes de un intento anterior: si no, el motivo de este pedido se confundia con el error viejo (pruebas del 31/10/2026).
+		quitarTodosLosMensajes();
 		// Antes de llamar a SAP: si el disponible del almacen no alcanza, se dice aqui (SAP lo rechazaria igual) y no se crea nada.
 		const faltan = await this.lineasSinDisponible();
 		if (faltan.length > 0) {
@@ -5348,14 +5350,7 @@ export default class Oferta extends Controller {
 	 * motivo verdadero esta en la causa o en los mensajes del servicio; se muestran para no ocultar lo que dijo SAP.
 	 */
 	private motivoDeError(error: unknown): string {
-		const e = error as Error & { cause?: Error };
-		const partes = [e.cause?.message ?? ""];
-		if (!partes[0] || e.message.includes("$batch failed")) {
-			const mensajes = mensajesVigentes();
-			partes.push(...mensajes.filter((m) => m.type === "Error" && m.message && !m.message.includes("$batch failed")).map((m) => m.message as string));
-		}
-		const unicos = [...new Set(partes.filter(Boolean))];
-		return unicos.length ? unicos.join(" | ") : e.message;
+		return motivoDeError(error);
 	}
 
 	/** SIMULADO: muestra cuantas ofertas saldrian, una por grupo, con numeros inventados. */
