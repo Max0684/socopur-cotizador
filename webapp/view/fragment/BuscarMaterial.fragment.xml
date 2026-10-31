@@ -237,7 +237,11 @@
 								<ObjectStatus
 									text="{= ${busqueda>disponible} > 0 ? ${busqueda>disponible} : ${i18n>sinStock} }"
 									state="{= ${busqueda>disponible} > 0 ? 'Success' : 'Error' }" />
-								<Text text="{busqueda>comprometido}" />
+								<!-- Pedido y no confirmado (p. ej. bloqueado por credito): MD04 lo cuenta, el disponible de SAP no (pruebas del 30/10/2026) -->
+								<VBox alignItems="End">
+									<Text text="{busqueda>comprometido}" />
+									<ObjectStatus visible="{= ${busqueda>porConfirmar} &gt; 0 }" text="{busqueda>porConfirmar} {i18n>stockPorConfirmar}" state="Warning" tooltip="{i18n>stockPorConfirmarTip}" />
+								</VBox>
 								<Text text="{busqueda>total}" />
 								<Text text="{busqueda>um}" />
 								<VBox alignItems="End">

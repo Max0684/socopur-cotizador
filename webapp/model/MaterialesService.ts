@@ -237,10 +237,18 @@ export interface Disponibilidad {
 	fisico: number;
 	disponible: number;
 	comprometido: number;
+	/**
+	 * Pedido y no confirmado en el almacen (p. ej. pedidos bloqueados por credito): MD04 lo muestra como necesidad y el ATP no lo descuenta
+	 * (pruebas del 30/10/2026, PU24). 0 si el servicio todavia no publica PorConfirmar.
+	 */
+	porConfirmar: number;
 }
 
 /** Filas de MaterialAtp a disponibilidad por material: se toma el almacen de mayor stock; si SAP no pudo calcular alguna fila (Respuesta != 0) se omite. */
-export function disponibilidadDeFilas(filas: { Matnr: string; Lgort?: string; StockLibre: number | string; Disponible: number | string; Comprometido: number | string; Respuesta?: number | string }[], lgort = ""): Record<string, Disponibilidad> {
+export function disponibilidadDeFilas(
+	filas: { Matnr: string; Lgort?: string; StockLibre: number | string; Disponible: number | string; Comprometido: number | string; PorConfirmar?: number | string; Respuesta?: number | string }[],
+	lgort = ""
+): Record<string, Disponibilidad> {
 	const res: Record<string, Disponibilidad> = {};
 	filas.forEach((f) => {
 		if (Number(f.Respuesta ?? 0) !== 0 || (lgort && f.Lgort !== lgort)) {
@@ -248,7 +256,7 @@ export function disponibilidadDeFilas(filas: { Matnr: string; Lgort?: string; St
 		}
 		const fisico = Number(f.StockLibre);
 		if (fisico >= (res[f.Matnr]?.fisico ?? -1)) {
-			res[f.Matnr] = { fisico, disponible: Number(f.Disponible), comprometido: Number(f.Comprometido) };
+			res[f.Matnr] = { fisico, disponible: Number(f.Disponible), comprometido: Number(f.Comprometido), porConfirmar: Number(f.PorConfirmar ?? 0) || 0 };
 		}
 	});
 	return res;
@@ -282,7 +290,7 @@ export function motivoVacio(coinciden: number, visibles: number, soloStock: bool
 }
 
 /** Fila de repuesto con su stock en el centro del perfil. */
-export type FilaConStock = FilaRepuestoSap & { disponible: number; comprometido: number | string; total: number };
+export type FilaConStock = FilaRepuestoSap & { disponible: number; comprometido: number | string; porConfirmar: number; total: number };
 
 /**
  * Une los materiales con su stock en el centro. El stock libre (MaterialCentro) es lo que decide si "hay stock": es la fuente confiable.
@@ -293,7 +301,7 @@ export function combinarStock(filas: FilaRepuestoSap[], libre: Record<string, nu
 	return filas.map((f) => {
 		const stock = libre[f.material] ?? 0;
 		const a = atp[f.material];
-		return { ...f, disponible: a ? a.disponible : stock, comprometido: a ? a.comprometido : "\u2014", total: stock };
+		return { ...f, disponible: a ? a.disponible : stock, comprometido: a ? a.comprometido : "\u2014", porConfirmar: a ? a.porConfirmar : 0, total: stock };
 	});
 }
 

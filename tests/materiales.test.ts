@@ -111,7 +111,13 @@ test("disponibilidadDeFilas toma el almacen de mayor stock y omite filas con Res
 		{ Matnr: "A", StockLibre: "30", Disponible: "25", Comprometido: "5", Respuesta: 0 },
 		{ Matnr: "B", StockLibre: 0, Disponible: 0, Comprometido: 0, Respuesta: 1 }
 	]);
-	assert.deepEqual(d, { A: { fisico: 30, disponible: 25, comprometido: 5 } });
+	assert.deepEqual(d, { A: { fisico: 30, disponible: 25, comprometido: 5, porConfirmar: 0 } });
+});
+
+test("disponibilidadDeFilas trae lo pedido y no confirmado (PU24: 2 pedidos de 100 bloqueados por credito que MD04 si cuenta)", () => {
+	// MaterialAtp del 30/10/2026: SFX428H-150-MTK, centro 1001, almacen 0001.
+	const d = disponibilidadDeFilas([{ Matnr: "SFX428H-150-MTK", Lgort: "0001", StockLibre: 38230, Disponible: 38222, Comprometido: 8, PorConfirmar: 200, Respuesta: 0 }], "0001");
+	assert.deepEqual(d, { "SFX428H-150-MTK": { fisico: 38230, disponible: 38222, comprometido: 8, porConfirmar: 200 } });
 });
 
 test("disponibilidadPorCentro consulta MaterialAtp y no consulta sin materiales", async () => {
@@ -123,7 +129,7 @@ test("disponibilidadPorCentro consulta MaterialAtp y no consulta sin materiales"
 		}
 	};
 	assert.deepEqual(await disponibilidadPorCentro(como(modelo), "1103", "10", "1101", []), {});
-	assert.deepEqual(await disponibilidadPorCentro(como(modelo), "1103", "10", "1101", ["A"]), { A: { fisico: 38228, disponible: 34594, comprometido: 3634 } });
+	assert.deepEqual(await disponibilidadPorCentro(como(modelo), "1103", "10", "1101", ["A"]), { A: { fisico: 38228, disponible: 34594, comprometido: 3634, porConfirmar: 0 } });
 	assert.deepEqual(rutas, ["/MaterialAtp"]);
 });
 

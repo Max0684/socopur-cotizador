@@ -255,10 +255,14 @@
 								</List>
 							</VBox>
 
-							<!-- Repuestos, ropa, accesorios: seleccion multiple, cada fila con su desglose y cantidad -->
+							<!-- Repuestos, ropa, accesorios: seleccion multiple, cada fila con su desglose y cantidad. Como el detalle de la oferta (pruebas del
+							     30/10/2026, PU38): el boton para agregar arriba y la determinacion de precio plegada, solo de la fila elegida -->
 							<VBox visible="{= ${oferta>/elegidosLista}.length > 0 }">
-								<Title text="{i18n>materialesElegidos}" level="H4" class="sapUiTinyMarginBottom" />
-								<Table items="{oferta>/elegidosLista}" sticky="ColumnHeaders" contextualWidth="Auto">
+								<HBox alignItems="Center" justifyContent="SpaceBetween" wrap="Wrap" class="sapUiTinyMarginBottom">
+									<Title text="{i18n>materialesElegidos}" level="H4" class="sapUiTinyMarginEnd" />
+									<Button text="{i18n>agregarTodos}" type="Emphasized" press=".onAgregarLista" enabled="{= ${oferta>/pedidos}.length === 0 }" />
+								</HBox>
+								<Table items="{oferta>/elegidosLista}" sticky="ColumnHeaders" contextualWidth="Auto" mode="SingleSelectMaster" selectionChange=".onElegirElegidoPrecio">
 									<columns>
 										<!-- En un telefono quedan material y total; lo demas baja debajo de cada fila (popin) -->
 										<Column width="8rem"><Text text="{i18n>colMaterial}" /></Column>
@@ -272,7 +276,7 @@
 										<Column width="7rem" hAlign="Center" minScreenWidth="40rem" demandPopin="true" popinDisplay="WithoutHeader"><Text text="" /></Column>
 									</columns>
 									<items>
-										<ColumnListItem>
+										<ColumnListItem selected="{oferta>verCondiciones}">
 											<cells>
 												<ObjectIdentifier title="{oferta>material}" />
 												<Text text="{oferta>denominacion}" />
@@ -294,23 +298,20 @@
 										</ColumnListItem>
 									</items>
 								</Table>
-								<!-- Determinacion de precio: una linea por condicion de SAP (precio, descuentos, impuestos, subtotales) de cada material elegido -->
-								<HBox alignItems="Center" justifyContent="SpaceBetween" wrap="Wrap" class="sapUiSmallMarginTop">
-									<Title text="{i18n>determinacionPrecio}" level="H4" class="sapUiTinyMarginEnd" />
-									<Select selectedKey="{oferta>/filtroCondiciones}" change=".onCambiaFiltroCondiciones" width="18rem">
+								<!-- Determinacion de precio (condiciones de SAP: precio, descuentos, impuestos, subtotales): plegada hasta elegir una fila, solo la de esa fila -->
+								<Panel headerText="{i18n>determinacionPrecio}" expandable="true" expanded="{oferta>/verPrecioElegidos}" expand=".onExpandirPrecioElegidos" class="sapUiSmallMarginTop">
+									<Text text="{i18n>precioElegirLinea}" visible="{= !${oferta>/elegidoPrecio} }" />
+									<Select selectedKey="{oferta>/filtroCondiciones}" change=".onCambiaFiltroCondiciones" width="18rem" class="sapUiTinyMarginBottom" visible="{= !!${oferta>/elegidoPrecio} }">
 										<core:Item key="todos" text="{i18n>condTodos}" />
 										<core:Item key="relevantes" text="{i18n>condRelevantes}" />
 									</Select>
-								</HBox>
-								<VBox items="{oferta>/elegidosLista}">
-									<VBox class="sapUiTinyMarginTop">
-										<ObjectStatus text="{oferta>material} · {oferta>denominacion}" state="Information" />
-										<core:Fragment fragmentName="com.socopur.cotizador.view.fragment.CondicionesTabla" type="XML" />
+									<VBox items="{oferta>/elegidosLista}">
+										<VBox class="sapUiTinyMarginTop" visible="{= !!${oferta>verCondiciones} }">
+											<ObjectStatus text="{oferta>material} · {oferta>denominacion}" state="Information" />
+											<core:Fragment fragmentName="com.socopur.cotizador.view.fragment.CondicionesTabla" type="XML" />
+										</VBox>
 									</VBox>
-								</VBox>
-								<HBox class="sapUiSmallMarginTop">
-									<Button text="{i18n>agregarTodos}" press=".onAgregarLista" enabled="{= ${oferta>/pedidos}.length === 0 }" />
-								</HBox>
+								</Panel>
 							</VBox>
 
 							<!-- Vehiculos: un material, vista previa detallada -->

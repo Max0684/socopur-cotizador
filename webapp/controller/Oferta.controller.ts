@@ -1061,6 +1061,7 @@ export default class Oferta extends Controller {
 		oferta.setProperty("/materialElegido", null);
 		oferta.setProperty("/vista", {});
 		oferta.setProperty("/elegidosLista", []);
+		this.mostrarPrecioElegido(undefined);
 	}
 
 	public async onConfirmarMaterial(): Promise<void> {
@@ -1080,6 +1081,7 @@ export default class Oferta extends Controller {
 		oferta.setProperty("/materialElegido", null);
 		oferta.setProperty("/vista", {});
 		oferta.setProperty("/elegidosLista", elegidos.map((m) => this.filaPrecio(m, 1)));
+		this.mostrarPrecioElegido(undefined);
 		this.dialogoBusqueda?.close();
 		// Un solo material: se abre su detalle (lista de precios, descuentos, escalas, regalos y stock) antes de agregarlo.
 		if (elegidos.length === 1) {
@@ -1471,6 +1473,7 @@ export default class Oferta extends Controller {
 		const filas = (oferta.getProperty("/elegidosLista") as (Vehiculo & Repuesto & { tipo: string; cantidad: number; final: number; detalle: string })[]) ?? [];
 		filas.forEach((f) => this.agregarLinea(f, f.cantidad, f.final));
 		oferta.setProperty("/elegidosLista", []);
+		this.mostrarPrecioElegido(undefined);
 		oferta.setProperty("/guardado", { visible: false, texto: "" });
 		this.recalcular();
 		void this.repreciarLineasSap();
@@ -2796,6 +2799,29 @@ export default class Oferta extends Controller {
 		this.recalcular();
 	}
 
+	/**
+	 * Materiales elegidos: como en el detalle de la oferta, elegir una fila abre su determinacion de precio, solo la de esa fila (pruebas del
+	 * 30/10/2026, PU38: con varios materiales habia que recorrer todas las determinaciones para llegar al boton de agregar).
+	 */
+	public onElegirElegidoPrecio(event: ListBase$SelectionChangeEvent): void {
+		this.mostrarPrecioElegido(event.getParameter("listItem")?.getBindingContext("oferta")?.getObject() as object | undefined);
+	}
+
+	/** Plegar el panel suelta la fila elegida; desplegarlo sin fila elegida muestra como elegir una. */
+	public onExpandirPrecioElegidos(event: Panel$ExpandEvent): void {
+		if (!event.getParameter("expand")) {
+			this.mostrarPrecioElegido(undefined);
+		}
+	}
+
+	private mostrarPrecioElegido(fila: object | undefined): void {
+		const oferta = this.modeloOferta();
+		const filas = (oferta.getProperty("/elegidosLista") as object[]) ?? [];
+		filas.forEach((f, i) => oferta.setProperty(`/elegidosLista/${i}/verCondiciones`, f === fila));
+		oferta.setProperty("/elegidoPrecio", !!fila);
+		oferta.setProperty("/verPrecioElegidos", !!fila);
+	}
+
 	/* ---------- Modalidad por oferta generada (define clase de oferta/pedido y el camino posterior) ---------- */
 
 	/** Cada grupo (= una oferta) lleva su modalidad; por defecto la estandar de su tipo. */
@@ -3410,6 +3436,7 @@ export default class Oferta extends Controller {
 		// Sale de la lista de elegidos para no agregarlo dos veces con "Agregar todos".
 		const restantes = ((oferta.getProperty("/elegidosLista") as { material: string }[]) ?? []).filter((f) => f.material !== material.material);
 		oferta.setProperty("/elegidosLista", restantes);
+		this.mostrarPrecioElegido(undefined);
 		oferta.setProperty("/guardado", { visible: false, texto: "" });
 		this.recalcular();
 		void this.repreciarLineasSap();
@@ -4681,14 +4708,17 @@ export default class Oferta extends Controller {
 	}
 
 	/**
-	 * Areas de ventas del cliente (de las organizaciones del vendedor) para elegir en el perfil. Un cliente puede tener condiciones distintas
+	 * Areas de ventas del cliente en la organizacion del vendedor para elegir en el perfil. Un cliente puede tener condiciones distintas
 	 * por canal y por sector; con una sola opcion se aplica sola, con varias el vendedor elige.
+	 * Solo la organizacion del vendedor (pruebas del 29/10/2026, PU18): antes tambien salia la de vehiculos de su sede y un vendedor de
+	 * repuestos (1103) podia elegir un area de vehiculos (1101/11), que no correspondia a su cabecera. Las lineas de otra organizacion toman
+	 * solas la condicion del cliente en su area (aplicarModalidadGrupo, condicionDeArea).
 	 */
 	private cargarAreasCliente(): void {
 		const oferta = this.modeloOferta();
 		const cliente = oferta.getProperty("/cliente") as Cliente | null;
 		const org = String(oferta.getProperty("/perfil/orgVentas") ?? "");
-		const orgs = [org, orgVehiculosDe(org) ?? ""].filter(Boolean);
+		const orgs = [org].filter(Boolean);
 		const canales = (oferta.getProperty("/opciones/canales") as { key: string; text: string }[]) ?? [];
 		const opciones = opcionesAreaCliente(cliente?.condicionesAreas, orgs).map((o) => ({
 			...o,
@@ -5880,6 +5910,8 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 			opcionesCentro: this.centrosDe(String(mock.getProperty("/perfil/canal") ?? "11")),
 			materialElegido: null,
 			elegidosLista: [],
+			elegidoPrecio: false,
+			verPrecioElegidos: false,
 			solpeds: [],
 			ofertasGuardadas: [],
 			pedidos: [],
