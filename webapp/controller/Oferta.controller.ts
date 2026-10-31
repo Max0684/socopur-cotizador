@@ -44,6 +44,7 @@ import JSONModel from "sap/ui/model/json/JSONModel";
 import ResourceModel from "sap/ui/model/resource/ResourceModel";
 import ResourceBundle from "sap/base/i18n/ResourceBundle";
 import SearchField from "sap/m/SearchField";
+import type { Input$LiveChangeEvent } from "sap/m/Input";
 import Event from "sap/ui/base/Event";
 import Control from "sap/ui/core/Control";
 import Dialog from "sap/m/Dialog";
@@ -2374,9 +2375,15 @@ export default class Oferta extends Controller {
 		oferta.setProperty("/entregaDatos/direccionFactura", dirs.find((x) => x.id === id)?.texto ?? "");
 	}
 
-	public onCambiaDireccionUnica(): void {
+	/**
+	 * El texto se toma del evento: en liveChange el modelo todavia no lo tiene (lo recibe al salir del campo), y con el del modelo la direccion
+	 * de envio quedaba vacia y Guardar deshabilitado (prueba del 31/10/2026, oferta 3100007426).
+	 */
+	public onCambiaDireccionUnica(evento: Input$LiveChangeEvent): void {
+		const texto = evento.getParameter("value") ?? "";
 		const oferta = this.modeloOferta();
-		oferta.setProperty("/entregaDatos/direccionEnvio", String(oferta.getProperty("/entregaDatos/direccionUnica") ?? "").trim());
+		oferta.setProperty("/entregaDatos/direccionUnica", texto);
+		oferta.setProperty("/entregaDatos/direccionEnvio", texto.trim());
 	}
 
 	/**
