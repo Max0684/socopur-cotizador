@@ -33,6 +33,8 @@ export interface Creada {
 export function crearModeloFalso(opciones: OpcionesModeloFalso = {}) {
 	const llamadas: string[] = [];
 	const creadas: Creada[] = [];
+	/** Parametros puestos en cada accion (setParameter), por ruta. */
+	const parametros: Record<string, Record<string, unknown>> = {};
 	let contadorGrupo = 0;
 	let contadorItem = 0;
 
@@ -70,6 +72,10 @@ export function crearModeloFalso(opciones: OpcionesModeloFalso = {}) {
 		},
 		bindContext(ruta: string) {
 			return {
+				setParameter(nombre: string, valor: unknown) {
+					(parametros[ruta] ??= {})[nombre] = valor;
+					return this;
+				},
 				async execute() {
 					llamadas.push(`execute ${ruta}`);
 					if (opciones.fallaExecute?.some((f) => ruta.includes(f))) {
@@ -99,5 +105,5 @@ export function crearModeloFalso(opciones: OpcionesModeloFalso = {}) {
 			};
 		}
 	};
-	return { modelo, llamadas, creadas };
+	return { modelo, llamadas, creadas, parametros };
 }

@@ -82,15 +82,18 @@ const CAMPOS: Record<string, string> = {
 	ESTADO: "historialCampoEstado",
 	VIGENCIAHASTA: "historialCampoVigencia",
 	MODALIDAD: "historialCampoModalidad",
+	TIPOENTREGA: "historialCampoTipoEntrega",
 	KUNNRWE: "historialCampoDestinatario",
+	ADDRNUMBERWE: "historialCampoDireccionEnvio",
 	KUNNRZT: "historialCampoTransportista",
+	ADDRNUMBERZT: "historialCampoSede",
 	LIFNRSP: "historialCampoTransportista",
 	FECHAENTREGA: "historialCampoEntrega",
 	VBELNOFERTA: "historialCampoOferta",
 	VBELNPEDIDO: "historialCampoPedido"
 };
 
-const OPERACIONES = ["CREAR", "MODIFICAR", "BORRAR", "GENERAR_OFERTAS", "OFERTA_CREADA", "CREAR_PEDIDO", "PEDIDO_CREADO", "ANULAR", "RENOVAR", "ASIGNAR_VIN", "LIBERAR_VIN", "VIN_VENCIDO"];
+const OPERACIONES = ["CREAR", "MODIFICAR", "BORRAR", "GENERAR_OFERTAS", "OFERTA_CREADA", "CREAR_PEDIDO", "PEDIDO_CREADO", "ANULAR", "RENOVAR", "ASIGNAR_VIN", "LIBERAR_VIN", "VIN_VENCIDO", "CAMBIAR_ENTREGA"];
 
 export function textoOperacion(operacion: string, t: Textos): string {
 	return OPERACIONES.includes(operacion) ? t(`historialOp_${operacion}`) : operacion;

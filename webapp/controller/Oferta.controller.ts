@@ -11,7 +11,7 @@ import { consultarCondiciones, consultarEscalas, consultarPrecio, impuestosDeCon
 import { cantidadTxt, claveRegalos, consultarRegalos, faltanteStock, proximoRegalo, regalosQueAplican, zetaExcluidasPorZna0, type ConsultaRegalo, type PromoRegalo } from "com/socopur/cotizador/model/RegalosService";
 import { type CondicionServicio, type FilaCondicion, descuentosAplicados, filasDeCondiciones } from "com/socopur/cotizador/model/Condiciones";
 import { agruparVehiculos, buscarVehiculos, filtrarVehiculos, textoDetalleVehiculo } from "com/socopur/cotizador/model/VehiculosService";
-import { opcionesAlmacen, repartoAlmacen, type AlmacenLinea, areasOrgCanal, textoSolicitudAmpliacion, type CondicionArea, type OpcionAreaCliente, condicionDeArea, opcionesAreaCliente, almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, gruposParaGuardar, igvExonerado, MODALIDAD_DESPACHO, modalidadParaEntrega, modalidadPorDefecto, oficinaDe, orgVehiculosDe, puedeVenderOtroCentro, sectorDeCabecera, sectoresDeLineas, sectorQueFalta, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
+import { opcionesAlmacen, repartoAlmacen, type AlmacenLinea, areasOrgCanal, textoSolicitudAmpliacion, type CondicionArea, type OpcionAreaCliente, condicionDeArea, opcionesAreaCliente, almacenDeCentro, canalDe, centroValidoParaArea, faltaAreaDeVentas, firmaLineas, gruposParaGuardar, igvExonerado, MODALIDAD_DESPACHO, modalidadParaEntrega, modalidadPorDefecto, oficinaDe, orgVehiculosDe, puedeVenderOtroCentro, sectorDeCabecera, sectoresDeLineas, sectorQueFalta, totalesDeOferta } from "com/socopur/cotizador/model/Reglas";
 import { evaluarBloqueoPedido, type BloqueoPedido } from "com/socopur/cotizador/model/BloqueoPedido";
 import { correoUsuarioBtp } from "com/socopur/cotizador/model/UsuarioBtp";
 import { almacenDelNavegador, borrarRespaldo, claveRespaldo, guardarRespaldo, leerRespaldo, perfilRecuperado, siguienteContador, type DatosRespaldo, type Respaldo } from "com/socopur/cotizador/model/RespaldoOferta";
@@ -19,7 +19,7 @@ import { historialPublicado, leerHistorial, textoDetalle, textoLugar, textoOpera
 import { impresionPublicada, leerImpresion, leerPdfOferta, numerosParaImprimir, pdfPublicado } from "com/socopur/cotizador/model/ImpresionService";
 import { fechaDdMmAaaa, htmlVehiculo, type TextosVehiculo } from "com/socopur/cotizador/model/ImpresionVehiculo";
 import { leerTipoCambio, tipoCambioPublicado, tipoCambioTexto } from "com/socopur/cotizador/model/TipoCambioService";
-import { asignarVinItem, crearPedidoGrupo, guardarCotizacion, leerDatosGuardados, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type EntregaParaGuardar, ENVIO_UNICO, type VinAsignado, esperarVinculos, leerMotivoVinculo, anularGrupo } from "com/socopur/cotizador/model/CotizacionesService";
+import { asignarVinItem, cambiarEntregaCotizacion, crearPedidoGrupo, entregaDeGuardados, guardarCotizacion, leerDatosGuardados, leerEstadoPedido, leerVinsGrupo, leerVinsLibres, mismaEntrega, renovarCotizacion, OfertaEnProcesoError, type OfertaParaGuardar, type EntregaParaGuardar, ENVIO_UNICO, type VinAsignado, esperarVinculos, leerMotivoVinculo, anularGrupo } from "com/socopur/cotizador/model/CotizacionesService";
 import { buscarClientes, type ClienteSap } from "com/socopur/cotizador/model/ClientesService";
 import { AmpliacionEnProcesoError, ampliacionPublicada, ampliarRetail, filtrarPorOrg, leerAmpliacion, organizacionesDe, solicitarAmpliacion, solicitudPublicada, type EstadoAmpliacion, type FilaAmpliacion, type FilaPorOrg } from "com/socopur/cotizador/model/AmpliacionService";
 import { tipoDocPorNumero, validarDocumento } from "com/socopur/cotizador/model/Documento";
@@ -398,6 +398,8 @@ export default class Oferta extends Controller {
 	/** Regalos ya avisados por linea, para avisar solo cuando cambian. */
 	private regalosAvisados = new Map<string, string>();
 	private instantanea = "[]";
+	/** Entrega que tiene guardada en SAP la oferta abierta: Guardar cambios solo la cambia si es otra (historia 1.10). */
+	private entregaGuardada?: EntregaParaGuardar;
 	private dialogoSolicitud?: Dialog;
 	private dialogoVin?: Dialog;
 	private dialogoHistorial?: Dialog;
@@ -4084,6 +4086,7 @@ export default class Oferta extends Controller {
 		}
 		try {
 			const datos = await leerDatosGuardados(odata, cotizId);
+			this.entregaGuardada = entregaDeGuardados(datos);
 			const oferta = this.modeloOferta();
 			oferta.setProperty("/entrega", datos.entrega);
 			oferta.setProperty("/perfil/expedicion", datos.vsbed);
@@ -5149,11 +5152,16 @@ export default class Oferta extends Controller {
 	}
 
 	/**
-	 * Con ?odata=1 y una oferta NUEVA guarda en SAP y muestra los numeros reales (una oferta por grupo).
-	 * Sin la bandera, o al modificar una oferta existente (la accion Edit aun no esta conectada), sigue simulado.
+	 * Con ?odata=1 y una oferta NUEVA guarda en SAP y muestra los numeros reales (una oferta por grupo). Con una oferta SAP ya guardada,
+	 * Guardar cambios cambia su entrega (historia 1.10). Sin la bandera sigue simulado.
 	 */
 	public async onGuardar(): Promise<void> {
 		const oferta = this.modeloOferta();
+		const cotizId = (oferta.getProperty("/historial/cotizId") as string) ?? "";
+		if (this.usarOData() && (oferta.getProperty("/numero") as string) && cotizId) {
+			await this.guardarEntregaEnSap(cotizId);
+			return;
+		}
 		if (this.usarOData() && !(oferta.getProperty("/numero") as string)) {
 			const previas = (oferta.getProperty("/ofertasGuardadas") as OfertaGuardada[]) ?? [];
 			if (previas.some((o) => o.cotizId)) {
@@ -5340,6 +5348,57 @@ export default class Oferta extends Controller {
 			} else {
 				MessageBox.error(i18n.getText("guardarError", [this.motivoDeError(error)]) as string);
 			}
+		} finally {
+			vista?.setBusy(false);
+		}
+	}
+
+	/**
+	 * Oferta SAP ya guardada (historia 1.10): cambia su entrega (recojo o envio, direccion y transportista) con la accion cambiarEntrega, en la
+	 * cotizacion y en sus ofertas sin pedido, sin anularla ni crear otra. Los productos y cantidades de una oferta guardada no se cambian por aqui.
+	 */
+	private async guardarEntregaEnSap(cotizId: string): Promise<void> {
+		const oferta = this.modeloOferta();
+		const i18n = this.i18n();
+		const cliente = oferta.getProperty("/cliente") as Cliente | null;
+		if (!cliente?.kunnr) {
+			MessageBox.error(i18n.getText("guardarSinCliente") as string);
+			return;
+		}
+		if (firmaLineas((oferta.getProperty("/lineas") as Linea[]) ?? []) !== firmaLineas(JSON.parse(this.instantanea) as Linea[])) {
+			MessageBox.information(i18n.getText("entregaSoloEntrega") as string);
+			return;
+		}
+		const entrega = this.entregaParaGuardar(cliente);
+		if (entrega.error) {
+			MessageBox.error(entrega.error);
+			return;
+		}
+		if (!entrega.datos || (this.entregaGuardada && mismaEntrega(entrega.datos, this.entregaGuardada))) {
+			MessageToast.show(i18n.getText("entregaSinCambios") as string);
+			return;
+		}
+		// SAP solo graba con la sesion del vendedor (la da su PIN y dura una jornada).
+		if (!sesionDelVendedorRecordado()) {
+			MessageBox.error(i18n.getText("vendIdSesionVencida") as string);
+			const raiz = (this.getOwnerComponent() as UIComponent).getRootControl() as View;
+			void (raiz.getController() as unknown as { onCambiarVendedor(): Promise<void> }).onCambiarVendedor();
+			return;
+		}
+		quitarTodosLosMensajes();
+		const vista = this.getView();
+		vista?.setBusy(true);
+		try {
+			const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel;
+			const r = await cambiarEntregaCotizacion(odata, cotizId, entrega.datos, await correoUsuarioBtp());
+			if (r.error) {
+				MessageBox.error(i18n.getText("entregaNoCambiada", [r.error]) as string);
+				return;
+			}
+			this.entregaGuardada = entrega.datos;
+			oferta.setProperty("/guardado", { visible: true, texto: i18n.getText("entregaCambiada", [oferta.getProperty("/numero")]) as string });
+		} catch (error) {
+			MessageBox.error(i18n.getText("entregaNoCambiada", [this.motivoDeError(error)]) as string);
 		} finally {
 			vista?.setBusy(false);
 		}
@@ -5785,6 +5844,7 @@ ${ed.comentario ? `<p><b>${e(i18n.getText("impresionObs"))}:</b> ${e(ed.comentar
 			let clonada = false;
 			const oferta = this.modeloOferta();
 			oferta.setData(this.crearOferta());
+			this.entregaGuardada = undefined;
 			if (this.usarOData()) {
 				const canalInicial = String(mock.getProperty("/perfil/canal") ?? "11");
 				await this.sincronizarCatalogosArea(canalInicial);

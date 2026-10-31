@@ -644,6 +644,77 @@ export async function renovarCotizacion(modelo: ODataModel, cotizId: string, usu
 	};
 }
 
+/**
+ * Parametros de cambiarEntrega (historia 1.10). SAP los trata como obligatorios: viajan todos, vacios los que no aplican. Con recojo solo el
+ * tipo; con envio el destinatario y su direccion ("$" = de un solo uso, con nombre y calle) y el transportista, ZT o SP, como al crear.
+ */
+export function parametrosEntrega(e: EntregaParaGuardar): Record<string, string> {
+	const campos = camposEntrega(e);
+	const unica = campos.AddrnumberWe === ENVIO_UNICO ? e.direccionUnica : undefined;
+	return {
+		TipoEntrega: e.tipo,
+		KunnrWe: campos.KunnrWe ?? "",
+		AddrnumberWe: campos.AddrnumberWe ?? "",
+		DirecName1: (unica?.nombre ?? "").slice(0, 40),
+		DirecStreet: (unica?.calle ?? "").slice(0, 60),
+		KunnrZt: campos.KunnrZt ?? "",
+		AddrnumberZt: campos.AddrnumberZt ?? "",
+		LifnrSp: campos.LifnrSp ?? ""
+	};
+}
+
+/** La entrega que quedo guardada en la cotizacion, con la misma forma que la que arma la pantalla para guardar. */
+export function entregaDeGuardados(d: DatosGuardados): EntregaParaGuardar {
+	if (d.entrega !== "envio") {
+		return { tipo: "02" };
+	}
+	return {
+		tipo: "01",
+		kunnrWe: d.kunnrWe || undefined,
+		addrnumberWe: d.addrnumberWe || undefined,
+		...(d.addrnumberWe === ENVIO_UNICO ? { direccionUnica: { nombre: "", calle: d.direccionUnica } } : {}),
+		kunnrZt: d.kunnrZt || undefined,
+		addrnumberZt: d.kunnrZt ? d.addrnumberZt || undefined : undefined,
+		lifnrSp: d.kunnrZt ? undefined : d.lifnrSp || undefined
+	};
+}
+
+/** true si las dos entregas llevan a SAP lo mismo. Los numeros se comparan sin ceros a la izquierda; el nombre de la direccion de un solo uso no cuenta. */
+export function mismaEntrega(a: EntregaParaGuardar, b: EntregaParaGuardar): boolean {
+	const numero = (v: string) => (/^\d+$/.test(v) ? v.replace(/^0+(?=\d)/, "") : v.trim());
+	const clave = (e: EntregaParaGuardar) => {
+		const p = parametrosEntrega(e);
+		return [p.TipoEntrega, p.KunnrWe, p.AddrnumberWe, p.DirecStreet, p.KunnrZt, p.AddrnumberZt, p.LifnrSp].map(numero).join("|");
+	};
+	return clave(a) === clave(b);
+}
+
+export interface ResultadoEntrega {
+	/** Motivo cuando SAP no acepto el cambio en alguna oferta (prefijo "[Entrega grupo NN]"); vacio si la entrega cambio. */
+	error: string;
+}
+
+/**
+ * cambiarEntrega (historia 1.10) sobre una cotizacion ACTIVA: cambia la entrega de la cotizacion y de cada oferta SAP sin pedido, sin anularla
+ * ni crear otra. SAP primero simula el cambio en todas las ofertas y solo si las acepta todas lo aplica; si no, la cotizacion queda como estaba y
+ * el motivo en Comentario con el prefijo "[Entrega grupo NN]", por eso se vuelve a leer. La accion misma rechaza el cambio (y se lanza el error)
+ * si algun grupo ya tiene pedido o esta en proceso.
+ */
+export async function cambiarEntregaCotizacion(modelo: ODataModel, cotizId: string, entrega: EntregaParaGuardar, usuario = ""): Promise<ResultadoEntrega> {
+	const activa = `/Cotizacion(CotizId=${cotizId},IsActiveEntity=true)`;
+	const operacion = modelo.bindContext(`${activa}/${NS}.cambiarEntrega(...)`);
+	for (const [nombre, valor] of Object.entries(parametrosEntrega(entrega))) {
+		operacion.setParameter(nombre, valor);
+	}
+	await ponerUsuario(modelo, operacion, "Cotizacion", "cambiarEntrega", usuario);
+	// ui5lint-disable-next-line no-deprecated-api -- invoke() existe desde UI5 1.123; el servidor de Socopur y los tipos son 1.120
+	await operacion.execute("$auto", true);
+	const leido = (await modelo.bindContext(activa, undefined, { $select: "CotizId,Comentario", $$ownRequest: true }).requestObject()) as Pick<Cotizacion, "Comentario">;
+	const comentario = leido.Comentario ?? "";
+	const desde = comentario.indexOf("[Entrega grupo");
+	return { error: desde >= 0 ? comentario.slice(desde).trim() : "" };
+}
+
 /** Estado final del vinculo de un VIN con VELO: V vinculado, E error, P todavia en proceso. */
 export type EstadoVinculo = "V" | "E" | "P";
 

@@ -224,6 +224,14 @@ export function gruposParaGuardar(grupos: GrupoCarrito[], perfil: PerfilVenta, a
 }
 
 /**
+ * Lo que cuenta como cambio en las lineas de una oferta guardada: material y cantidad de las que no son regalo. Lo que la pantalla recalcula
+ * al abrirla (condiciones, totales, regalos) no cuenta: si no, una oferta recien abierta pareceria cambiada.
+ */
+export function firmaLineas(lineas: Pick<LineaCarrito, "material" | "cantidad" | "bonificacion">[]): string {
+	return JSON.stringify(lineas.filter((l) => !l.bonificacion).map((l) => [l.material, Number(l.cantidad)]));
+}
+
+/**
  * true si el centro es valido para la organizacion/canal segun TVKWZ. Si no hay lista para esa area
  * (por ejemplo 1103/99, que no se leyo completa) no se bloquea.
  */
