@@ -14,6 +14,8 @@ export interface FiltroVehiculos {
 	color?: string;
 	anio?: string;
 	condicion?: string;
+	/** Modelos exactos (carga desde Excel); vacio = todos. */
+	matnrs?: string[];
 }
 
 /** Fila de la entidad Vehiculo tal como llega (solo lo que usa el front). */
@@ -104,6 +106,9 @@ export function filtroVehiculos(f: FiltroVehiculos): string {
 	}
 	if (f.condicion) {
 		partes.push(`Condicion eq '${comillas(f.condicion.toUpperCase())}'`);
+	}
+	if (f.matnrs?.length) {
+		partes.push(`(${f.matnrs.map((m) => `Matnr eq '${comillas(m.toUpperCase())}'`).join(" or ")})`);
 	}
 	return partes.join(" and ");
 }

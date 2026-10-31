@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { filaDeCondicion, filasDeCondiciones, importeVisible, type CondicionServicio } from "../webapp/model/Condiciones.ts";
+import { descuentosAplicados, filaDeCondicion, filasDeCondiciones, importeVisible, type CondicionServicio } from "../webapp/model/Condiciones.ts";
 import { consultarCondiciones } from "../webapp/model/PreciosService.ts";
 import { crearModeloFalso } from "./helpers/modeloFalso.ts";
 
@@ -23,10 +23,20 @@ test("filasDeCondiciones con verTodas muestra tambien las de valor cero e inacti
 	assert.deepEqual(filasDeCondiciones(pedido, true).map((f) => f.tipo), ["Z300", "Z309", "Z320", "Z303", "ZIGV", "Z339"]);
 });
 
-test("el importe de un porcentaje se corrige (el servicio lo da dividido por 10) y el de un monto queda tal cual", () => {
-	assert.equal(importeVisible({ CondType: "ZIGV", Valor: 1.8, TipoCalculo: "A" }), "18.00 %");
-	assert.equal(importeVisible({ CondType: "Z320", Valor: -1, TipoCalculo: "A" }), "-10.00 %");
+test("el porcentaje toma la escala que cuadra con el importe de la linea: dividido por 10 (antes) o directo (hoy)", () => {
+	// Escala anterior (18 % como 1.8): pedido 3300008237.
+	assert.equal(importeVisible({ CondType: "ZIGV", Valor: 1.8, TipoCalculo: "A", Base: 58.77, Total: 8.96 }), "18.00 %");
+	assert.equal(importeVisible({ CondType: "Z320", Valor: -1, TipoCalculo: "A", Base: 65.3, Total: -6.53 }), "-10.00 %");
+	// Escala directa, PrecioCond del 30/10/2026 (GLD-100/90X17-001, 1203/10, cliente de grupo 26): antes se mostraba -100 % y 180 %.
+	assert.equal(importeVisible({ CondType: "Z320", Valor: -10, TipoCalculo: "A", Base: 88, Total: -8.8 }), "-10.00 %");
+	assert.equal(importeVisible({ CondType: "ZIGV", Valor: 18, TipoCalculo: "A", Base: 79.2, Total: 12.08 }), "18.00 %");
+	assert.equal(importeVisible({ CondType: "Z323", Valor: -2.5, TipoCalculo: "A", Base: 35.6, Total: -0.89 }), "-2.50 %");
 	assert.equal(importeVisible({ CondType: "Z300", Valor: 65.3, TipoCalculo: "C" }), "65.30");
+});
+
+test("sin base ni importe (condicion de la oferta guardada) el porcentaje se muestra tal cual", () => {
+	assert.equal(importeVisible({ CondType: "ZIGV", Valor: 18, TipoCalculo: "A" }), "18.00 %");
+	assert.equal(importeVisible({ CondType: "Z320", Valor: -10, TipoCalculo: "A", Total: -6.53 }), "-10.00 %");
 });
 
 test("cada fila trae descripcion, valor de la linea, unidades y moneda del documento", () => {
@@ -88,4 +98,12 @@ test("filaDeCondicion acepta los indicadores como booleano o como texto (el serv
 	assert.equal(g.estadistica, false);
 	assert.equal(g.manual, false);
 	assert.equal(g.relevante, false);
+});
+
+test("el beneficio de la promocion sale con el porcentaje real (PU27: Z320 del 10 % se mostraba -100 %)", () => {
+	const filas = filasDeCondiciones([
+		{ CondType: "Z300", Descripcion: "Precio Lista", Valor: 88, Moneda: "PEN", Base: 1, Total: 88, TipoCalculo: "C", Paso: "010" },
+		{ CondType: "Z320", Descripcion: "Dsc.Pos %", Valor: -10, Base: 88, Total: -8.8, TipoCalculo: "A", Paso: "040" }
+	]);
+	assert.deepEqual(descuentosAplicados(filas), [{ nombre: "Dsc.Pos % (Z320)", beneficio: "-10.00 %", monto: "-8.80" }]);
 });

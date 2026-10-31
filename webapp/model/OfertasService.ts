@@ -146,8 +146,8 @@ interface CondicionPosSap {
 
 /**
  * Pasa una condicion del documento al formato de la simulacion (PrecioCond) para reutilizar la misma tabla.
- * La vista entrega el porcentaje directo (18 % = 18.0, descuentos con signo negativo) y la simulacion lo entrega dividido por 10 (1.8):
- * se deja en esa escala para reutilizar Condiciones.ts. El importe de las demas condiciones se copia tal cual.
+ * La vista entrega el porcentaje directo (18 % = 18.0, descuentos con signo negativo), igual que hoy la simulacion: se copia tal cual,
+ * como el importe de las demas condiciones (Condiciones.porcentajeDe lo muestra).
  * En los porcentajes Waers viene vacio: la moneda es la del documento (Waerk). Manual = origen 'C'.
  */
 /** Marca de SAP como texto: el servicio entrega los indicadores como "X" o como booleano segun el campo (de ahi el error "trim is not a function"). */
@@ -156,11 +156,10 @@ function marca(valor: unknown): string {
 }
 
 function condicionDeDocumento(c: CondicionPosSap): CondicionServicio {
-	const porcentaje = c.Krech === "A";
 	return {
 		CondType: c.Kschl,
 		Descripcion: c.Descripcion,
-		Valor: porcentaje ? Number(c.Kbetr ?? 0) / 10 : c.Kbetr,
+		Valor: c.Kbetr,
 		Moneda: c.Waers,
 		UmPrecio: c.Kpein,
 		Unidad: c.Kmein,

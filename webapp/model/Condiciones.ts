@@ -61,13 +61,25 @@ const num = (v: unknown): number => {
 
 const formato = (v: number): string => v.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-/** En los porcentajes el valor del servicio sale dividido por 10 (18 % aparece como 1.8): se corrige al mostrarlo. */
-const FACTOR_PORCENTAJE = 10;
+/**
+ * Porcentaje de una condicion (calculo A). SAP guarda los porcentajes en por mil (KONP 180.00 = 18 %) y el servicio los ha entregado en dos
+ * escalas: dividido por 10 (18 % como 1.8, hasta octubre) y directo (18 y -10, pruebas del 29-30/10/2026, que mostraban 180 % y -100 %).
+ * Se toma la escala que cuadra con el importe de la linea (Total ~ Base x %); sin base ni total, el valor tal cual, como lo entrega hoy.
+ */
+export function porcentajeDe(c: CondicionServicio): number {
+	const valor = num(c.Valor);
+	const base = num(c.Base);
+	const total = num(c.Total);
+	if (!base || !total) {
+		return valor;
+	}
+	const desvio = (p: number): number => Math.abs((base * p) / 100 - total);
+	return desvio(valor * 10) < desvio(valor) ? valor * 10 : valor;
+}
 
 /** Texto del importe: "10,00- %" en los porcentajes y el monto en los demas casos. */
 export function importeVisible(c: CondicionServicio): string {
-	const valor = num(c.Valor);
-	return c.TipoCalculo === "A" ? `${formato(valor * FACTOR_PORCENTAJE)} %` : formato(valor);
+	return c.TipoCalculo === "A" ? `${formato(porcentajeDe(c))} %` : formato(num(c.Valor));
 }
 
 export function filaDeCondicion(c: CondicionServicio): FilaCondicion {
@@ -86,7 +98,7 @@ export function filaDeCondicion(c: CondicionServicio): FilaCondicion {
 		manual: marcado(c.Manual),
 		relevante: !inactiva && (total !== 0 || num(c.Valor) !== 0),
 		valorNum: total,
-		importeNum: formato(c.TipoCalculo === "A" ? num(c.Valor) * FACTOR_PORCENTAJE : num(c.Valor)),
+		importeNum: formato(c.TipoCalculo === "A" ? porcentajeDe(c) : num(c.Valor)),
 		importeUnidad: c.TipoCalculo === "A" ? "%" : (c.Moneda || c.MonedaDoc || ""),
 		umPrecioTxt: num(c.UmPrecio) ? `${num(c.UmPrecio)} ${c.Unidad ?? ""}`.trim() : "",
 		valorMoneda: c.MonedaDoc || c.Moneda || "",

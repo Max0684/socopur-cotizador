@@ -135,6 +135,31 @@ export async function buscarMateriales(modelo: ODataModel, filtros: FiltrosMater
 	return contextos.map((c) => filaDeMaterial(c.getObject() as MaterialSap, filtros.vkorg, filtros.vtweg, sectorCab));
 }
 
+/** Codigos por consulta en la busqueda exacta: el $filter con muchos "or" se vuelve largo para la URL. */
+const CODIGOS_POR_CONSULTA = 20;
+
+/**
+ * Materiales con esos codigos exactos en la organizacion y canal (carga desde Excel). Los que no existen ahi simplemente no vuelven.
+ * El servicio acepta "or" entre codigos (probado en el 130 el 30/10/2026).
+ */
+export async function materialesPorCodigo(modelo: ODataModel, vkorg: string, vtweg: string, codigos: string[], sectorCab?: (canal: string, sector: string, org?: string) => string): Promise<FilaRepuestoSap[]> {
+	const lotes: string[][] = [];
+	for (let i = 0; i < codigos.length; i += CODIGOS_POR_CONSULTA) {
+		lotes.push(codigos.slice(i, i + CODIGOS_POR_CONSULTA));
+	}
+	const resultados = await Promise.all(
+		lotes.map(async (lote) => {
+			const codigosFiltro = lote.map((c) => `Matnr eq '${comillas(c.toUpperCase())}'`).join(" or ");
+			const lista = modelo.bindList("/Material", undefined, undefined, undefined, {
+				$filter: `Vkorg eq '${comillas(vkorg)}' and Vtweg eq '${comillas(vtweg)}' and (${codigosFiltro})`
+			});
+			const contextos = await lista.requestContexts(0, lote.length);
+			return contextos.map((c) => filaDeMaterial(c.getObject() as MaterialSap, vkorg, vtweg, sectorCab));
+		})
+	);
+	return resultados.flat();
+}
+
 /* ---------- Combos Linea > Clase > Familia (entidades Linea, Clase y Familia) y stock por centro ---------- */
 
 export interface OpcionSegmento {

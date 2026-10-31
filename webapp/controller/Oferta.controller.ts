@@ -26,7 +26,8 @@ import { tipoDocPorNumero, validarDocumento } from "com/socopur/cotizador/model/
 import { conAdvertencia, consultarDocumento, documentoPublicado, tipoDeDocumento } from "com/socopur/cotizador/model/DocumentoService";
 import { usarOData as usarODataActual } from "com/socopur/cotizador/model/Modo";
 import { AltaEnProcesoError, cambiosDeEdicion, cargarUbigeo, crearClienteSap, esPersona, leerBloqueoEdicion, leerCambiosCliente, leerClienteEdicion, modificarClienteSap, partirNombres, partirRazon, serviciosDeCliente, TIPO_CLIENTE, tiposClientePara, ubicarEnArbol, type CambiosCliente, type DatosAlta, type DatosEdicion, type NodoUbigeo } from "com/socopur/cotizador/model/ClienteEscrituraService";
-import { buscarRepuestosConStock, disponibilidadPorAlmacen, motivoVacio } from "com/socopur/cotizador/model/MaterialesService";
+import { buscarRepuestosConStock, combinarStock, disponibilidadPorAlmacen, materialesPorCodigo, motivoVacio, stockPorCentro } from "com/socopur/cotizador/model/MaterialesService";
+import { ENCABEZADO_PLANTILLA, leerPlantilla, validarContraSap, type FilaPlantilla, type RepuestoExcel, type ResultadoExcel } from "com/socopur/cotizador/model/CargaExcel";
 import { cargarPreciosLista, precioListaDisponible, textoPrecioLista } from "com/socopur/cotizador/model/PrecioListaService";
 import { sesionDelVendedorRecordado, textoOrganizacion } from "com/socopur/cotizador/model/VendedoresService";
 import { listaDeSede } from "com/socopur/cotizador/model/Ciudades";
@@ -379,6 +380,8 @@ export default class Oferta extends Controller {
 	/** Material del detalle abierto (su fila de la lista de elegidos); la cantidad y las condiciones se piden de nuevo a SAP al cambiarla. */
 	private detalleMaterial?: Vehiculo & Repuesto & { tipo: string };
 	private dialogoExcel?: Dialog;
+	/** Materiales de SAP validados en la carga desde Excel, listos para agregar (con SAP real; con el catalogo de ejemplo queda vacio). */
+	private excelSap: { m: Vehiculo & Repuesto & { tipo: string; detalle?: string }; cantidad: number }[] = [];
 	private dialogoValidar?: Dialog;
 	private dialogoVistaOferta?: Dialog;
 	private dialogosCliente: Record<string, Dialog> = {};
@@ -999,34 +1002,36 @@ export default class Oferta extends Controller {
 			MessageBox.warning(i18n.getText("precioSinCliente") as string);
 			return false;
 		}
-		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel;
-		const canal = canalDe(String(oferta.getProperty("/perfil/busqueda/canal") ?? "11"));
-		const centro = String(oferta.getProperty("/perfil/centro") ?? "");
 		try {
-			await Promise.all(
-				delSap.map(async (m) => {
-					// Vehiculo: Matnr = modelo, el precio sale de la variante y el centro es el del vehiculo.
-					const canalDoc = this.canalDeDocumento(m.orgVentas, m.sectorOferta, m.variante ? "vehiculos" : "repuestos") || canal;
-					const base = m.variante
-						? { kunnr, vkorg: m.orgVentas, vtweg: canalDoc, spart: m.sectorOferta, auart: CLASE_OFERTA_PRECIO_VEH, matnr: m.material, werks: m.centro ?? centro, cantidad, varcond: m.variante, ...this.extrasPrecio() }
-						: { kunnr, vkorg: m.orgVentas, vtweg: canalDoc, spart: sectorDeCabecera(canalDoc, m.sector, m.orgVentas), auart: CLASE_OFERTA_PRECIO, matnr: m.material, werks: centro, cantidad, ...this.extrasPrecio() };
-					const [pen, usd] = await Promise.all([consultarPrecio(odata, { ...base, waers: "PEN" }), consultarPrecio(odata, { ...base, waers: "USD" })]);
-					m.precioPenSap = pen.precioUnitario;
-					m.precioUsd = usd.precioUnitario;
-					m.sinPrecio = false;
-					// La lista de condiciones es informativa: si falla no impide elegir el material.
-					m.condicionesSap = await consultarCondiciones(odata, { ...base, waers: oferta.getProperty("/perfil/moneda") === "USD" ? "USD" : "PEN" }).catch((e: Error) => {
-						console.warn(`[Cotizador] condiciones de ${m.material}: ${e.message}`);
-						return [];
-					});
-					m.condiciones = filasDeCondiciones(m.condicionesSap, this.verTodasCondiciones());
-				})
-			);
+			await Promise.all(delSap.map((m) => this.precioSapDe(m, kunnr, cantidad)));
 			return true;
 		} catch (error) {
 			MessageBox.error(i18n.getText("precioSapError", [(error as Error).message]) as string);
 			return false;
 		}
+	}
+
+	/** Precio de SAP (soles y dolares) y condiciones de UN material para el cliente. Lanza el error de SAP si no hay precio. */
+	private async precioSapDe(m: Vehiculo & Repuesto & { tipo: string }, kunnr: string, cantidad: number): Promise<void> {
+		const oferta = this.modeloOferta();
+		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel;
+		const canal = canalDe(String(oferta.getProperty("/perfil/busqueda/canal") ?? "11"));
+		const centro = String(oferta.getProperty("/perfil/centro") ?? "");
+		// Vehiculo: Matnr = modelo, el precio sale de la variante y el centro es el del vehiculo.
+		const canalDoc = this.canalDeDocumento(m.orgVentas, m.sectorOferta, m.variante ? "vehiculos" : "repuestos") || canal;
+		const base = m.variante
+			? { kunnr, vkorg: m.orgVentas, vtweg: canalDoc, spart: m.sectorOferta, auart: CLASE_OFERTA_PRECIO_VEH, matnr: m.material, werks: m.centro ?? centro, cantidad, varcond: m.variante, ...this.extrasPrecio() }
+			: { kunnr, vkorg: m.orgVentas, vtweg: canalDoc, spart: sectorDeCabecera(canalDoc, m.sector, m.orgVentas), auart: CLASE_OFERTA_PRECIO, matnr: m.material, werks: centro, cantidad, ...this.extrasPrecio() };
+		const [pen, usd] = await Promise.all([consultarPrecio(odata, { ...base, waers: "PEN" }), consultarPrecio(odata, { ...base, waers: "USD" })]);
+		m.precioPenSap = pen.precioUnitario;
+		m.precioUsd = usd.precioUnitario;
+		m.sinPrecio = false;
+		// La lista de condiciones es informativa: si falla no impide elegir el material.
+		m.condicionesSap = await consultarCondiciones(odata, { ...base, waers: oferta.getProperty("/perfil/moneda") === "USD" ? "USD" : "PEN" }).catch((e: Error) => {
+			console.warn(`[Cotizador] condiciones de ${m.material}: ${e.message}`);
+			return [];
+		});
+		m.condiciones = filasDeCondiciones(m.condicionesSap, this.verTodasCondiciones());
 	}
 
 	private verTodasCondiciones(): boolean {
@@ -2922,13 +2927,9 @@ export default class Oferta extends Controller {
 	public async onDescargarPlantilla(): Promise<void> {
 		try {
 			const X = await this.cargarXlsx();
-			// Mismas columnas que la carga actual de ZSDP009 (lectura por posicion; la fila 1 es el encabezado).
-			const hoja = X.utils.aoa_to_sheet([
-				["Material", "Tipo", "Cantidad", "Color", "Condicion", "Modelo", "Marca", "Anio"],
-				["LUB-1040", "R", 2, "", "", "", "", ""],
-				["LUB-2075", "R", 1, "", "", "", "", ""],
-				["VEH-LKP200", "V", 1, "Negro Mate", "CBU", "KPT 200", "Lifan", 2026]
-			]);
+			// Plantilla simplificada (pruebas del 30/10/2026): solo el encabezado, sin filas de ejemplo con codigos que no existen en SAP.
+			// Color, condicion y ano solo se llenan en vehiculos; tipo, modelo y marca salen del material.
+			const hoja = X.utils.aoa_to_sheet([ENCABEZADO_PLANTILLA]);
 			const libro = X.utils.book_new();
 			X.utils.book_append_sheet(libro, hoja, "Detalle");
 			X.writeFile(libro, "plantilla_cotizador.xlsx");
@@ -2956,7 +2957,12 @@ export default class Oferta extends Controller {
 			const datos = await archivo.arrayBuffer();
 			const libro = X.read(datos, { type: "array" });
 			const filas = X.utils.sheet_to_json(libro.Sheets[libro.SheetNames[0]], { header: 1, blankrows: false }) as unknown[][];
-			this.validarExcel(filas);
+			const plantilla = leerPlantilla(filas);
+			if (this.modeloBusqueda().getProperty("/ejemplo") === false) {
+				await this.validarExcelSap(plantilla);
+			} else {
+				this.validarExcel(plantilla);
+			}
 		} catch (e) {
 			const clave = (e as Error).message === "xlsx" ? "excelLibError" : "excelLeerError";
 			modelo.setProperty("/error", this.i18n().getText(clave));
@@ -2964,26 +2970,20 @@ export default class Oferta extends Controller {
 	}
 
 	/**
-	 * Valida contra el catalogo (mock; luego sera el servicio). Columnas como en ZSDP009: A Material, B Tipo (V = vehiculo),
-	 * C Cantidad, D Color, E Condicion, F Modelo, G Marca (no se usa), H Anio. La fila 1 es el encabezado.
-	 * Mejora sobre ZSDP009: aqui tambien se avisa de cantidad invalida, repetidos, tipo distinto, atributos que no coinciden y stock.
+	 * Valida contra el catalogo de EJEMPLO (sin SAP). Con SAP real valida validarExcelSap. Mejora sobre ZSDP009: aqui tambien se avisa de
+	 * cantidad invalida, repetidos, tipo distinto, atributos que no coinciden y stock.
 	 */
-	private validarExcel(filas: unknown[][]): void {
+	private validarExcel(plantilla: FilaPlantilla[]): void {
 		const i18n = this.i18n();
 		const mock = this.modeloMock();
 		const vehiculos = mock.getProperty("/catalogo/vehiculos") as Vehiculo[];
 		const repuestos = mock.getProperty("/catalogo/repuestos") as Repuesto[];
-		const texto = (v: unknown): string => String(v ?? "").trim();
 		const igual = (a: string, b: string | number): boolean => a === "" || a.toLowerCase() === String(b).toLowerCase();
 		type Fila = { fila: number; material: string; denominacion: string; cantidad: number; estado: string; mensaje: string; mat?: string; esVeh?: boolean };
 		const resultado: Fila[] = [];
-		filas.slice(1).forEach((r, i) => {
-			const material = texto(r[0]);
-			if (!material) {
-				return;
-			}
-			const fila = i + 2;
-			const cantidad = Number(r[2]);
+		this.excelSap = [];
+		plantilla.forEach((p) => {
+			const { fila, material, cantidad } = p;
 			const veh = vehiculos.find((m) => m.material.toLowerCase() === material.toLowerCase());
 			const rep = repuestos.find((m) => m.material.toLowerCase() === material.toLowerCase());
 			const item = veh ?? rep;
@@ -2998,11 +2998,11 @@ export default class Oferta extends Controller {
 			const esVeh = !!veh;
 			let estado = "Success";
 			let mensaje = i18n.getText("excelOk") as string;
-			const declaraVeh = texto(r[1]).toUpperCase() === "V";
-			if (declaraVeh !== esVeh) {
+			const declaraVeh = p.tipo === "V";
+			if (p.tipo !== "" && declaraVeh !== esVeh) {
 				estado = "Warning";
 				mensaje = i18n.getText("excelTipoDifiere", [i18n.getText(esVeh ? "excelVehiculo" : "excelRepuesto")]) as string;
-			} else if (veh && !(igual(texto(r[3]), veh.color) && igual(texto(r[4]), veh.condicion) && igual(texto(r[7]), veh.anio))) {
+			} else if (veh && !(igual(p.color, veh.color) && igual(p.condicion, veh.condicion) && igual(p.anio, veh.anio))) {
 				estado = "Warning";
 				mensaje = i18n.getText("excelAtributosDifieren", [`${veh.color} \u00b7 ${veh.anio} \u00b7 ${veh.condicion}`]) as string;
 			}
@@ -3027,6 +3027,12 @@ export default class Oferta extends Controller {
 				r.mensaje = i18n.getText("excelSupera", [disponible]) as string;
 			}
 		});
+		this.mostrarResultadoExcel(resultado);
+	}
+
+	/** Pone en el dialogo el resultado de la validacion (de ejemplo o de SAP): filas, totales y el texto del boton. */
+	private mostrarResultadoExcel(resultado: { fila: number; material: string; denominacion: string; cantidad: number; estado: string; mensaje: string; mat?: string; esVeh?: boolean }[]): void {
+		const i18n = this.i18n();
 		const errores = resultado.filter((r) => r.estado === "Error").length;
 		const adv = resultado.filter((r) => r.estado === "Warning").length;
 		const validas = resultado.filter((r) => r.estado === "Success").length;
@@ -3047,6 +3053,72 @@ export default class Oferta extends Controller {
 		this.textoAgregarExcel();
 	}
 
+	/**
+	 * Valida la plantilla contra SAP (pruebas del 30/10/2026: validaba contra el catalogo de ejemplo y agregaba precios inventados).
+	 * Repuestos: codigo exacto en la organizacion y canal del vendedor, con el disponible del almacen de su perfil. Vehiculos: unidades
+	 * vendibles del modelo en el centro del perfil, agrupadas por variante. El precio se pide a SAP al agregar, como al elegir a mano.
+	 */
+	private async validarExcelSap(plantilla: FilaPlantilla[]): Promise<void> {
+		const i18n = this.i18n();
+		const modelo = this.modeloExcel();
+		const oferta = this.modeloOferta();
+		const mock = this.modeloMock();
+		this.excelSap = [];
+		if (!(oferta.getProperty("/cliente") as Cliente | null)?.kunnr) {
+			modelo.setProperty("/error", i18n.getText("excelSinCliente"));
+			return;
+		}
+		const odata = (this.getOwnerComponent() as UIComponent).getModel("odata") as ODataModel;
+		const vkorg = String(mock.getProperty("/perfil/busqueda/orgs/repuestos") ?? "1103");
+		const vtweg = String(mock.getProperty("/perfil/busqueda/canal") ?? "11");
+		const centro = String(oferta.getProperty("/perfil/centro") ?? "");
+		const almacen = this.almacenDelPerfil();
+		const codigos = [...new Set(plantilla.map((f) => f.material.toUpperCase()))];
+		modelo.setProperty("/cargando", true);
+		try {
+			const encontrados = codigos.length ? await materialesPorCodigo(odata, vkorg, vtweg, codigos, sectorDeCabecera) : [];
+			const matnrs = encontrados.map((f) => f.material);
+			// Stock libre y disponible (ATP) en el almacen del perfil, por lotes de 50 como la busqueda.
+			const libre: Record<string, number> = {};
+			const atp: Record<string, Disponibilidad> = {};
+			for (let i = 0; i < matnrs.length; i += 50) {
+				const lote = matnrs.slice(i, i + 50);
+				const [l, a] = await Promise.all([
+					stockPorCentro(odata, vkorg, vtweg, centro, lote, almacen).catch(() => ({})),
+					disponibilidadPorCentro(odata, vkorg, vtweg, centro, lote, almacen).catch(() => ({}))
+				]);
+				Object.assign(libre, l);
+				Object.assign(atp, a);
+			}
+			const conStock = combinarStock(encontrados, libre, atp);
+			const repuestos: Record<string, RepuestoExcel> = {};
+			conStock.forEach((r) => (repuestos[r.material.toUpperCase()] = { material: r.material, denominacion: r.denominacion, disponible: r.disponible }));
+			// Lo que no es repuesto de la organizacion del vendedor se busca como vehiculo (modelo) en el centro del perfil.
+			const faltan = codigos.filter((c) => !repuestos[c]);
+			const vehiculos = faltan.length && centro ? agruparVehiculos(await buscarVehiculos(odata, { vkorg: this.orgBusqueda("vehiculos"), vtweg, werks: centro, matnrs: faltan })) : [];
+			const resultado = validarContraSap(plantilla, repuestos, vehiculos, (clave, args) => i18n.getText(clave, args?.map(String)) as string);
+			const sectores = (mock.getProperty("/sectores/repuestos") as { key: string; text: string }[]) ?? [];
+			const textoSector = (c: string): string => (sectores.find((x) => x.key === c)?.text ?? c).replace(/^(\d+)\s*[—–-]\s*/, "$1 · ");
+			this.excelSap = resultado
+				.filter((r): r is ResultadoExcel & { mat: string } => !!r.mat && r.estado !== "Error")
+				.map((r) => {
+					if (r.esVeh) {
+						const v = vehiculos.find((x) => x.material === r.mat && x.variante === r.variante) as (typeof vehiculos)[number];
+						const m = { ...v, centroTxt: v.almacen ? `${v.centro} · ${v.almacen}` : v.centro, otroCentro: false, tipo: "vehiculos", detalle: textoDetalleVehiculo(v) };
+						return { m: m as unknown as Vehiculo & Repuesto & { tipo: string; detalle?: string }, cantidad: r.cantidad };
+					}
+					const f = conStock.find((x) => x.material === r.mat) as (typeof conStock)[number];
+					const m = { ...f, sectorTxt: textoSector(f.sector), precioUsd: 0, condicionPct: 0, promocion: null, sinPrecio: true, tipo: "repuestos", detalle: f.marca };
+					return { m: m as unknown as Vehiculo & Repuesto & { tipo: string; detalle?: string }, cantidad: r.cantidad };
+				});
+			this.mostrarResultadoExcel(resultado);
+		} catch (error) {
+			modelo.setProperty("/error", i18n.getText("busquedaMaterialError", [(error as Error).message]));
+		} finally {
+			modelo.setProperty("/cargando", false);
+		}
+	}
+
 	private textoAgregarExcel(): void {
 		const modelo = this.modeloExcel();
 		const n = modelo.getProperty("/nLineas") as number;
@@ -3059,7 +3131,11 @@ export default class Oferta extends Controller {
 		this.textoAgregarExcel();
 	}
 
-	public onAgregarExcel(): void {
+	public async onAgregarExcel(): Promise<void> {
+		if (this.excelSap.length) {
+			await this.agregarExcelSap();
+			return;
+		}
 		const modelo = this.modeloExcel();
 		const lineas = (modelo.getProperty("/lineas") as { material: string; cantidad: number; esVeh: boolean }[]) ?? [];
 		const mock = this.modeloMock();
@@ -3096,6 +3172,53 @@ export default class Oferta extends Controller {
 		this.recalcular();
 		this.dialogoExcel?.close();
 		MessageToast.show(this.i18n().getText("excelAgregadas", [total]) as string);
+	}
+
+	/**
+	 * Agrega lo validado contra SAP con el precio que SAP da a ESTE cliente para la cantidad de la fila (los vehiculos, una linea por unidad).
+	 * Lo que SAP no pudo preciar no se agrega y se avisa.
+	 */
+	private async agregarExcelSap(): Promise<void> {
+		const i18n = this.i18n();
+		const modelo = this.modeloExcel();
+		const oferta = this.modeloOferta();
+		const kunnr = (oferta.getProperty("/cliente") as Cliente | null)?.kunnr ?? "";
+		const items = this.excelSap;
+		modelo.setProperty("/cargando", true);
+		const precios = await Promise.allSettled(items.map((it) => this.precioSapDe(it.m, kunnr, it.m.tipo === "vehiculos" ? 1 : it.cantidad)));
+		modelo.setProperty("/cargando", false);
+		// Como ZSDP009: "reemplazar" vacia el detalle antes de cargar; "agregar" suma a lo que ya hay.
+		if (modelo.getProperty("/modo") === "reemplazar") {
+			oferta.setProperty("/lineas", []);
+		}
+		let total = 0;
+		const sinPrecio: string[] = [];
+		items.forEach((it, i) => {
+			const p = precios[i];
+			if (p.status === "rejected") {
+				sinPrecio.push(`${it.m.material}: ${(p.reason as Error).message}`);
+				return;
+			}
+			if (it.m.tipo === "vehiculos") {
+				const final = (this.filaPrecio(it.m, 1) as { final: number }).final;
+				for (let k = 0; k < it.cantidad; k++) {
+					this.agregarLinea(it.m, 1, final);
+					total++;
+				}
+			} else {
+				this.agregarLinea(it.m, it.cantidad, (this.filaPrecio(it.m, it.cantidad) as { final: number }).final);
+				total++;
+			}
+		});
+		this.excelSap = [];
+		oferta.setProperty("/guardado", { visible: false, texto: "" });
+		this.recalcular();
+		void this.repreciarLineasSap();
+		this.dialogoExcel?.close();
+		MessageToast.show(i18n.getText("excelAgregadas", [total]) as string);
+		if (sinPrecio.length) {
+			MessageBox.warning(i18n.getText("excelSinPrecio", [sinPrecio.join("\n")]) as string);
+		}
 	}
 
 	public onCambiaCantidad(): void {

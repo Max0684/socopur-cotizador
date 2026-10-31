@@ -10,7 +10,7 @@
 		draggable="true"
 		resizable="true">
 		<content>
-			<VBox class="sapUiSmallMargin">
+			<VBox class="sapUiSmallMargin" busy="{= !!${excel>/cargando} }">
 				<MessageStrip text="{i18n>excelNota}" type="Information" showIcon="true" class="sapUiSmallMarginBottom" />
 				<HBox alignItems="Center" wrap="Wrap" class="sapUiSmallMarginBottom">
 					<Button text="{i18n>excelPlantilla}" icon="sap-icon://download" press=".onDescargarPlantilla" class="sapUiSmallMarginEnd" />
